@@ -149,7 +149,6 @@ function validEAN(value,format){
   for(let i=d.length-2;i>=0;i--){sum+=Number(d[i])*weight;weight=weight===3?1:3;}
   return (10-sum%10)%10===Number(d[d.length-1]);
 }
-function barcodePrefix(value){const digits=String(value||"").trim();return /^\\d{4,}$/.test(digits)?digits.slice(0,-3):"";}
 async function handleScanned(code,format){
   if(scannerMode==="product"){
     $("productBarcode").value=code;
