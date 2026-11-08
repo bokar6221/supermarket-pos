@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
 import android.util.Size;
 import android.view.Gravity;
 import android.view.View;
@@ -32,7 +33,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.AspectRatioStrategy;
+import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.FocusMeteringAction;
@@ -40,8 +41,8 @@ import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.Preview;
-import androidx.camera.core.ResolutionSelector;
-import androidx.camera.core.ResolutionStrategy;
+import androidx.camera.core.resolutionselector.ResolutionSelector;
+import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.core.ZoomState;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -61,7 +62,9 @@ import org.json.JSONObject;
 
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -148,7 +151,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setSafeBrowsingEnabled(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) settings.setSafeBrowsingEnabled(true);
 
         webView.setBackgroundColor(Color.WHITE);
         webView.addJavascriptInterface(new AndroidBridge(), "AndroidScanner");
@@ -223,7 +226,8 @@ public class MainActivity extends AppCompatActivity {
         public void saveBackup(String json) {
             runOnUiThread(() -> {
                 pendingBackupJson = json;
-                String fileName = "supermarket-pos-backup-" + LocalDate.now() + ".json";
+                String day = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
+                String fileName = "supermarket-pos-backup-" + day + ".json";
                 saveBackupLauncher.launch(fileName);
             });
         }
