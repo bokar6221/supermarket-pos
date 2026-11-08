@@ -86,3 +86,93 @@
   footer{font-size:12px;padding:16px 12px}
 }
 @media(min-width:641px) and (max-width:900px){.catalog-list{grid-template-columns:1fr 1fr}}
+
+/* Mobile cashier redesign: clear product area + always-visible invoice entry */
+.mobile-product-browser{min-width:0}
+.invoice-drawer-top,.mobile-invoice-toggle,.invoice-backdrop{display:none}
+@media(max-width:640px){
+  body{padding-bottom:0;overflow-x:hidden}
+  .topbar{padding:12px 13px calc(12px + env(safe-area-inset-top));min-height:66px}
+  .eyebrow{font-size:11px;margin-bottom:3px}
+  h1{font-size:20px}
+  .offline-tag{font-size:11px;padding:6px 9px}
+  .tabs{position:sticky;top:0;z-index:25;margin:0;padding:7px 8px;gap:6px;box-shadow:0 2px 7px #173f350b}
+  .tab{flex:1;text-align:center;min-height:40px;padding:8px 6px;font-size:13px}
+  .layout{width:100%;max-width:100%;margin:9px auto 0;padding:0 8px 92px}
+  #view-sale.active{display:block}
+  #view-sale>.panel:first-child{width:100%;max-width:none;margin:0;padding:10px;background:transparent;border:0;box-shadow:none}
+  #view-sale>.form-panel{width:100%;max-width:none;margin:12px 0 0;padding:13px}
+  #view-sale .section-heading{margin:0 2px 8px;align-items:center}
+  #view-sale .section-heading h2{font-size:17px;margin:0}
+  #view-sale .section-heading p{font-size:12px;margin-top:3px}
+  #view-sale .actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0 11px}
+  #view-sale .actions button{min-height:42px;padding:9px 7px;font-size:13px}
+  .mobile-product-browser{padding:11px;background:#fff;border:1px solid #e1e9e4;border-radius:14px;box-shadow:0 2px 8px #183d3008}
+  .quick-head{display:block;margin:0 0 8px}
+  .quick-head h3{font-size:15px;margin:0 0 7px}
+  .quick-head input{width:100%;max-width:none;height:43px;min-height:43px;margin:0;font-size:14px;padding:8px 11px}
+  .category-list{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;overflow-y:hidden;margin:0 -2px 8px;padding:2px 2px 7px;scrollbar-width:thin}
+  .category-chip{flex:0 0 auto;min-height:35px;padding:7px 10px;font-size:12px;border-radius:18px}
+  .quick-products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;align-items:stretch}
+  .quick-card{min-width:0;overflow:hidden;padding:6px;border-radius:10px;border:1px solid #e5ece7;background:#fbfdfb}
+  .quick-card .quick-product{display:flex;width:100%;min-width:0;min-height:61px;flex-direction:column;justify-content:center;align-items:flex-start;gap:4px;padding:7px 8px;border:0;border-radius:7px;background:#f0f6f2;text-align:right}
+  .quick-product strong{display:-webkit-box;max-width:100%;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+  .quick-product small{font-size:11px;line-height:1.25;white-space:normal}
+  .weight-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin-top:5px}
+  .weight-chips button{min-width:0;min-height:34px;padding:5px 2px;font-size:11px;border-radius:6px}
+  .invoice-panel{position:fixed;z-index:51;right:0;bottom:0;left:0;width:100%;max-width:100%;max-height:82dvh;margin:0;padding:14px 13px calc(13px + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior:contain;background:#fff;border:0;border-radius:19px 19px 0 0;box-shadow:0 -12px 35px #10271d30;transform:translateY(105%);visibility:hidden;pointer-events:none;transition:transform .22s ease,visibility .22s}
+  body.invoice-open .invoice-panel{transform:translateY(0);visibility:visible;pointer-events:auto}
+  .invoice-drawer-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 0 5px;padding-bottom:9px;border-bottom:1px solid #edf1ee}
+  .invoice-drawer-top h3{font-size:17px;margin:0}
+  .invoice-drawer-top p{font-size:11px;color:#77847d;margin:3px 0 0}
+  .invoice-drawer-top button{min-height:36px;padding:6px 12px;font-size:12px}
+  .cart-head{margin:0;padding:9px 0 7px;border-bottom:1px solid #edf1ee}
+  .cart-head h3{font-size:13px}
+  .cart-head span{font-size:12px}
+  .cart-items{min-height:35px;max-height:31dvh;overflow-y:auto;overscroll-behavior:contain}
+  .cart-item{display:flex;flex-direction:row;align-items:center;gap:8px;padding:9px 0}
+  .cart-item-info{flex:1 1 58%;min-width:0}
+  .cart-item-info>strong{display:block;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+  .cart-item-info small{font-size:10px;line-height:1.3}
+  .amount-field{width:100%;max-width:150px;margin:5px 0 2px;font-size:11px}
+  .amount-field input{height:36px;min-height:36px;padding:5px 8px;margin-top:3px;font-size:15px}
+  .cart-item-side{flex:0 0 auto;max-width:40%;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+  .cart-item-side>strong{font-size:14px;white-space:nowrap}
+  .qty-controls{gap:4px;margin:1px 0}
+  .qty-controls button{min-width:32px;min-height:31px;padding:2px 8px;font-size:16px}
+  .cart-item .remove{min-height:27px;padding:3px 8px;font-size:10px!important}
+  .checkout-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  .checkout-fields label{min-width:0;margin:0;font-size:11px}
+  .checkout-fields input,.checkout-fields select{height:39px;min-height:39px;margin-top:3px;padding:5px 7px;font-size:13px}
+  .total-row{padding:9px 0 7px;font-size:13px}
+  .total-row strong{font-size:18px}
+  .checkout{min-height:44px;padding:9px;font-size:15px}
+  .invoice-backdrop:not([hidden]){display:block;position:fixed;z-index:50;inset:0;background:#0b1812a6;backdrop-filter:blur(2px)}
+  .mobile-invoice-toggle{position:fixed;z-index:40;right:9px;bottom:calc(8px + env(safe-area-inset-bottom));left:9px;display:flex;align-items:center;justify-content:space-between;gap:9px;min-height:62px;padding:8px 12px;border:0;border-radius:13px;background:#173f35;color:#fff;box-shadow:0 5px 20px #10271d45;text-align:right}
+  .mobile-invoice-count,.mobile-invoice-total{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+  .mobile-invoice-count strong{font-size:20px;line-height:1}
+  .mobile-invoice-count small,.mobile-invoice-total small{font-size:10px;color:#d3e4dc}
+  .mobile-invoice-total strong{font-size:14px;white-space:nowrap}
+  .mobile-invoice-action{padding:8px 10px;border-radius:8px;background:#2b6553;font-size:12px;white-space:nowrap}
+  body.invoice-open .mobile-invoice-toggle{display:none}
+  body:not(.sales-view) .mobile-invoice-toggle{display:none}
+  #view-products.active{display:block}
+  #view-products>.panel{margin-bottom:10px;padding:12px;border-radius:12px}
+  #view-products .section-heading h2,#view-products h2{font-size:17px}
+  #view-products .section-heading p,#view-products .hint{font-size:12px}
+  #view-products .quick-head{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+  #view-products .quick-head input{max-width:none}
+  #view-products .form-grid{grid-template-columns:1fr}
+  #view-products .catalog-list{grid-template-columns:1fr;max-height:360px}
+  footer{padding:12px 10px;font-size:10px}
+}
+@media(max-width:360px){
+  .mobile-invoice-toggle{gap:5px;padding:7px 8px}
+  .mobile-invoice-action{padding:7px 8px;font-size:11px}
+  .checkout-fields{grid-template-columns:1fr}
+  .cart-item-side{max-width:38%}
+}
+@media(min-width:641px){
+  .invoice-panel{display:block}
+  .invoice-drawer-top{display:none}
+}
