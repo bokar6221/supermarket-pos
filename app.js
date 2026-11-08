@@ -1,54 +1,31 @@
-const cart=[];
-const money=value=>Number(value||0).toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م";
-const $=id=>document.getElementById(id);
-function renderCart(){
-  $("cartCount").textContent=cart.length+" صنف";
-  $("grandTotal").textContent=money(cart.reduce((sum,item)=>sum+item.total,0));
-  $("checkoutButton").disabled=cart.length===0;
-  $("cartItems").innerHTML="";
-  if(!cart.length){$("cartItems").innerHTML='<p class="empty">لم تتم إضافة أصناف بعد</p>';return}
-  cart.forEach((item,index)=>{
-    const row=document.createElement("div");
-    row.className="cart-item";
-    const details=document.createElement("div");
-    const name=document.createElement("strong");name.textContent=item.name;
-    const meta=document.createElement("small");meta.textContent=item.quantity+" × "+money(item.unitPrice);
-    details.append(name,meta);
-    const side=document.createElement("div");
-    const amount=document.createElement("strong");amount.textContent=money(item.total);
-    const remove=document.createElement("button");remove.className="remove";remove.type="button";remove.textContent="حذف";
-    remove.addEventListener("click",()=>{cart.splice(index,1);renderCart()});
-    side.append(amount,remove);row.append(details,side);$("cartItems").append(row);
-  });
-}
-$("saleType").addEventListener("change",()=>{
-  $("unitHint").textContent=$("saleType").value==="weight"?"أدخل الوزن بالكيلوجرام؛ مثال 0.250 يعني 250 جرام.":"الكمية بالقطعة أو العبوة.";
-  $("itemQuantity").step=$("saleType").value==="weight"?"0.001":"1";
-  if($("saleType").value!=="weight")$("itemQuantity").value="1";
-});
-$("itemForm").addEventListener("submit",event=>{
-  event.preventDefault();
-  const name=$("itemName").value.trim();
-  const quantity=Number($("itemQuantity").value);
-  const unitPrice=Number($("itemPrice").value);
-  if(!name||!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(unitPrice)||unitPrice<0)return;
-  cart.push({name,kind:$("saleType").value,quantity,unitPrice,total:Math.round(quantity*unitPrice*100)/100});
-  $("itemName").value="";$("itemQuantity").value="1";$("itemPrice").value="";
-  renderCart();
-});
-$("manualButton").addEventListener("click",()=>{$("saleType").value="manual";$("itemName").focus();$("unitHint").textContent="أدخل اسم البند والسعر والكمية يدوياً."});
-$("scanButton").addEventListener("click",()=>{$("scannerArea").hidden=false;$("scannerMessage").textContent="قارئ الكاميرا لم يُفعّل بعد. سنضيف مكتبة مسح محلية بعد اختبارها على هاتف Android."});
-$("closeScanner").addEventListener("click",()=>{$("scannerArea").hidden=true});
-$("checkoutButton").addEventListener("click",async()=>{
-  if(!cart.length)return;
-  const invoice={id:crypto.randomUUID(),createdAt:new Date().toISOString(),items:cart.map(item=>({...item})),total:Math.round(cart.reduce((s,item)=>s+item.total,0)*100)/100,currency:"EGP",status:"saved"};
-  try{
-    await POSDatabase.addInvoice(invoice);
-    alert("تم حفظ الفاتورة محلياً. هذه نسخة اختبارية وليست فاتورة ضريبية.");
-    cart.length=0;renderCart();
-  }catch(error){alert("تعذر حفظ الفاتورة: "+error.message)}
-});
-if("serviceWorker" in navigator && location.protocol!=="file:"){
-  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
-}
-renderCart();
+(()=>{"use strict";
+const $=id=>document.getElementById(id),cart=[];let products=[],stream=null,timer=null;
+const money=n=>Number(n||0).toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م",uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random(),unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
+function view(n){document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));if(n==="products")renderProducts();if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();}
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>view(b.dataset.view));
+const sub=()=>cart.reduce((s,x)=>s+x.total,0),disc=()=>Math.max(0,Number($("discount").value)||0);
+function renderCart(){$("cartCount").textContent=cart.length+" صنف";$("grandTotal").textContent=money(Math.max(0,sub()-Math.min(disc(),sub())));$("checkoutButton").disabled=!cart.length;const root=$("cartItems");root.replaceChildren();if(!cart.length){root.innerHTML='<p class="empty">لم تتم إضافة أصناف بعد</p>';return;}cart.forEach((x,i)=>{const row=document.createElement("div");row.className="cart-item";const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");name.textContent=x.name;meta.textContent=x.quantity+" "+unit(x.unit)+" × "+money(x.unitPrice);info.append(name,meta);const side=document.createElement("div"),amount=document.createElement("strong"),del=document.createElement("button");amount.textContent=money(x.total);del.className="remove";del.textContent="حذف";del.onclick=()=>{cart.splice(i,1);renderCart()};side.append(amount,del);row.append(info,side);root.append(row);});}
+function add(x){cart.push({...x,total:Math.round(x.quantity*x.unitPrice*100)/100});renderCart();}
+function renderQuick(){const root=$("quickProducts"),q=$("quickSearch").value.trim().toLowerCase();root.replaceChildren();const list=products.filter(p=>!q||p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مطابقة. أضف منتجاً من قسم المنتجات.</p>';return;}list.forEach(p=>{const b=document.createElement("button");b.className="quick-product";b.textContent=p.name+" — "+money(p.price)+"/"+unit(p.unit);b.onclick=()=>{const raw=prompt("الكمية ("+unit(p.unit)+")",p.unit==="piece"?"1":"0.250");if(raw===null)return;const qty=Number(raw);if(!Number.isFinite(qty)||qty<=0)return alert("الكمية غير صحيحة.");if(p.trackStock&&qty>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock);add({productId:p.id,name:p.name,kind:"product",unit:p.unit,quantity:qty,stockQuantity:qty,unitPrice:Number(p.price),cost:Number(p.cost||0)});};root.append(b);});}
+$("quickSearch").oninput=renderQuick;$("discount").oninput=renderCart;
+$("saleType").onchange=()=>{$("unitHint").textContent=$("saleType").value==="weight"?"أدخل الوزن بالكيلوجرام؛ 0.250 = 250 جرام.":$("saleType").value==="manual"?"بند يدوي لا يخصم من المخزون.":"الكمية بالقطعة أو العبوة.";$("itemQuantity").step=$("saleType").value==="weight"?"0.001":"1";if($("saleType").value!=="weight")$("itemQuantity").value="1";};
+$("itemForm").onsubmit=e=>{e.preventDefault();const name=$("itemName").value.trim(),quantity=Number($("itemQuantity").value),price=Number($("itemPrice").value),kind=$("saleType").value;if(!name||!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)return;add({name,kind,unit:kind==="weight"?"kg":"piece",quantity,unitPrice:price,stockQuantity:quantity});e.target.reset();$("itemQuantity").value="1";$("saleType").value="piece";};
+$("manualButton").onclick=()=>{$("saleType").value="manual";$("itemName").focus();$("manualPanel").scrollIntoView({behavior:"smooth"});};
+$("trackStock").onchange=()=>$("stockLabel").hidden=!$("trackStock").checked;
+function resetProduct(){$("productForm").reset();$("productId").value="";$("stockLabel").hidden=true;$("productStock").value="0";}
+$("resetProduct").onclick=resetProduct;
+$("productForm").onsubmit=async e=>{e.preventDefault();const id=$("productId").value||uid(),barcode=$("productBarcode").value.trim(),p={id,name:$("productName").value.trim(),barcode,category:$("productCategory").value.trim(),unit:$("productUnit").value,price:Number($("productPrice").value),cost:Number($("productCost").value)||0,trackStock:$("trackStock").checked,stock:$("trackStock").checked?Number($("productStock").value)||0:null,updatedAt:new Date().toISOString()};if(!p.name||!Number.isFinite(p.price)||p.price<0)return alert("راجع الاسم والسعر.");try{if(barcode){const old=await POSDatabase.getProductByBarcode(barcode);if(old&&old.id!==id)return alert("الباركود مسجل للمنتج "+old.name);}await POSDatabase.saveProduct(p);await load();resetProduct();alert("تم حفظ المنتج.");}catch(err){alert("تعذر الحفظ: "+err.message);}};
+async function load(){products=await POSDatabase.getProducts();products.sort((a,b)=>a.name.localeCompare(b.name,"ar"));renderQuick();renderProducts();}
+function renderProducts(){const root=$("productList"),q=$("productSearch").value.trim().toLowerCase();root.replaceChildren();const list=products.filter(p=>p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مسجلة.</p>';return;}list.forEach(p=>{const row=document.createElement("div");row.className="product-row";const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");name.textContent=p.name;meta.textContent=(p.barcode?"باركود "+p.barcode:"بدون باركود")+" · "+money(p.price)+(p.trackStock?" · رصيد "+p.stock+" "+unit(p.unit):" · دون مخزون");info.append(name,meta);const actions=document.createElement("div"),edit=document.createElement("button"),del=document.createElement("button");edit.className="secondary";edit.textContent="تعديل";edit.onclick=()=>{$("productId").value=p.id;$("productName").value=p.name;$("productBarcode").value=p.barcode||"";$("productCategory").value=p.category||"";$("productUnit").value=p.unit;$("productPrice").value=p.price;$("productCost").value=p.cost||"";$("trackStock").checked=!!p.trackStock;$("stockLabel").hidden=!p.trackStock;$("productStock").value=p.stock??0;$("productForm").scrollIntoView({behavior:"smooth"});};del.className="remove";del.textContent="حذف";del.onclick=async()=>{if(confirm("حذف المنتج؟ الفواتير السابقة لن تتغير.")){await POSDatabase.deleteProduct(p.id);await load();}};actions.append(edit,del);row.append(info,actions);root.append(row);});}
+$("productSearch").oninput=renderProducts;
+async function renderInvoices(){const root=$("invoiceList");root.replaceChildren();const list=(await POSDatabase.getInvoices()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));if(!list.length){root.innerHTML='<p class="empty">لا توجد فواتير محفوظة.</p>';return;}list.forEach(inv=>{const row=document.createElement("div");row.className="invoice-row";const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");title.textContent="فاتورة "+inv.id.slice(0,8);meta.textContent=new Date(inv.createdAt).toLocaleString("ar-EG")+" · "+inv.items.length+" صنف · "+({cash:"نقدي",electronic:"إلكتروني",credit:"آجل"}[inv.paymentMethod]||"");info.append(title,meta);const total=document.createElement("strong");total.textContent=money(inv.total);const detail=document.createElement("button");detail.className="secondary";detail.textContent="تفاصيل";detail.onclick=()=>alert(inv.items.map(x=>x.name+" — "+x.quantity+" × "+money(x.unitPrice)+" = "+money(x.total)).join("\n")+"\nالخصم: "+money(inv.discount)+"\nالإجمالي: "+money(inv.total));row.append(info,total,detail);root.append(row);});}
+$("checkoutButton").onclick=async()=>{if(!cart.length)return;const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,currency:"EGP",status:"saved"};try{await POSDatabase.saveInvoice(inv);cart.length=0;$("discount").value="0";renderCart();await load();alert("تم حفظ الفاتورة محلياً.");}catch(err){alert("لم تحفظ الفاتورة: "+err.message);}};
+async function stopCamera(){if(timer)clearTimeout(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}$("cameraPreview").srcObject=null;$("scannerArea").hidden=true;}
+async function scan(){if(!("BarcodeDetector"in window))return alert("قارئ الباركود غير مدعوم في هذا المتصفح. استخدم البحث أو أدخل الباركود في شاشة المنتجات.");try{const detector=new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf"]});stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});$("scannerArea").hidden=false;$("cameraPreview").srcObject=stream;await $("cameraPreview").play();const loop=async()=>{if(!stream)return;try{const codes=await detector.detect($("cameraPreview"));if(codes.length){const code=codes[0].rawValue;await stopCamera();const p=await POSDatabase.getProductByBarcode(code);if(p){add({productId:p.id,name:p.name,kind:"product",unit:p.unit,quantity:1,stockQuantity:1,unitPrice:Number(p.price),cost:Number(p.cost||0)});}else{view("products");$("productBarcode").value=code;$("productName").focus();alert("الباركود غير مسجل؛ أدخل بيانات المنتج واحفظه.");}return;}}catch(e){}timer=setTimeout(loop,300);};loop();}catch(e){await stopCamera();alert("تعذر تشغيل الكاميرا. اسمح بالوصول للكاميرا وافتح التطبيق عبر HTTPS.");}}
+$("scanButton").onclick=scan;$("closeScanner").onclick=stopCamera;
+$("exportBackup").onclick=async()=>{try{const data=await POSDatabase.backupData(),blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="supermarket-pos-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url);$("backupMessage").textContent="تم إنشاء النسخة؛ احتفظ بها خارج الهاتف.";}catch(e){alert(e.message);}};
+$("importBackup").onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!confirm("الاستعادة ستحذف البيانات الحالية وتستبدلها. هل تتابع؟")){e.target.value="";return;}try{await POSDatabase.restoreData(JSON.parse(await f.text()));await load();await renderInvoices();$("backupMessage").textContent="تمت الاستعادة بنجاح.";}catch(err){alert("فشلت الاستعادة: "+err.message);}finally{e.target.value="";}};
+window.addEventListener("online",()=>$("connectionState").textContent="متصل");window.addEventListener("offline",()=>$("connectionState").textContent="دون إنترنت");
+if("serviceWorker"in navigator&&location.protocol!=="file:")addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+(async()=>{try{await load();renderCart();}catch(e){alert("تعذر فتح قاعدة البيانات: "+e.message);}})();
+})();
