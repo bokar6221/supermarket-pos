@@ -64,7 +64,29 @@ function setCartAmount(i,value){
 function changeCartQty(i,delta){const x=cart[i];if(!x)return;const next=Math.round((x.quantity+delta)*1000)/1000;if(next<=0){cart.splice(i,1);}else{const p=products.find(item=>item.id===x.productId);if(p&&p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));x.quantity=next;x.stockQuantity=next;x.total=Math.round(next*x.unitPrice*100)/100;}renderCart();}
 function add(x){cart.push({...x,total:Math.round(x.quantity*x.unitPrice*100)/100});renderCart();}
 let activeCategory="الكل";
-function beep(ok=true){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!audioCtx)audioCtx=new C();const c=audioCtx,o=c.createOscillator(),g=c.createGain();o.type="sine";o.frequency.value=ok?1550:420;g.gain.setValueAtTime(.0001,c.currentTime);g.gain.exponentialRampToValueAtTime(.12,c.currentTime+.01);g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+(ok?.11:.22));o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+(ok?.12:.23));}catch(e){}}
+function beep(ok=true){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(!C)return;
+    if(!audioCtx)audioCtx=new C();
+    const ctx=audioCtx;
+    if(ctx.state==="suspended")ctx.resume().catch(()=>{});
+    const start=ctx.currentTime+0.004;
+    const notes=ok
+      ? [{frequency:1450,offset:0,duration:0.085},{frequency:1850,offset:0.105,duration:0.115}]
+      : [{frequency:520,offset:0,duration:0.13},{frequency:390,offset:0.16,duration:0.16}];
+    notes.forEach(note=>{
+      const osc=ctx.createOscillator(),gain=ctx.createGain();
+      osc.type="triangle";
+      osc.frequency.setValueAtTime(note.frequency,start+note.offset);
+      gain.gain.setValueAtTime(0.0001,start+note.offset);
+      gain.gain.exponentialRampToValueAtTime(ok?0.30:0.22,start+note.offset+0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001,start+note.offset+note.duration);
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.start(start+note.offset);osc.stop(start+note.offset+note.duration+0.01);
+    });
+  }catch(e){}
+}
 function weightQty(p,kg){return p.unit==="gram"?kg*1000:kg;}
 function addProduct(p,qty=1){if(p.trackStock&&qty>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));const existing=cart.find(x=>x.productId===p.id);if(existing){const next=existing.quantity+qty;if(p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));existing.quantity=next;existing.stockQuantity=next;existing.total=Math.round(next*existing.unitPrice*100)/100;}else add({productId:p.id,name:p.name,kind:"product",unit:p.unit,quantity:qty,stockQuantity:qty,unitPrice:Number(p.price),cost:Number(p.cost||0)});beep(true);renderCart();}
 function renderQuick(){const root=$("quickProducts"),q=$("quickSearch").value.trim().toLowerCase(),cats=$("quickCategories");root.replaceChildren();const categories=["الكل",...new Set(products.map(p=>p.category).filter(Boolean))];cats.replaceChildren();categories.forEach(c=>{const b=document.createElement("button");b.className="category-chip"+(activeCategory===c?" active":"");b.textContent=c;b.onclick=()=>{activeCategory=c;renderQuick()};cats.append(b);});const list=products.filter(p=>(activeCategory==="الكل"||p.category===activeCategory)&&(!q||p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q)));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مطابقة. أضف منتجات أو اختر تصنيفًا آخر.</p>';return;}list.forEach(p=>{const card=document.createElement("div");card.className="quick-card";const b=document.createElement("button");b.className="quick-product";b.innerHTML="<strong></strong><small></small>";b.querySelector("strong").textContent=p.name;b.querySelector("small").textContent=money(p.price)+" / "+unit(p.unit);b.onclick=()=>{if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));};card.append(b);if(p.unit!=="piece"){const weights=document.createElement("div");weights.className="weight-chips";[[.25,"250 جم"],[.5,"500 جم"],[.75,"750 جم"],[1,"1 كجم"]].forEach(([n,label])=>{const x=document.createElement("button");x.textContent=label;x.onclick=()=>addProduct(p,weightQty(p,n));weights.append(x);});card.append(weights);}root.append(card);});}
@@ -178,7 +200,7 @@ async function scan(mode="sale"){
     return alert("هذا المتصفح لا يدعم قارئ الباركود. استخدم Chrome محدّثًا على Android.");
   }
   try{
-    const wanted=["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf"];
+    const wanted=["ean_13","ean_8","upc_a","upc_e","code_128","code_39","code_93","itf","codabar","qr_code"];
     const supported=await BarcodeDetector.getSupportedFormats();
     const formats=wanted.filter(x=>supported.includes(x));
     if(!formats.length)throw new Error("لا توجد صيغ باركود للمنتجات مدعومة.");
@@ -189,7 +211,7 @@ async function scan(mode="sale"){
         facingMode:{ideal:"environment"},
         width:{ideal:1280},
         height:{ideal:720},
-        frameRate:{ideal:30,max:30}
+        frameRate:{ideal:24,max:30}
       },
       audio:false
     });
@@ -197,9 +219,11 @@ async function scan(mode="sale"){
     // Ask supported mobile cameras to keep autofocus continuous. Unsupported controls are ignored safely.
     try{
       const capabilities=track?.getCapabilities?.();
-      if(capabilities?.focusMode?.includes("continuous")){
-        await track.applyConstraints({advanced:[{focusMode:"continuous"}]});
-      }
+      const cameraHints={};
+      if(capabilities?.focusMode?.includes("continuous"))cameraHints.focusMode="continuous";
+      if(capabilities?.exposureMode?.includes("continuous"))cameraHints.exposureMode="continuous";
+      if(capabilities?.whiteBalanceMode?.includes("continuous"))cameraHints.whiteBalanceMode="continuous";
+      if(Object.keys(cameraHints).length)await track.applyConstraints({advanced:[cameraHints]});
     }catch(e){}
     $("scannerMessage").textContent="وجّه الباركود أمام الكاميرا. سيُضاف الصنف مرة واحدة فقط لكل ظهور.";
     $("scannerArea").hidden=false;
@@ -249,7 +273,7 @@ async function scan(mode="sale"){
       }catch(e){
         // A transient detector error is treated like a blurred frame, not a confirmed removal.
       }
-      if(stream)timer=setTimeout(loop,70);
+      if(stream)timer=setTimeout(loop,90);
     };
     loop();
   }catch(e){
