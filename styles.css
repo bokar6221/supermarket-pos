@@ -38,7 +38,7 @@
 .catalog-added{background:#e8efeb;color:#62756b;cursor:default}
 @media(max-width:640px){
   body{font-size:16px}
-  .topbar{padding:14px 12px calc(13px + env(safe-area-inset-top))}
+  .topbar{padding:calc(14px + env(safe-area-inset-top)) 12px 14px}
   h1{font-size:23px}
   .eyebrow,.offline-tag{font-size:13px}
   .tabs{position:sticky;top:0;z-index:20;max-width:none;margin:0;padding:8px 9px;background:#fff;border-bottom:1px solid #e4ebe6;gap:6px}
