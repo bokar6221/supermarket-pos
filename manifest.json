@@ -1,0 +1,11 @@
+{
+  "name": "كاشير المحل",
+  "short_name": "الكاشير",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f6f4",
+  "theme_color": "#173f35",
+  "description": "برنامج كاشير محلي للمحلات الصغيرة"
+}
