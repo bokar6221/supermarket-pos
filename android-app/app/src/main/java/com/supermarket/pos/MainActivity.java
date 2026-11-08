@@ -89,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
     private ImageAnalysis imageAnalysis;
     private BarcodeScanner barcodeScanner;
     private final ExecutorService analysisExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private boolean scannerActive = false;
     private boolean torchOn = false;
