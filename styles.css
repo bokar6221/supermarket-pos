@@ -18,3 +18,71 @@
 
 /* Barcode capture in product form */
 .barcode-field{min-width:0}.barcode-field label{margin-bottom:7px}.barcode-field button{width:100%;font-size:12px;padding:9px 8px}.scanner-choice{display:block;width:100%;margin:7px 0;text-align:right;background:#eaf2ee;color:#205744;border:1px solid #dce8e0}
+
+/* Mobile cashier readability and large touch targets */
+.amount-field{display:block;width:min(100%,220px);margin:9px 0 6px;color:#245743;font-size:14px;font-weight:700}
+.amount-field input{margin-top:5px;min-height:46px;font-size:19px;font-weight:700;border:2px solid #9ab9aa;background:#fbfffc}
+.cart-item-info{flex:1;min-width:0}
+.cart-item-side{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.cart-item-side>strong{font-size:18px;font-variant-numeric:tabular-nums}
+.catalog-panel{margin-top:14px}
+.catalog-heading{align-items:flex-start;flex-wrap:wrap}
+.catalog-heading>button{min-height:44px}
+.catalog-search{font-size:17px;margin:10px 0 12px}
+.catalog-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:520px;overflow:auto;padding:2px}
+.catalog-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:10px;border:1px solid #e3ebe6;border-radius:10px;background:#fbfdfb}
+.catalog-row>div{min-width:0;flex:1}
+.catalog-row strong{display:block;font-size:14px;line-height:1.4}
+.catalog-row small{display:block;margin-top:5px;color:#65766d;font-size:12px}
+.catalog-row button{min-width:66px;min-height:42px;padding:8px;font-size:13px;flex-shrink:0}
+.catalog-added{background:#e8efeb;color:#62756b;cursor:default}
+@media(max-width:640px){
+  body{font-size:16px}
+  .topbar{padding:14px 12px calc(13px + env(safe-area-inset-top))}
+  h1{font-size:23px}
+  .eyebrow,.offline-tag{font-size:13px}
+  .tabs{position:sticky;top:0;z-index:20;max-width:none;margin:0;padding:8px 9px;background:#fff;border-bottom:1px solid #e4ebe6;gap:6px}
+  .tab{min-height:44px;padding:10px 13px;font-size:15px}
+  .layout{padding:0 9px;margin:10px auto}
+  .panel{padding:15px;border-radius:13px}
+  .section-heading{align-items:flex-start}
+  h2{font-size:20px}
+  .section-heading p,.hint{font-size:14px;line-height:1.55}
+  label{font-size:15px}
+  input,select{min-height:47px;padding:11px 12px;font-size:18px}
+  button,.file-button{min-height:44px;padding:10px 13px;font-size:15px}
+  .form-grid,.checkout-fields{grid-template-columns:1fr}
+  .quick-head{align-items:stretch;flex-direction:column}
+  .quick-head input{max-width:none}
+  .quick-products{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .quick-card{padding:7px}
+  .quick-card .quick-product{min-height:76px;padding:10px}
+  .quick-product strong{font-size:15px;line-height:1.45}
+  .quick-product small{font-size:13px}
+  .category-chip{min-height:42px;font-size:14px;padding:9px 13px}
+  .weight-chips button{min-height:44px;font-size:14px}
+  .cart-item{align-items:stretch;flex-direction:column;gap:8px;padding:13px 0}
+  .cart-item-info>strong{font-size:17px;line-height:1.5}
+  .cart-item-info small{font-size:13px;line-height:1.5}
+  .cart-item-side{flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .cart-item-side>strong{font-size:20px}
+  .qty-controls button{min-width:42px;min-height:42px;font-size:20px}
+  .remove{min-height:40px;font-size:14px!important}
+  .amount-field{width:100%;max-width:260px;font-size:15px}
+  .total-row strong{font-size:24px}
+  .checkout{min-height:52px;font-size:18px}
+  .product-row,.invoice-row{align-items:flex-start;flex-wrap:wrap}
+  .product-row strong,.invoice-row strong{font-size:16px}
+  .product-row small,.invoice-row small{font-size:13px}
+  .product-row button,.invoice-row button{min-height:42px}
+  .barcode-field button{font-size:15px}
+  .scanner-area{padding:10px}
+  .scanner-area video{max-height:300px}
+  .scanner-area p{font-size:14px;line-height:1.5}
+  .catalog-list{grid-template-columns:1fr;max-height:440px}
+  .catalog-row{padding:11px}
+  .catalog-row strong{font-size:15px}
+  .catalog-row small{font-size:13px}
+  footer{font-size:12px;padding:16px 12px}
+}
+@media(min-width:641px) and (max-width:900px){.catalog-list{grid-template-columns:1fr 1fr}}
