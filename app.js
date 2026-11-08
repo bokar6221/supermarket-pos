@@ -78,9 +78,7 @@ $("resetProduct").onclick=resetProduct;
 $("productForm").onsubmit=async e=>{e.preventDefault();const id=$("productId").value||uid(),barcode=$("productBarcode").value.trim(),p={id,name:$("productName").value.trim(),barcode,category:$("productCategory").value.trim(),unit:$("productUnit").value,price:Number($("productPrice").value),cost:Number($("productCost").value)||0,trackStock:$("trackStock").checked,stock:$("trackStock").checked?Number($("productStock").value)||0:null,updatedAt:new Date().toISOString()};if(!p.name||!Number.isFinite(p.price)||p.price<0)return alert("راجع الاسم والسعر.");try{if(barcode){
  const old=await POSDatabase.getProductByBarcode(barcode);
  if(old&&old.id!==id)return alert("الباركود مسجل للمنتج "+old.name);
- const prefix=barcodePrefix(barcode);
- const similar=prefix?products.find(x=>x.id!==id&&barcodePrefix(x.barcode)===prefix):null;
- if(similar)return alert("الأرقام الثابتة لهذا الباركود مستخدمة بالفعل للمنتج "+similar.name+". عدّل المنتج الموجود بدل تسجيل باركود قد يسبب خلطًا عند البيع.");
+
 }await POSDatabase.saveProduct(p);await load();resetProduct();alert("تم حفظ المنتج.");}catch(err){alert("تعذر الحفظ: "+err.message);}};
 async function load(){products=await POSDatabase.getProducts();products.sort((a,b)=>a.name.localeCompare(b.name,"ar"));renderQuick();renderProducts();renderCatalog();}
 function renderProducts(){const root=$("productList"),q=$("productSearch").value.trim().toLowerCase();root.replaceChildren();const list=products.filter(p=>p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مسجلة.</p>';return;}list.forEach(p=>{const row=document.createElement("div");row.className="product-row";const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");name.textContent=p.name;meta.textContent=(p.barcode?"باركود "+p.barcode:"بدون باركود")+" · "+money(p.price)+(p.trackStock?" · رصيد "+p.stock+" "+unit(p.unit):" · دون مخزون");info.append(name,meta);const actions=document.createElement("div"),edit=document.createElement("button"),del=document.createElement("button");edit.className="secondary";edit.textContent="تعديل";edit.onclick=()=>{$("productId").value=p.id;$("productName").value=p.name;$("productBarcode").value=p.barcode||"";$("productCategory").value=p.category||"";$("productUnit").value=p.unit;$("productPrice").value=p.price;$("productCost").value=p.cost||"";$("trackStock").checked=!!p.trackStock;$("stockLabel").hidden=!p.trackStock;$("productStock").value=p.stock??0;$("productForm").scrollIntoView({behavior:"smooth"});};del.className="remove";del.textContent="حذف";del.onclick=async()=>{if(confirm("حذف المنتج؟ الفواتير السابقة لن تتغير.")){await POSDatabase.deleteProduct(p.id);await load();}};actions.append(edit,del);row.append(info,actions);root.append(row);});}
@@ -158,27 +156,8 @@ async function handleScanned(code,format){
     $("scannerMessage").textContent="✓ تم قراءة الباركود. اضغط حفظ المنتج.";
     beep(true);await stopCamera();$("productBarcode").focus();return;
   }
-  let p=await POSDatabase.getProductByBarcode(code);
-  if(!p){
-    const prefix=barcodePrefix(code);
-    const candidates=prefix?products.filter(x=>barcodePrefix(x.barcode)===prefix):[];
-    if(candidates.length===1)p=candidates[0];
-    else if(candidates.length>1){
-      const msg=$("scannerMessage");msg.replaceChildren();
-      msg.append(document.createTextNode("وجدت أكثر من منتج له نفس الأرقام الثابتة. اختر الصنف الصحيح:"));
-      candidates.forEach(candidate=>{
-        const b=document.createElement("button");b.type="button";b.className="scanner-choice";
-        b.textContent=candidate.name+" — "+candidate.barcode;
-        b.onclick=()=>{
-          if(candidate.unit==="piece")addProduct(candidate,1);
-          else addProduct(candidate,weightQty(candidate,.25));
-          $("scannerMessage").textContent="✓ تمت إضافة "+candidate.name+" — أبعد العبوة عن الكاميرا ثم قرّب الصنف التالي.";
-        };
-        msg.append(b);
-      });
-      beep(false);return;
-    }
-  }
+  // Exact full barcode match only. Never guess a product from a shortened prefix.
+  const p=await POSDatabase.getProductByBarcode(code);
   if(p){
     if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));
     $("scannerMessage").textContent="✓ تمت إضافة "+p.name+" — أبعد العبوة عن الكاميرا حتى تختفي القراءة، ثم امسح الصنف التالي.";
