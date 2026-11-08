@@ -5,7 +5,7 @@
 <meta name="theme-color" content="#173f35"><meta name="description" content="برنامج كاشير ومبيعات محلي للمحلات الصغيرة">
 <link rel="manifest" href="manifest.json"><link rel="stylesheet" href="styles.css"><title>كاشير المحل</title>
 </head>
-<body>
+<body class="sales-view">
 <header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1></div><span class="offline-tag" id="connectionState">محلي</span></header>
 <nav class="tabs" aria-label="أقسام التطبيق">
 <button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button>
@@ -17,13 +17,19 @@
 <div class="section-heading"><div><h2>فاتورة جديدة</h2><p>امسح الباركود أو اختر صنفاً مسجلاً أو أضفه يدوياً</p></div></div>
 <div class="actions"><button class="primary" id="scanButton">مسح باركود بالكاميرا</button><button class="secondary" id="manualButton">بيع يدوي</button></div>
 
-<div class="quick-head"><h3>الأصناف السريعة</h3><input id="quickSearch" placeholder="بحث سريع بالاسم أو الباركود"></div><div id="quickCategories" class="category-list"></div>
-<div id="quickProducts" class="quick-products"><p class="empty">أضف منتجات من قسم المنتجات لتظهر هنا.</p></div>
-<div class="cart-head"><h3>الأصناف في الفاتورة</h3><span id="cartCount">0 صنف</span></div>
-<div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
-<div class="checkout-fields"><label>طريقة الدفع<select id="paymentMethod"><option value="cash">نقدي</option><option value="electronic">دفع إلكتروني</option><option value="credit">آجل</option></select></label><label>خصم الفاتورة (جنيه)<input id="discount" type="number" min="0" step="0.01" value="0"></label></div>
-<div class="total-row"><span>الإجمالي بعد الخصم</span><strong id="grandTotal">0.00 ج.م</strong></div>
-<button class="checkout" id="checkoutButton" disabled>حفظ الفاتورة</button>
+<div class="mobile-product-browser">
+  <div class="quick-head"><h3>اختار المنتج</h3><input id="quickSearch" placeholder="ابحث باسم المنتج أو امسح الباركود"></div>
+  <div id="quickCategories" class="category-list"></div>
+  <div id="quickProducts" class="quick-products"><p class="empty">أضف منتجات من قسم المنتجات لتظهر هنا.</p></div>
+</div>
+<div class="invoice-panel" id="invoicePanel" aria-label="فاتورة البيع">
+  <div class="invoice-drawer-top"><div><h3>فاتورة البيع</h3><p>راجع الأصناف والمبالغ قبل الحفظ</p></div><button class="secondary" type="button" id="closeInvoice">إغلاق</button></div>
+  <div class="cart-head"><h3>الأصناف في الفاتورة</h3><span id="cartCount">0 صنف</span></div>
+  <div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
+  <div class="checkout-fields"><label>طريقة الدفع<select id="paymentMethod"><option value="cash">نقدي</option><option value="electronic">دفع إلكتروني</option><option value="credit">آجل</option></select></label><label>خصم الفاتورة (جنيه)<input id="discount" type="number" min="0" step="0.01" value="0"></label></div>
+  <div class="total-row"><span>الإجمالي بعد الخصم</span><strong id="grandTotal">0.00 ج.م</strong></div>
+  <button class="checkout" id="checkoutButton" disabled>حفظ الفاتورة</button>
+</div>
 </div>
 <div class="panel form-panel" id="manualPanel"><h2>إضافة بند للفاتورة</h2>
 <form id="itemForm"><label>اسم الصنف<input id="itemName" required placeholder="مثال: جبنة رومي"></label>
@@ -50,6 +56,12 @@
 <section class="view" id="view-invoices"><div class="panel"><h2>سجل الفواتير</h2><p class="hint">الفواتير محفوظة على هذا الجهاز فقط.</p><div id="invoiceList"></div></div></section>
 <section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
 </main>
+<div class="invoice-backdrop" id="invoiceBackdrop" hidden></div>
+<button class="mobile-invoice-toggle" id="mobileInvoiceToggle" type="button" aria-controls="invoicePanel" aria-expanded="false">
+  <span class="mobile-invoice-count"><strong id="mobileCartCount">0</strong><small>صنف في الفاتورة</small></span>
+  <span class="mobile-invoice-total"><small>الإجمالي</small><strong id="mobileGrandTotal">0.00 ج.م</strong></span>
+  <span class="mobile-invoice-action">عرض الفاتورة ←</span>
+</button>
 <footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>
 <script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script>
 </body></html>
