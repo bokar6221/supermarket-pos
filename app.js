@@ -33,7 +33,7 @@ async function renderInvoices(){const root=$("invoiceList");root.replaceChildren
 $("checkoutButton").onclick=async()=>{if(!cart.length)return;const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,currency:"EGP",status:"saved"};try{await POSDatabase.saveInvoice(inv);cart.length=0;$("discount").value="0";renderCart();await load();alert("تم حفظ الفاتورة محلياً.");}catch(err){alert("لم تحفظ الفاتورة: "+err.message);}};
 async function stopCamera(){if(timer)clearTimeout(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}$("cameraPreview").srcObject=null;$("scannerArea").hidden=true;}
 function validEAN(value,format){const d=String(value||"").replace(/[^0-9]/g,"");if(!["ean_13","ean_8","upc_a"].includes(format))return true;const n=format==="ean_13"?13:format==="ean_8"?8:12;if(d.length!==n)return false;let sum=0,weight=3;for(let i=d.length-2;i>=0;i--){sum+=Number(d[i])*weight;weight=weight===3?1:3;}return (10-sum%10)%10===Number(d[d.length-1]);}
-function barcodePrefix(value){const digits=String(value||"").replace(/\D/g,"");return digits.length>3?digits.slice(0,-3):"";}
+function barcodePrefix(value){const digits=String(value||"").trim();return /^\d{4,}$/.test(digits)?digits.slice(0,-3):"";}
 async function handleScanned(code,format){
   if(scannerMode==="product"){
     $("productBarcode").value=code;
