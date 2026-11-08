@@ -1,12 +1,25 @@
 (()=>{"use strict";
 const $=id=>document.getElementById(id),cart=[];let products=[],stream=null,timer=null,audioCtx=null,scannerMode="sale";
 const money=n=>Number(n||0).toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م",uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random(),unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
-function view(n){document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));if(n==="products"){renderProducts();renderCatalog();}if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();}
+function view(n){setInvoiceOpen(false);document.body.classList.toggle("sales-view",n==="sale");document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));if(n==="products"){renderProducts();renderCatalog();}if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();}
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>view(b.dataset.view));
 const sub=()=>cart.reduce((s,x)=>s+x.total,0),disc=()=>Math.max(0,Number($("discount").value)||0);
+function setInvoiceOpen(open){
+  document.body.classList.toggle("invoice-open",!!open);
+  $("invoiceBackdrop").hidden=!open;
+  $("mobileInvoiceToggle").setAttribute("aria-expanded",String(!!open));
+}
+$("mobileInvoiceToggle").onclick=()=>setInvoiceOpen(true);
+$("closeInvoice").onclick=()=>setInvoiceOpen(false);
+$("invoiceBackdrop").onclick=()=>setInvoiceOpen(false);
+document.addEventListener("keydown",e=>{if(e.key==="Escape")setInvoiceOpen(false);});
+
 function renderCart(){
+  const netTotal=Math.max(0,sub()-Math.min(disc(),sub()));
   $("cartCount").textContent=cart.length+" صنف";
-  $("grandTotal").textContent=money(Math.max(0,sub()-Math.min(disc(),sub())));
+  $("grandTotal").textContent=money(netTotal);
+  $("mobileCartCount").textContent=String(cart.length);
+  $("mobileGrandTotal").textContent=money(netTotal);
   $("checkoutButton").disabled=!cart.length;
   const root=$("cartItems");root.replaceChildren();
   if(!cart.length){root.innerHTML='<p class="empty">امسح الباركود أو اضغط على الصنف لإضافته</p>';return;}
@@ -120,7 +133,7 @@ $("catalogSearch").oninput=renderCatalog;
 $("catalogImportAll").onclick=importCatalog;
 $("productSearch").oninput=renderProducts;
 async function renderInvoices(){const root=$("invoiceList");root.replaceChildren();const list=(await POSDatabase.getInvoices()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));if(!list.length){root.innerHTML='<p class="empty">لا توجد فواتير محفوظة.</p>';return;}list.forEach(inv=>{const row=document.createElement("div");row.className="invoice-row";const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");title.textContent="فاتورة "+inv.id.slice(0,8);meta.textContent=new Date(inv.createdAt).toLocaleString("ar-EG")+" · "+inv.items.length+" صنف · "+({cash:"نقدي",electronic:"إلكتروني",credit:"آجل"}[inv.paymentMethod]||"");info.append(title,meta);const total=document.createElement("strong");total.textContent=money(inv.total);const detail=document.createElement("button");detail.className="secondary";detail.textContent="تفاصيل";detail.onclick=()=>alert(inv.items.map(x=>x.name+" — "+x.quantity+" × "+money(x.unitPrice)+" = "+money(x.total)).join("\n")+"\nالخصم: "+money(inv.discount)+"\nالإجمالي: "+money(inv.total));row.append(info,total,detail);root.append(row);});}
-$("checkoutButton").onclick=async()=>{if(!cart.length)return;const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,currency:"EGP",status:"saved"};try{await POSDatabase.saveInvoice(inv);cart.length=0;$("discount").value="0";renderCart();await load();alert("تم حفظ الفاتورة محلياً.");}catch(err){alert("لم تحفظ الفاتورة: "+err.message);}};
+$("checkoutButton").onclick=async()=>{if(!cart.length)return;const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,currency:"EGP",status:"saved"};try{await POSDatabase.saveInvoice(inv);cart.length=0;$("discount").value="0";renderCart();setInvoiceOpen(false);await load();alert("تم حفظ الفاتورة محلياً.");}catch(err){alert("لم تحفظ الفاتورة: "+err.message);}};
 async function stopCamera(){if(timer)clearTimeout(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}$("cameraPreview").srcObject=null;$("scannerArea").hidden=true;}
 function validEAN(value,format){const d=String(value||"").replace(/[^0-9]/g,"");if(!["ean_13","ean_8","upc_a"].includes(format))return true;const n=format==="ean_13"?13:format==="ean_8"?8:12;if(d.length!==n)return false;let sum=0,weight=3;for(let i=d.length-2;i>=0;i--){sum+=Number(d[i])*weight;weight=weight===3?1:3;}return (10-sum%10)%10===Number(d[d.length-1]);}
 function barcodePrefix(value){const digits=String(value||"").trim();return /^\d{4,}$/.test(digits)?digits.slice(0,-3):"";}
