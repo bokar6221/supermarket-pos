@@ -15,3 +15,6 @@
 .cart-item .remove{font-size:11px}
 .scanner-area video{object-fit:cover;max-height:260px}
 @media(max-width:560px){.quick-products{grid-template-columns:repeat(2,minmax(0,1fr))}.quick-card{padding:6px}.category-list{margin-left:-2px;margin-right:-2px}}
+
+/* Barcode capture in product form */
+.barcode-field{min-width:0}.barcode-field label{margin-bottom:7px}.barcode-field button{width:100%;font-size:12px;padding:9px 8px}.scanner-choice{display:block;width:100%;margin:7px 0;text-align:right;background:#eaf2ee;color:#205744;border:1px solid #dce8e0}
