@@ -10,12 +10,13 @@
 <nav class="tabs" aria-label="أقسام التطبيق">
 <button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button>
 </nav>
+<div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه كاميرا الموبايل إلى باركود المنتج. عند سماع الرنة ارفع الباركود لمسح الصنف التالي.</p><button class="secondary" id="closeScanner">إغلاق المسح</button></div>
 <main class="layout">
 <section class="view active" id="view-sale">
 <div class="panel">
 <div class="section-heading"><div><h2>فاتورة جديدة</h2><p>امسح الباركود أو اختر صنفاً مسجلاً أو أضفه يدوياً</p></div></div>
 <div class="actions"><button class="primary" id="scanButton">مسح باركود بالكاميرا</button><button class="secondary" id="manualButton">بيع يدوي</button></div>
-<div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه كاميرا الموبايل إلى باركود المنتج. عند سماع الرنة ارفع الباركود لمسح الصنف التالي.</p><button class="secondary" id="closeScanner">إغلاق المسح</button></div>
+
 <div class="quick-head"><h3>الأصناف السريعة</h3><input id="quickSearch" placeholder="بحث سريع بالاسم أو الباركود"></div><div id="quickCategories" class="category-list"></div>
 <div id="quickProducts" class="quick-products"><p class="empty">أضف منتجات من قسم المنتجات لتظهر هنا.</p></div>
 <div class="cart-head"><h3>الأصناف في الفاتورة</h3><span id="cartCount">0 صنف</span></div>
