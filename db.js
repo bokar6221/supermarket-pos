@@ -29,6 +29,14 @@
   async function saveProduct(product){
     const db=await openDB();try{return await new Promise((resolve,reject)=>{const tx=db.transaction("products","readwrite");tx.objectStore("products").put(product);tx.oncomplete=()=>resolve(product);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);});}finally{db.close();}
   }
+  async function saveProducts(products){
+    if(!Array.isArray(products))throw new Error("قائمة المنتجات غير صحيحة.");
+    const db=await openDB();try{return await new Promise((resolve,reject)=>{
+      const tx=db.transaction("products","readwrite"),store=tx.objectStore("products");
+      for(const product of products)store.put(product);
+      tx.oncomplete=()=>resolve(products.length);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+    });}finally{db.close();}
+  }
   async function deleteProduct(id){
     const db=await openDB();try{return await new Promise((resolve,reject)=>{const tx=db.transaction("products","readwrite");tx.objectStore("products").delete(id);tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);});}finally{db.close();}
   }
@@ -65,5 +73,5 @@
       tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
     });}finally{db.close();}
   }
-  window.POSDatabase={getProducts,getInvoices,getProductByBarcode,saveProduct,deleteProduct,saveInvoice,backupData,restoreData};
+  window.POSDatabase={getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,saveInvoice,backupData,restoreData};
 })();
