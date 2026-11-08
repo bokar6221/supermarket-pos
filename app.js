@@ -66,8 +66,9 @@ function add(x){cart.push({...x,total:Math.round(x.quantity*x.unitPrice*100)/100
 let activeCategory="الكل";
 function beep(ok=true){
   if(window.AndroidScanner){
-    if(!ok&&typeof window.AndroidScanner.playErrorBeep==="function")window.AndroidScanner.playErrorBeep();
-    return; // Native Android scanner produces the hardware-style success tone.
+    const method=ok?"playSuccessBeep":"playErrorBeep";
+    if(typeof window.AndroidScanner[method]==="function")window.AndroidScanner[method]();
+    return;
   }
   try{
     const C=window.AudioContext||window.webkitAudioContext;
@@ -306,9 +307,9 @@ async function scan(mode="sale"){
   }
 }
 $("scanButton").onclick=()=>scan("sale");$("scanProductBarcode").onclick=()=>scan("product");$("closeScanner").onclick=stopCamera;
-$("exportBackup").onclick=async()=>{try{const data=await POSDatabase.backupData(),blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="supermarket-pos-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url);$("backupMessage").textContent="تم إنشاء النسخة؛ احتفظ بها خارج الهاتف.";}catch(e){alert(e.message);}};
+$("exportBackup").onclick=async()=>{try{const data=await POSDatabase.backupData(),json=JSON.stringify(data,null,2);if(window.AndroidScanner&&typeof window.AndroidScanner.saveBackup==="function"){window.AndroidScanner.saveBackup(json);$("backupMessage").textContent="اختر مكان حفظ النسخة من نافذة Android.";return;}const blob=new Blob([json],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="supermarket-pos-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url);$("backupMessage").textContent="تم إنشاء النسخة؛ احتفظ بها خارج الهاتف.";}catch(e){alert(e.message);}};
 $("importBackup").onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!confirm("الاستعادة ستحذف البيانات الحالية وتستبدلها. هل تتابع؟")){e.target.value="";return;}try{await POSDatabase.restoreData(JSON.parse(await f.text()));await load();await renderInvoices();$("backupMessage").textContent="تمت الاستعادة بنجاح.";}catch(err){alert("فشلت الاستعادة: "+err.message);}finally{e.target.value="";}};
 window.addEventListener("online",()=>$("connectionState").textContent="متصل");window.addEventListener("offline",()=>$("connectionState").textContent="دون إنترنت");
-if("serviceWorker"in navigator&&location.protocol!=="file:")addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
+if(!window.AndroidScanner&&"serviceWorker"in navigator&&location.protocol!=="file:")addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 (async()=>{try{await load();renderCart();}catch(e){alert("تعذر فتح قاعدة البيانات: "+e.message);}})();
 })();
