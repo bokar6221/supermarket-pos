@@ -31,7 +31,7 @@
 </section>
 <section class="view" id="view-products">
 <div class="panel"><div class="section-heading"><div><h2>إدارة المنتجات</h2><p>تسجيل المنتجات المغلفة والسائبة بدون اشتراط باركود</p></div></div>
-<form id="productForm"><input id="productId" type="hidden"><div class="form-grid"><label>اسم المنتج<input id="productName" required></label><label>الباركود (اختياري)<input id="productBarcode" inputmode="numeric"></label></div>
+<form id="productForm"><input id="productId" type="hidden"><div class="form-grid"><label>اسم المنتج<input id="productName" required></label><div class="barcode-field"><label for="productBarcode">الباركود (اختياري)<input id="productBarcode" inputmode="numeric" autocomplete="off"></label><button class="secondary" type="button" id="scanProductBarcode">مسح الباركود بالكاميرا</button></div></div>
 <div class="form-grid"><label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label><label>وحدة البيع<select id="productUnit"><option value="piece">قطعة / عبوة</option><option value="kg">كيلو</option><option value="gram">جرام</option></select></label></div>
 <div class="form-grid"><label>سعر البيع<input id="productPrice" type="number" min="0" step="0.01" required></label><label>تكلفة الشراء (اختياري)<input id="productCost" type="number" min="0" step="0.01"></label></div>
 <label class="check-label"><input id="trackStock" type="checkbox"> متابعة المخزون لهذا المنتج</label><label id="stockLabel" hidden>الرصيد الحالي<input id="productStock" type="number" min="0" step="0.001" value="0"></label>
