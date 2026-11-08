@@ -48,7 +48,7 @@ function setCartAmount(i,value){
   }
   x.quantity=quantity;x.stockQuantity=quantity;x.total=amount;renderCart();
 }
-function changeCartQty(i,delta){const x=cart[i];if(!x)return;const next=Math.round((x.quantity+delta)*1000)/1000;if(next<=0){cart.splice(i,1);}else{x.quantity=next;x.stockQuantity=next;x.total=Math.round(next*x.unitPrice*100)/100;}renderCart();}
+function changeCartQty(i,delta){const x=cart[i];if(!x)return;const next=Math.round((x.quantity+delta)*1000)/1000;if(next<=0){cart.splice(i,1);}else{const p=products.find(item=>item.id===x.productId);if(p&&p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));x.quantity=next;x.stockQuantity=next;x.total=Math.round(next*x.unitPrice*100)/100;}renderCart();}
 function add(x){cart.push({...x,total:Math.round(x.quantity*x.unitPrice*100)/100});renderCart();}
 let activeCategory="الكل";
 function beep(ok=true){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!audioCtx)audioCtx=new C();const c=audioCtx,o=c.createOscillator(),g=c.createGain();o.type="sine";o.frequency.value=ok?1550:420;g.gain.setValueAtTime(.0001,c.currentTime);g.gain.exponentialRampToValueAtTime(.12,c.currentTime+.01);g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+(ok?.11:.22));o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+(ok?.12:.23));}catch(e){}}
