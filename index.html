@@ -1,67 +1,46 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#173f35">
-  <meta name="description" content="برنامج كاشير ومبيعات يعمل محلياً">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="styles.css">
-  <title>كاشير المحل</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#173f35"><meta name="description" content="برنامج كاشير ومبيعات محلي للمحلات الصغيرة">
+<link rel="manifest" href="manifest.json"><link rel="stylesheet" href="styles.css"><title>كاشير المحل</title>
 </head>
 <body>
-  <header class="topbar">
-    <div>
-      <p class="eyebrow">نظام إدارة المبيعات</p>
-      <h1>كاشير المحل</h1>
-    </div>
-    <span class="offline-tag" id="connectionState">وضع محلي</span>
-  </header>
-
-  <main class="layout">
-    <section class="panel sale-panel">
-      <div class="section-heading">
-        <div><h2>فاتورة جديدة</h2><p>امسح الباركود أو أضف الصنف يدوياً</p></div>
-      </div>
-      <div class="actions">
-        <button class="primary" id="scanButton" type="button">مسح باركود</button>
-        <button class="secondary" id="manualButton" type="button">إضافة صنف يدوي</button>
-      </div>
-      <div id="scannerArea" class="scanner-area" hidden>
-        <video id="cameraPreview" playsinline></video>
-        <p id="scannerMessage">سيتم تفعيل قارئ الكاميرا بعد إضافة واختبار مكتبة المسح.</p>
-        <button class="secondary" id="closeScanner" type="button">إغلاق</button>
-      </div>
-      <div class="cart-head"><h3>الأصناف</h3><span id="cartCount">0 صنف</span></div>
-      <div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
-      <div class="total-row"><span>الإجمالي</span><strong id="grandTotal">0.00 ج.م</strong></div>
-      <button class="checkout" id="checkoutButton" type="button" disabled>حفظ الفاتورة</button>
-    </section>
-
-    <section class="panel product-panel">
-      <div class="section-heading"><div><h2>إضافة صنف</h2><p>منتج مسجل أو بيع مباشر</p></div></div>
-      <form id="itemForm">
-        <label>اسم الصنف<input id="itemName" required placeholder="مثال: جبنة رومي"></label>
-        <label>طريقة البيع
-          <select id="saleType">
-            <option value="piece">بالقطعة / العبوة</option>
-            <option value="weight">بالوزن</option>
-            <option value="manual">سعر مباشر يدوي</option>
-          </select>
-        </label>
-        <div class="form-grid">
-          <label>الكمية / الوزن<input id="itemQuantity" type="number" min="0.001" step="0.001" value="1" required></label>
-          <label>سعر الوحدة<input id="itemPrice" type="number" min="0" step="0.01" placeholder="السعر بالجنيه" required></label>
-        </div>
-        <p class="hint" id="unitHint">الكمية بالقطعة أو العبوة.</p>
-        <button class="primary full" type="submit">إضافة إلى الفاتورة</button>
-      </form>
-      <div class="notice"><strong>ملاحظة:</strong> البيع اليدوي لا يخصم من مخزون صنف مسجل. إدارة المخزون ستضاف في مرحلة لاحقة.</div>
-    </section>
-  </main>
-
-  <footer>نسخة تجريبية قيد التطوير — لا تستخدم للبيع الفعلي بعد</footer>
-  <script src="db.js"></script>
-  <script src="app.js"></script>
-</body>
-</html>
+<header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1></div><span class="offline-tag" id="connectionState">محلي</span></header>
+<nav class="tabs" aria-label="أقسام التطبيق">
+<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button>
+</nav>
+<main class="layout">
+<section class="view active" id="view-sale">
+<div class="panel">
+<div class="section-heading"><div><h2>فاتورة جديدة</h2><p>امسح الباركود أو اختر صنفاً مسجلاً أو أضفه يدوياً</p></div></div>
+<div class="actions"><button class="primary" id="scanButton">مسح باركود بالكاميرا</button><button class="secondary" id="manualButton">بيع يدوي</button></div>
+<div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه الكاميرا إلى الباركود.</p><button class="secondary" id="closeScanner">إغلاق الكاميرا</button></div>
+<div class="quick-head"><h3>الأصناف السريعة</h3><input id="quickSearch" placeholder="ابحث باسم الصنف أو الباركود"></div>
+<div id="quickProducts" class="quick-products"><p class="empty">أضف منتجات من قسم المنتجات لتظهر هنا.</p></div>
+<div class="cart-head"><h3>الأصناف في الفاتورة</h3><span id="cartCount">0 صنف</span></div>
+<div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
+<div class="checkout-fields"><label>طريقة الدفع<select id="paymentMethod"><option value="cash">نقدي</option><option value="electronic">دفع إلكتروني</option><option value="credit">آجل</option></select></label><label>خصم الفاتورة (جنيه)<input id="discount" type="number" min="0" step="0.01" value="0"></label></div>
+<div class="total-row"><span>الإجمالي بعد الخصم</span><strong id="grandTotal">0.00 ج.م</strong></div>
+<button class="checkout" id="checkoutButton" disabled>حفظ الفاتورة</button>
+</div>
+<div class="panel form-panel" id="manualPanel"><h2>إضافة بند للفاتورة</h2>
+<form id="itemForm"><label>اسم الصنف<input id="itemName" required placeholder="مثال: جبنة رومي"></label>
+<div class="form-grid"><label>طريقة البيع<select id="saleType"><option value="piece">بالقطعة / العبوة</option><option value="weight">بالوزن (كيلو)</option><option value="manual">سعر مباشر يدوي</option></select></label><label>الكمية / الوزن<input id="itemQuantity" type="number" min="0.001" step="0.001" value="1" required></label></div>
+<label>سعر الوحدة بالجنيه<input id="itemPrice" type="number" min="0" step="0.01" required></label><p class="hint" id="unitHint">الكمية بالقطعة أو العبوة.</p><button class="primary full">إضافة إلى الفاتورة</button></form></div>
+</section>
+<section class="view" id="view-products">
+<div class="panel"><div class="section-heading"><div><h2>إدارة المنتجات</h2><p>تسجيل المنتجات المغلفة والسائبة بدون اشتراط باركود</p></div></div>
+<form id="productForm"><input id="productId" type="hidden"><div class="form-grid"><label>اسم المنتج<input id="productName" required></label><label>الباركود (اختياري)<input id="productBarcode" inputmode="numeric"></label></div>
+<div class="form-grid"><label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label><label>وحدة البيع<select id="productUnit"><option value="piece">قطعة / عبوة</option><option value="kg">كيلو</option><option value="gram">جرام</option></select></label></div>
+<div class="form-grid"><label>سعر البيع<input id="productPrice" type="number" min="0" step="0.01" required></label><label>تكلفة الشراء (اختياري)<input id="productCost" type="number" min="0" step="0.01"></label></div>
+<label class="check-label"><input id="trackStock" type="checkbox"> متابعة المخزون لهذا المنتج</label><label id="stockLabel" hidden>الرصيد الحالي<input id="productStock" type="number" min="0" step="0.001" value="0"></label>
+<div class="actions"><button class="primary" type="submit">حفظ المنتج</button><button class="secondary" type="button" id="resetProduct">منتج جديد</button></div></form></div>
+<div class="panel"><div class="quick-head"><h2>قائمة المنتجات</h2><input id="productSearch" placeholder="بحث بالاسم أو الباركود"></div><div id="productList"></div></div>
+</section>
+<section class="view" id="view-invoices"><div class="panel"><h2>سجل الفواتير</h2><p class="hint">الفواتير محفوظة على هذا الجهاز فقط.</p><div id="invoiceList"></div></div></section>
+<section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
+</main>
+<footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>
+<script src="db.js"></script><script src="app.js"></script>
+</body></html>
