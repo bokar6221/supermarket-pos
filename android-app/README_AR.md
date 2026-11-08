@@ -14,6 +14,8 @@
 
 ## الحصول على APK
 
+- تم إعداد GitHub Actions ليبني ملف APK تجريبيًا عند تحديث ملفات التطبيق. اسم المخرج: supermarket-pos-android-debug.
+
 البناء يتم تلقائيًا بواسطة GitHub Actions عند تحديث ملفات المشروع.
 
 1. افتح المستودع الخاص bokar6221/supermarket-pos.
