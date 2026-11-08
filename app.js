@@ -1,5 +1,5 @@
 (()=>{"use strict";
-const $=id=>document.getElementById(id),cart=[];let products=[],stream=null,timer=null,audioCtx=null,scannerMode="sale",scanStarting=false;
+const $=id=>document.getElementById(id),cart=[];let products=[],stream=null,timer=null,audioCtx=null,scannerMode="sale",scanStarting=false,nativeScannerActive=false;
 const money=n=>Number(n||0).toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م",uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random(),unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
 function view(n){setInvoiceOpen(false);document.body.classList.toggle("sales-view",n==="sale");document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));if(n==="products"){renderProducts();renderCatalog();}if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();}
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>view(b.dataset.view));
@@ -65,6 +65,10 @@ function changeCartQty(i,delta){const x=cart[i];if(!x)return;const next=Math.rou
 function add(x){cart.push({...x,total:Math.round(x.quantity*x.unitPrice*100)/100});renderCart();}
 let activeCategory="الكل";
 function beep(ok=true){
+  if(window.AndroidScanner){
+    if(!ok&&typeof window.AndroidScanner.playErrorBeep==="function")window.AndroidScanner.playErrorBeep();
+    return; // Native Android scanner produces the hardware-style success tone.
+  }
   try{
     const C=window.AudioContext||window.webkitAudioContext;
     if(!C)return;
@@ -77,8 +81,7 @@ function beep(ok=true){
       : [{frequency:520,offset:0,duration:0.13},{frequency:390,offset:0.16,duration:0.16}];
     notes.forEach(note=>{
       const osc=ctx.createOscillator(),gain=ctx.createGain();
-      osc.type="triangle";
-      osc.frequency.setValueAtTime(note.frequency,start+note.offset);
+      osc.type="triangle";osc.frequency.setValueAtTime(note.frequency,start+note.offset);
       gain.gain.setValueAtTime(0.0001,start+note.offset);
       gain.gain.exponentialRampToValueAtTime(ok?0.30:0.22,start+note.offset+0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001,start+note.offset+note.duration);
@@ -155,6 +158,10 @@ $("productSearch").oninput=renderProducts;
 async function renderInvoices(){const root=$("invoiceList");root.replaceChildren();const list=(await POSDatabase.getInvoices()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));if(!list.length){root.innerHTML='<p class="empty">لا توجد فواتير محفوظة.</p>';return;}list.forEach(inv=>{const row=document.createElement("div");row.className="invoice-row";const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");title.textContent="فاتورة "+inv.id.slice(0,8);meta.textContent=new Date(inv.createdAt).toLocaleString("ar-EG")+" · "+inv.items.length+" صنف · "+({cash:"نقدي",electronic:"إلكتروني",credit:"آجل"}[inv.paymentMethod]||"");info.append(title,meta);const total=document.createElement("strong");total.textContent=money(inv.total);const detail=document.createElement("button");detail.className="secondary";detail.textContent="تفاصيل";detail.onclick=()=>alert(inv.items.map(x=>x.name+" — "+x.quantity+" × "+money(x.unitPrice)+" = "+money(x.total)).join("\n")+"\nالخصم: "+money(inv.discount)+"\nالإجمالي: "+money(inv.total));row.append(info,total,detail);root.append(row);});}
 $("checkoutButton").onclick=async()=>{if(!cart.length)return;const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,currency:"EGP",status:"saved"};try{await POSDatabase.saveInvoice(inv);cart.length=0;$("discount").value="0";renderCart();setInvoiceOpen(false);await load();alert("تم حفظ الفاتورة محلياً.");}catch(err){alert("لم تحفظ الفاتورة: "+err.message);}};
 async function stopCamera(){
+  if(nativeScannerActive&&window.AndroidScanner&&typeof window.AndroidScanner.stopScan==="function"){
+    try{window.AndroidScanner.stopScan();}catch(e){}
+  }
+  nativeScannerActive=false;
   if(timer)clearTimeout(timer);
   timer=null;
   scanStarting=false;
@@ -187,10 +194,27 @@ async function handleScanned(code,format){
     $("scannerMessage").textContent="لم أجد منتجًا مطابقًا: "+code+" — راجع تسجيل الباركود في المنتج.";
   }
 }
+window.onNativeScannerReady=()=>{
+  scanStarting=false;
+};
+window.onNativeScannerClosed=()=>{
+  scanStarting=false;
+  nativeScannerActive=false;
+};
+window.onNativeBarcodeScanned=(code,format)=>{
+  if(!code)return;
+  handleScanned(String(code),String(format||""));
+};
 async function scan(mode="sale"){
-  if(scanStarting||stream)return;
-  scanStarting=true;
+  if(scanStarting||stream||nativeScannerActive)return;
   scannerMode=mode;
+  if(window.AndroidScanner&&typeof window.AndroidScanner.startScan==="function"){
+    scanStarting=true;nativeScannerActive=true;
+    try{window.AndroidScanner.startScan(mode);}
+    catch(error){scanStarting=false;nativeScannerActive=false;alert("تعذر تشغيل ماسح Android: "+(error?.message||error));}
+    return;
+  }
+  scanStarting=true;
   try{
     const C=window.AudioContext||window.webkitAudioContext;
     if(C){if(!audioCtx)audioCtx=new C();await audioCtx.resume();}
