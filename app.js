@@ -1,5 +1,5 @@
 (()=>{"use strict";
-const $=id=>document.getElementById(id),cart=[];let products=[],stream=null,timer=null,audioCtx=null,scannerMode="sale";
+const $=id=>document.getElementById(id),cart=[];let products=[],stream=null,timer=null,audioCtx=null,scannerMode="sale",scanStarting=false;
 const money=n=>Number(n||0).toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م",uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random(),unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
 function view(n){setInvoiceOpen(false);document.body.classList.toggle("sales-view",n==="sale");document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));if(n==="products"){renderProducts();renderCatalog();}if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();}
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>view(b.dataset.view));
@@ -134,9 +134,24 @@ $("catalogImportAll").onclick=importCatalog;
 $("productSearch").oninput=renderProducts;
 async function renderInvoices(){const root=$("invoiceList");root.replaceChildren();const list=(await POSDatabase.getInvoices()).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));if(!list.length){root.innerHTML='<p class="empty">لا توجد فواتير محفوظة.</p>';return;}list.forEach(inv=>{const row=document.createElement("div");row.className="invoice-row";const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");title.textContent="فاتورة "+inv.id.slice(0,8);meta.textContent=new Date(inv.createdAt).toLocaleString("ar-EG")+" · "+inv.items.length+" صنف · "+({cash:"نقدي",electronic:"إلكتروني",credit:"آجل"}[inv.paymentMethod]||"");info.append(title,meta);const total=document.createElement("strong");total.textContent=money(inv.total);const detail=document.createElement("button");detail.className="secondary";detail.textContent="تفاصيل";detail.onclick=()=>alert(inv.items.map(x=>x.name+" — "+x.quantity+" × "+money(x.unitPrice)+" = "+money(x.total)).join("\n")+"\nالخصم: "+money(inv.discount)+"\nالإجمالي: "+money(inv.total));row.append(info,total,detail);root.append(row);});}
 $("checkoutButton").onclick=async()=>{if(!cart.length)return;const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,currency:"EGP",status:"saved"};try{await POSDatabase.saveInvoice(inv);cart.length=0;$("discount").value="0";renderCart();setInvoiceOpen(false);await load();alert("تم حفظ الفاتورة محلياً.");}catch(err){alert("لم تحفظ الفاتورة: "+err.message);}};
-async function stopCamera(){if(timer)clearTimeout(timer);timer=null;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}$("cameraPreview").srcObject=null;$("scannerArea").hidden=true;}
-function validEAN(value,format){const d=String(value||"").replace(/[^0-9]/g,"");if(!["ean_13","ean_8","upc_a"].includes(format))return true;const n=format==="ean_13"?13:format==="ean_8"?8:12;if(d.length!==n)return false;let sum=0,weight=3;for(let i=d.length-2;i>=0;i--){sum+=Number(d[i])*weight;weight=weight===3?1:3;}return (10-sum%10)%10===Number(d[d.length-1]);}
-function barcodePrefix(value){const digits=String(value||"").trim();return /^\d{4,}$/.test(digits)?digits.slice(0,-3):"";}
+async function stopCamera(){
+  if(timer)clearTimeout(timer);
+  timer=null;
+  scanStarting=false;
+  if(stream){stream.getTracks().forEach(track=>track.stop());stream=null;}
+  $("cameraPreview").srcObject=null;
+  $("scannerArea").hidden=true;
+}
+function validEAN(value,format){
+  const d=String(value||"").replace(/[^0-9]/g,"");
+  if(!["ean_13","ean_8","upc_a"].includes(format))return true;
+  const n=format==="ean_13"?13:format==="ean_8"?8:12;
+  if(d.length!==n)return false;
+  let sum=0,weight=3;
+  for(let i=d.length-2;i>=0;i--){sum+=Number(d[i])*weight;weight=weight===3?1:3;}
+  return (10-sum%10)%10===Number(d[d.length-1]);
+}
+function barcodePrefix(value){const digits=String(value||"").trim();return /^\\d{4,}$/.test(digits)?digits.slice(0,-3):"";}
 async function handleScanned(code,format){
   if(scannerMode==="product"){
     $("productBarcode").value=code;
@@ -149,15 +164,121 @@ async function handleScanned(code,format){
     const candidates=prefix?products.filter(x=>barcodePrefix(x.barcode)===prefix):[];
     if(candidates.length===1)p=candidates[0];
     else if(candidates.length>1){
-      const msg=$("scannerMessage");msg.textContent="وجدت أكثر من منتج له نفس الأرقام الثابتة. اختر الصنف الصحيح:";
-      candidates.forEach(candidate=>{const b=document.createElement("button");b.type="button";b.className="scanner-choice";b.textContent=candidate.name+" — "+candidate.barcode;b.onclick=()=>{if(candidate.unit==="piece")addProduct(candidate,1);else addProduct(candidate,weightQty(candidate,.25));$("scannerMessage").textContent="✓ تمت إضافة "+candidate.name+" — ارفع الباركود للصنف التالي.";};msg.append(b);});
+      const msg=$("scannerMessage");msg.replaceChildren();
+      msg.append(document.createTextNode("وجدت أكثر من منتج له نفس الأرقام الثابتة. اختر الصنف الصحيح:"));
+      candidates.forEach(candidate=>{
+        const b=document.createElement("button");b.type="button";b.className="scanner-choice";
+        b.textContent=candidate.name+" — "+candidate.barcode;
+        b.onclick=()=>{
+          if(candidate.unit==="piece")addProduct(candidate,1);
+          else addProduct(candidate,weightQty(candidate,.25));
+          $("scannerMessage").textContent="✓ تمت إضافة "+candidate.name+" — أبعد العبوة عن الكاميرا ثم قرّب الصنف التالي.";
+        };
+        msg.append(b);
+      });
       beep(false);return;
     }
   }
-  if(p){if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));$("scannerMessage").textContent="✓ تمت إضافة "+p.name+" — ارفع الباركود ثم امسحه مرة أخرى للصنف التالي.";}
-  else{beep(false);$("scannerMessage").textContent="لم أجد منتجًا مطابقًا للأرقام الثابتة: "+code+" — راجع تسجيل الباركود في المنتج.";}
+  if(p){
+    if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));
+    $("scannerMessage").textContent="✓ تمت إضافة "+p.name+" — أبعد العبوة عن الكاميرا حتى تختفي القراءة، ثم امسح الصنف التالي.";
+  }else{
+    beep(false);
+    $("scannerMessage").textContent="لم أجد منتجًا مطابقًا: "+code+" — راجع تسجيل الباركود في المنتج.";
+  }
 }
-async function scan(mode="sale"){scannerMode=mode;try{const C=window.AudioContext||window.webkitAudioContext;if(C){if(!audioCtx)audioCtx=new C();await audioCtx.resume();}}catch(e){}if(!("BarcodeDetector"in window))return alert("هذا المتصفح لا يدعم قارئ الباركود السريع. استخدم Chrome محدّثًا على Android.");try{const wanted=["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf","qr_code"];const supported=await BarcodeDetector.getSupportedFormats();const formats=wanted.filter(x=>supported.includes(x));if(!formats.length)throw new Error("لا توجد صيغ باركود مدعومة.");const detector=new BarcodeDetector({formats});if(!navigator.mediaDevices?.getUserMedia)throw new Error("الكاميرا غير متاحة.");stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});$("scannerArea").hidden=false;$("cameraPreview").srcObject=stream;await $("cameraPreview").play();let last="",stable=0,handled=false;const loop=async()=>{if(!stream)return;try{const codes=await detector.detect($("cameraPreview"));if(codes.length){const c=codes[0],code=String(c.rawValue||"").trim(),fmt=c.format||"";if(code&&validEAN(code,fmt)){if(code===last)stable++;else{last=code;stable=1;handled=false;}if(stable>=2&&!handled){handled=true;await handleScanned(code,fmt);}}else{stable=0;}}else{last="";stable=0;handled=false;}}catch(e){}timer=setTimeout(loop,100);};loop();}catch(e){await stopCamera();alert("تعذر تشغيل المسح. تأكد من إذن الكاميرا واستخدام رابط HTTPS.");}}
+async function scan(mode="sale"){
+  if(scanStarting||stream)return;
+  scanStarting=true;
+  scannerMode=mode;
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(C){if(!audioCtx)audioCtx=new C();await audioCtx.resume();}
+  }catch(e){}
+  if(!("BarcodeDetector"in window)){
+    scanStarting=false;
+    return alert("هذا المتصفح لا يدعم قارئ الباركود. استخدم Chrome محدّثًا على Android.");
+  }
+  try{
+    const wanted=["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf"];
+    const supported=await BarcodeDetector.getSupportedFormats();
+    const formats=wanted.filter(x=>supported.includes(x));
+    if(!formats.length)throw new Error("لا توجد صيغ باركود للمنتجات مدعومة.");
+    const detector=new BarcodeDetector({formats});
+    if(!navigator.mediaDevices?.getUserMedia)throw new Error("الكاميرا غير متاحة.");
+    stream=await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:{ideal:"environment"},
+        width:{ideal:1280},
+        height:{ideal:720},
+        frameRate:{ideal:30,max:30}
+      },
+      audio:false
+    });
+    const track=stream.getVideoTracks()[0];
+    // Ask supported mobile cameras to keep autofocus continuous. Unsupported controls are ignored safely.
+    try{
+      const capabilities=track?.getCapabilities?.();
+      if(capabilities?.focusMode?.includes("continuous")){
+        await track.applyConstraints({advanced:[{focusMode:"continuous"}]});
+      }
+    }catch(e){}
+    $("scannerMessage").textContent="وجّه الباركود أمام الكاميرا. سيُضاف الصنف مرة واحدة فقط لكل ظهور.";
+    $("scannerArea").hidden=false;
+    const video=$("cameraPreview");
+    video.srcObject=stream;
+    await video.play();
+    scanStarting=false;
+
+    let candidateCode="",stableReads=0,lockedCode="",noCodeSince=0;
+    const unlockAfterMs=1200;
+    const loop=async()=>{
+      if(!stream)return;
+      try{
+        const codes=await detector.detect(video);
+        const now=performance.now();
+        const detected=codes.find(item=>{
+          const value=String(item.rawValue||"").trim();
+          return value&&validEAN(value,item.format||"");
+        });
+        if(detected){
+          const code=String(detected.rawValue).trim();
+          noCodeSince=0;
+          if(code===lockedCode){
+            candidateCode="";
+            stableReads=0;
+          }else{
+            if(code===candidateCode)stableReads++;
+            else{candidateCode=code;stableReads=1;}
+            if(stableReads>=2){
+              // Lock this physical appearance before adding the item, so repeated camera frames cannot add it twice.
+              lockedCode=code;
+              candidateCode="";
+              stableReads=0;
+              await handleScanned(code,detected.format||"");
+            }
+          }
+        }else{
+          candidateCode="";
+          stableReads=0;
+          if(!noCodeSince)noCodeSince=now;
+          // A brief autofocus blur must not release the lock and create a duplicate sale.
+          if(now-noCodeSince>=unlockAfterMs){
+            lockedCode="";
+            noCodeSince=0;
+          }
+        }
+      }catch(e){
+        // A transient detector error is treated like a blurred frame, not a confirmed removal.
+      }
+      if(stream)timer=setTimeout(loop,70);
+    };
+    loop();
+  }catch(e){
+    await stopCamera();
+    alert("تعذر تشغيل المسح. تأكد من إذن الكاميرا واستخدام رابط HTTPS. "+(e?.message||""));
+  }
+}
 $("scanButton").onclick=()=>scan("sale");$("scanProductBarcode").onclick=()=>scan("product");$("closeScanner").onclick=stopCamera;
 $("exportBackup").onclick=async()=>{try{const data=await POSDatabase.backupData(),blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="supermarket-pos-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url);$("backupMessage").textContent="تم إنشاء النسخة؛ احتفظ بها خارج الهاتف.";}catch(e){alert(e.message);}};
 $("importBackup").onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!confirm("الاستعادة ستحذف البيانات الحالية وتستبدلها. هل تتابع؟")){e.target.value="";return;}try{await POSDatabase.restoreData(JSON.parse(await f.text()));await load();await renderInvoices();$("backupMessage").textContent="تمت الاستعادة بنجاح.";}catch(err){alert("فشلت الاستعادة: "+err.message);}finally{e.target.value="";}};
