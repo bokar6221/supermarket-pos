@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173f35">
+  <meta name="description" content="برنامج كاشير ومبيعات يعمل محلياً">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <title>كاشير المحل</title>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">نظام إدارة المبيعات</p>
+      <h1>كاشير المحل</h1>
+    </div>
+    <span class="offline-tag" id="connectionState">وضع محلي</span>
+  </header>
+
+  <main class="layout">
+    <section class="panel sale-panel">
+      <div class="section-heading">
+        <div><h2>فاتورة جديدة</h2><p>امسح الباركود أو أضف الصنف يدوياً</p></div>
+      </div>
+      <div class="actions">
+        <button class="primary" id="scanButton" type="button">مسح باركود</button>
+        <button class="secondary" id="manualButton" type="button">إضافة صنف يدوي</button>
+      </div>
+      <div id="scannerArea" class="scanner-area" hidden>
+        <video id="cameraPreview" playsinline></video>
+        <p id="scannerMessage">سيتم تفعيل قارئ الكاميرا بعد إضافة واختبار مكتبة المسح.</p>
+        <button class="secondary" id="closeScanner" type="button">إغلاق</button>
+      </div>
+      <div class="cart-head"><h3>الأصناف</h3><span id="cartCount">0 صنف</span></div>
+      <div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
+      <div class="total-row"><span>الإجمالي</span><strong id="grandTotal">0.00 ج.م</strong></div>
+      <button class="checkout" id="checkoutButton" type="button" disabled>حفظ الفاتورة</button>
+    </section>
+
+    <section class="panel product-panel">
+      <div class="section-heading"><div><h2>إضافة صنف</h2><p>منتج مسجل أو بيع مباشر</p></div></div>
+      <form id="itemForm">
+        <label>اسم الصنف<input id="itemName" required placeholder="مثال: جبنة رومي"></label>
+        <label>طريقة البيع
+          <select id="saleType">
+            <option value="piece">بالقطعة / العبوة</option>
+            <option value="weight">بالوزن</option>
+            <option value="manual">سعر مباشر يدوي</option>
+          </select>
+        </label>
+        <div class="form-grid">
+          <label>الكمية / الوزن<input id="itemQuantity" type="number" min="0.001" step="0.001" value="1" required></label>
+          <label>سعر الوحدة<input id="itemPrice" type="number" min="0" step="0.01" placeholder="السعر بالجنيه" required></label>
+        </div>
+        <p class="hint" id="unitHint">الكمية بالقطعة أو العبوة.</p>
+        <button class="primary full" type="submit">إضافة إلى الفاتورة</button>
+      </form>
+      <div class="notice"><strong>ملاحظة:</strong> البيع اليدوي لا يخصم من مخزون صنف مسجل. إدارة المخزون ستضاف في مرحلة لاحقة.</div>
+    </section>
+  </main>
+
+  <footer>نسخة تجريبية قيد التطوير — لا تستخدم للبيع الفعلي بعد</footer>
+  <script src="db.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
