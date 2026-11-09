@@ -158,7 +158,7 @@ async function openReturn(invoiceId){
   $("salesReturnInfo").textContent="فاتورة "+String(invoice.id).slice(0,12)+" · "+new Date(invoice.createdAt).toLocaleString("ar-EG")+" · "+(invoice.customerName||"عميل نقدي");
   const method=$("salesReturnMethod");
   if(invoice.paymentMethod==="credit"){method.value="credit";[...method.options].forEach(o=>o.disabled=o.value!=="credit");}
-  else{method.value="cash";[...method.options].forEach(o=>o.disabled=o.value==="credit");}
+  else{method.value=invoice.paymentMethod==="electronic"?"electronic":"cash";[...method.options].forEach(o=>o.disabled=o.value==="credit");}
   $("salesReturnNote").value="";$("salesReturnMessage").textContent="";$("salesReturnModal").hidden=false;updateReturnTotal();
 }
 function updateReturnTotal(){
@@ -186,7 +186,7 @@ $("invoiceList").addEventListener("click",e=>{
   const button=e.target.closest("[data-return-invoice]");if(button)openReturn(button.dataset.returnInvoice);
 });
 
-const categoryNames={sale:"مبيعات",customer_collection:"تحصيل عميل",purchase:"مشتريات",supplier_payment:"سداد مورد",sales_return:"مرتجع مبيعات",rent:"إيجار",salary:"أجور",utilities:"مرافق",transport:"نقل ومواصلات",maintenance:"صيانة",withdrawal:"مسحوبات",other:"أخرى"};
+const categoryNames={sale:"مبيعات",customer_collection:"تحصيل عميل",purchase:"مشتريات",supplier_payment:"سداد مورد",sales_return:"مرتجع مبيعات",other_income:"إيراد إضافي",capital:"إيداع نقدية",rent:"إيجار",salary:"أجور",utilities:"مرافق",transport:"نقل ومواصلات",maintenance:"صيانة",withdrawal:"مسحوبات",other:"أخرى"};
 const methodName=m=>m==="electronic"?"إلكتروني":"نقدي";
 function dateWithin(date,start,end){const t=new Date(date||0).getTime();return t>=start&&t<end;}
 async function renderCash(){
@@ -282,7 +282,16 @@ async function renderReports(){
   const monthOut=cashEntries.filter(x=>x.type==="expense"&&localKey(x.createdAt).startsWith(month)).reduce((s,x)=>s+Number(x.amount||0),0);
   $("reportStockValue").textContent=money(inventoryValue);$("reportCustomerDebt").textContent=money(customerDebt);$("reportSupplierDebt").textContent=money(supplierDebt);$("reportMonthExpenses").textContent=money(monthOut);
 }
-$("cashEntryCategory").onchange=()=>{};
+function updateCashCategoryOptions(){
+  const select=$("cashEntryCategory"),type=$("cashEntryType").value,previous=select.value;
+  const options=type==="income"
+    ?[["other_income","إيراد إضافي"],["capital","إيداع نقدية"],["other","أخرى"]]
+    :[["rent","إيجار"],["salary","أجور"],["utilities","مرافق"],["transport","نقل ومواصلات"],["maintenance","صيانة"],["withdrawal","مسحوبات"],["other","أخرى"]];
+  select.replaceChildren();
+  options.forEach(([value,label])=>{const option=document.createElement("option");option.value=value;option.textContent=label;select.append(option);});
+  select.value=options.some(x=>x[0]===previous)?previous:options[0][0];
+}
+$("cashEntryType").onchange=updateCashCategoryOptions;updateCashCategoryOptions();
 document.addEventListener("click",e=>{
   const tab=e.target.closest("[data-view]");if(!tab)return;
   const name=tab.dataset.view;
