@@ -273,3 +273,237 @@
 .purchase-history-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .purchase-history-actions button{padding:7px 9px;font-size:11px}
 @media(max-width:420px){.purchase-history-actions{flex-direction:column;align-items:flex-end}}
+
+
+/* Focused in-screen navigation and mobile viewport fit */
+html,body{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  overflow-x:hidden;
+}
+body{
+  min-height:100dvh;
+  -webkit-text-size-adjust:100%;
+}
+.topbar,.tabs,.layout,main,.view,.panel,.inner-tabs,.inner-tab-panel{
+  min-width:0;
+  max-width:100%;
+}
+.layout{
+  width:100%;
+}
+.view.active{
+  width:100%;
+  min-width:0;
+}
+.view.active>*{
+  min-width:0;
+  max-width:100%;
+}
+.panel{
+  width:100%;
+}
+.inner-tabs{
+  display:flex;
+  align-items:stretch;
+  gap:6px;
+  width:100%;
+  padding:6px;
+  margin:0 0 12px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-inline:contain;
+  scrollbar-width:thin;
+  background:#edf3ef;
+  border:1px solid #e1e9e4;
+  border-radius:12px;
+}
+.inner-tab{
+  flex:0 0 auto;
+  min-height:42px;
+  padding:9px 13px;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:#315a48;
+  font-size:13px;
+  white-space:nowrap;
+}
+.inner-tab.active{
+  background:#173f35;
+  color:#fff;
+  box-shadow:0 2px 7px #173f3526;
+}
+.inner-tab-panel{
+  display:none;
+  width:100%;
+  min-width:0;
+}
+.inner-tab-panel.active{
+  display:block;
+}
+.inner-tab-panel>.panel{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  margin:0;
+}
+.inner-tab-panel .form-grid,
+.inner-tab-panel .checkout-fields{
+  min-width:0;
+}
+.product-category-filter{
+  width:100%;
+  min-width:0;
+  overflow:hidden;
+}
+#productCategories{
+  margin:5px 0 10px;
+}
+#productList{
+  width:100%;
+  min-width:0;
+}
+.manual-sale-panel{
+  width:100%;
+  max-width:100%;
+  margin:0;
+}
+#view-sale>.panel{
+  width:100%;
+  min-width:0;
+  max-width:100%;
+}
+#view-sale .inner-tab-panel .actions{
+  margin-top:0;
+}
+#view-sale .inner-tab-panel .actions button{
+  width:100%;
+}
+@media(max-width:640px){
+  html,body,#app,main.layout{
+    width:100%;
+    max-width:100vw;
+    overflow-x:hidden;
+  }
+  .topbar{
+    width:100%;
+    max-width:100%;
+    padding-inline:12px;
+  }
+  .tabs{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    flex-wrap:nowrap;
+    overflow-x:auto;
+    overflow-y:hidden;
+    overscroll-behavior-inline:contain;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar,.inner-tabs::-webkit-scrollbar{display:none}
+  .tabs .tab{
+    flex:0 0 auto;
+    min-width:max-content;
+    max-width:none;
+  }
+  .layout{
+    width:100%;
+    max-width:100%;
+    padding-inline:8px;
+    margin-inline:0;
+  }
+  .view.active{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+  .view.active>.panel,
+  .inner-tab-panel>.panel{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    margin-inline:0;
+  }
+  .inner-tabs{
+    width:100%;
+    max-width:100%;
+    margin:0 0 10px;
+    padding:5px;
+    gap:5px;
+    border-radius:10px;
+  }
+  .inner-tab{
+    min-height:42px;
+    padding:8px 12px;
+    font-size:13px;
+  }
+  .inner-tab-panel.active{
+    width:100%;
+    min-width:0;
+  }
+  #view-sale>.panel:first-child{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    margin:0;
+    padding:10px;
+  }
+  #view-sale .inner-tab-panel .actions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    gap:7px;
+    width:100%;
+    margin:0 0 9px;
+  }
+  #view-sale .inner-tab-panel .actions button{
+    min-width:0;
+    width:100%;
+  }
+  #view-sale .manual-sale-panel{
+    padding:13px;
+  }
+  #view-products .inner-tabs,
+  #view-inventory .inner-tabs,
+  #view-purchases .inner-tabs{
+    position:sticky;
+    top:56px;
+    z-index:18;
+    background:#edf3ef;
+    box-shadow:0 2px 7px #173f350a;
+  }
+  #view-products .inner-tab-panel>.panel,
+  #view-inventory .inner-tab-panel>.panel,
+  #view-purchases .inner-tab-panel>.panel{
+    padding:13px;
+  }
+  #view-products .product-row,
+  #view-purchases .supplier-row,
+  #view-inventory .movement-row,
+  #view-inventory .stock-alert-row{
+    min-width:0;
+    max-width:100%;
+  }
+  #view-products .product-row>div,
+  #view-purchases .supplier-row>div,
+  #view-inventory .movement-row>div,
+  #view-inventory .stock-alert-row>div{
+    min-width:0;
+    overflow-wrap:anywhere;
+  }
+  #view-inventory .data-table,
+  #view-purchases .data-table{
+    min-width:490px;
+  }
+  #view-purchases .form-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+}
+@media(max-width:380px){
+  .layout{padding-inline:6px}
+  .panel{padding:11px}
+  .inner-tab{padding-inline:10px;font-size:12px}
+  .tabs{padding-inline:6px}
+  .tabs .tab{padding-inline:10px;font-size:12px}
+}
