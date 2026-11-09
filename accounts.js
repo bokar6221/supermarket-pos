@@ -264,22 +264,71 @@ $("cashEntryForm").onsubmit=async e=>{
   }catch(error){$("cashEntryMessage").textContent="تعذر الحفظ: "+error.message;}
 };
 
+function periodProfitSnapshot(invoices,returns,cashEntries,dateFilter){
+  const periodInvoices=invoices.filter(x=>dateFilter(x.createdAt));
+  const periodReturns=returns.filter(x=>dateFilter(x.createdAt));
+  const invoiceById=new Map(invoices.map(x=>[x.id,x]));
+  let sales=0,salesCost=0,knownRevenue=0,totalLineRevenue=0;
+  periodInvoices.forEach(invoice=>{
+    sales+=Number(invoice.total||0);
+    const factor=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
+    (invoice.items||[]).forEach(item=>{
+      const quantity=Number(item.stockQuantity??item.quantity)||0;
+      const lineRevenue=quantity*Number(item.unitPrice||0)*factor;
+      totalLineRevenue+=lineRevenue;
+      if(item.cost!==undefined&&item.cost!==null&&item.cost!==""&&Number.isFinite(Number(item.cost))){
+        salesCost+=Number(item.cost)*quantity;
+        knownRevenue+=lineRevenue;
+      }
+    });
+  });
+  const returnedAmount=periodReturns.reduce((sum,x)=>sum+Number(x.amount||0),0);
+  let returnedCost=0;
+  periodReturns.forEach(record=>{
+    const invoice=invoiceById.get(record.invoiceId);
+    (record.items||[]).forEach(line=>{
+      const original=(invoice?.items||[])[Number(line.itemIndex)];
+      const cost=line.cost!==undefined&&line.cost!==null&&line.cost!==""&&Number.isFinite(Number(line.cost))
+        ?Number(line.cost):(original?.cost!==undefined&&original?.cost!==null&&Number.isFinite(Number(original.cost))?Number(original.cost):null);
+      if(cost!==null)returnedCost+=cost*Number(line.quantity||0);
+    });
+  });
+  const netSales=sales-returnedAmount,cogs=salesCost-returnedCost;
+  const operatingCategories=new Set(["rent","salary","utilities","transport","maintenance","other"]);
+  const operatingExpenses=cashEntries.filter(x=>x.type==="expense"&&operatingCategories.has(x.category)&&dateFilter(x.createdAt))
+    .reduce((sum,x)=>sum+Number(x.amount||0),0);
+  const totalCashOut=cashEntries.filter(x=>x.type==="expense"&&dateFilter(x.createdAt))
+    .reduce((sum,x)=>sum+Number(x.amount||0),0);
+  return {sales,returnedAmount,netSales,cogs,grossProfit:netSales-cogs,operatingExpenses,
+    operatingResult:netSales-cogs-operatingExpenses,totalCashOut,
+    costCoverage:totalLineRevenue>0?Math.min(1,knownRevenue/totalLineRevenue):0};
+}
+function renderProfitCards(prefix,result){
+  $(prefix+"Cogs").textContent=money(result.cogs);
+  $(prefix+"GrossProfit").textContent=money(result.grossProfit);
+  $(prefix+"OperatingExpenses").textContent=money(result.operatingExpenses);
+  $(prefix+"OperatingResult").textContent=money(result.operatingResult);
+  $(prefix+"ProfitNote").textContent="تغطية تكلفة الأصناف المسجلة: "+(result.costCoverage*100).toLocaleString("ar-EG",{maximumFractionDigits:0})+"%. النتيجة تقديرية وليست قائمة مالية معتمدة.";
+}
 async function renderReports(){
   const [invoices,returns,products,customers,customerPayments,suppliers,purchases,supplierPayments,cashEntries]=await Promise.all([
     POSDatabase.getInvoices(),POSDatabase.getReturns(),POSDatabase.getProducts(),POSDatabase.getCustomers(),POSDatabase.getCustomerPayments(),
     POSDatabase.getSuppliers(),POSDatabase.getPurchases(),POSDatabase.getSupplierPayments(),POSDatabase.getCashEntries()
   ]);
   const today=localToday(),month=localMonth();
-  const todayInvoices=invoices.filter(x=>localKey(x.createdAt)===today),monthInvoices=invoices.filter(x=>localKey(x.createdAt).startsWith(month));
-  const todayReturns=returns.filter(x=>localKey(x.createdAt)===today).reduce((s,x)=>s+Number(x.amount||0),0);
-  const monthReturns=returns.filter(x=>localKey(x.createdAt).startsWith(month)).reduce((s,x)=>s+Number(x.amount||0),0);
+  const todayFilter=date=>localKey(date)===today,monthFilter=date=>localKey(date).startsWith(month);
+  const todayInvoices=invoices.filter(x=>todayFilter(x.createdAt)),monthInvoices=invoices.filter(x=>monthFilter(x.createdAt));
+  const todayReturns=returns.filter(x=>todayFilter(x.createdAt)).reduce((s,x)=>s+Number(x.amount||0),0);
+  const monthReturns=returns.filter(x=>monthFilter(x.createdAt)).reduce((s,x)=>s+Number(x.amount||0),0);
   const todaySales=todayInvoices.reduce((s,x)=>s+Number(x.total||0),0),monthSales=monthInvoices.reduce((s,x)=>s+Number(x.total||0),0);
   $("reportTodaySales").textContent=money(todaySales);$("reportTodayInvoices").textContent=String(todayInvoices.length);$("reportTodayReturns").textContent=money(todayReturns);$("reportTodayNet").textContent=money(todaySales-todayReturns);
   $("reportMonthSales").textContent=money(monthSales);$("reportMonthInvoices").textContent=String(monthInvoices.length);$("reportMonthReturns").textContent=money(monthReturns);$("reportMonthNet").textContent=money(monthSales-monthReturns);
+  renderProfitCards("reportToday",periodProfitSnapshot(invoices,returns,cashEntries,todayFilter));
+  renderProfitCards("reportMonth",periodProfitSnapshot(invoices,returns,cashEntries,monthFilter));
   const inventoryValue=products.filter(p=>p.trackStock).reduce((s,p)=>s+Number(p.stock||0)*Number(p.cost||0),0);
   const customerDebt=customers.filter(x=>x.active!==false).reduce((s,x)=>s+Math.max(0,customerBalance(x,invoices,customerPayments,returns)),0);
   const supplierDebt=suppliers.filter(x=>x.active!==false).reduce((s,x)=>s+Number(x.openingBalance||0),0)+purchases.filter(x=>x.supplierId).reduce((s,x)=>s+Number(x.total||0)-Number(x.paidAmount||0),0)-supplierPayments.reduce((s,x)=>s+Number(x.amount||0),0);
-  const monthOut=cashEntries.filter(x=>x.type==="expense"&&localKey(x.createdAt).startsWith(month)).reduce((s,x)=>s+Number(x.amount||0),0);
+  const monthOut=cashEntries.filter(x=>x.type==="expense"&&monthFilter(x.createdAt)).reduce((s,x)=>s+Number(x.amount||0),0);
   $("reportStockValue").textContent=money(inventoryValue);$("reportCustomerDebt").textContent=money(customerDebt);$("reportSupplierDebt").textContent=money(supplierDebt);$("reportMonthExpenses").textContent=money(monthOut);
 }
 function updateCashCategoryOptions(){
