@@ -73,5 +73,22 @@
       tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
     });}finally{db.close();}
   }
-  window.POSDatabase={getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,saveInvoice,backupData,restoreData};
+  async function getSettings(){
+    const rows=await all("settings"),result={};
+    for(const row of rows){if(row&&typeof row.key==="string")result[row.key]=row.value;}
+    return result;
+  }
+  async function saveSettings(values){
+    if(!values||typeof values!=="object"||Array.isArray(values))throw new Error("إعدادات المحل غير صحيحة.");
+    const db=await openDB();
+    try{return await new Promise((resolve,reject)=>{
+      const tx=db.transaction("settings","readwrite"),store=tx.objectStore("settings"),updatedAt=new Date().toISOString();
+      for(const [key,value] of Object.entries(values)){
+        if(!key)continue;
+        store.put({key,value,updatedAt});
+      }
+      tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+    });}finally{db.close();}
+  }
+  window.POSDatabase={getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,saveInvoice,backupData,restoreData,getSettings,saveSettings};
 })();
