@@ -113,7 +113,7 @@ function beep(ok=true){
   }catch(e){}
 }
 function weightQty(p,kg){return p.unit==="gram"?kg*1000:kg;}
-function addProduct(p,qty=1){if(p.trackStock&&qty>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));const existing=cart.find(x=>x.productId===p.id);if(existing){const next=existing.quantity+qty;if(p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));existing.quantity=next;existing.stockQuantity=next;existing.total=Math.round(next*existing.unitPrice*100)/100;}else add({productId:p.id,name:p.name,kind:"product",unit:p.unit,quantity:qty,stockQuantity:qty,unitPrice:Number(p.price),cost:Number(p.cost||0)});beep(true);renderCart();}
+function addProduct(p,qty=1){if(p.trackStock&&qty>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));const existing=cart.find(x=>x.productId===p.id);if(existing){const next=existing.quantity+qty;if(p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));existing.quantity=next;existing.stockQuantity=next;existing.total=Math.round(next*existing.unitPrice*100)/100;}else add({productId:p.id,name:p.name,kind:"product",unit:p.unit,quantity:qty,stockQuantity:qty,unitPrice:Number(p.price),cost:Number(p.cost||0),costKnown:p.costKnown===true||Number(p.cost)>0});beep(true);renderCart();}
 function renderQuick(){const root=$("quickProducts"),q=$("quickSearch").value.trim().toLowerCase(),cats=$("quickCategories");root.replaceChildren();const categories=["الكل",...new Set(products.map(p=>p.category).filter(Boolean))];cats.replaceChildren();categories.forEach(c=>{const b=document.createElement("button");b.className="category-chip"+(activeCategory===c?" active":"");b.textContent=c;b.onclick=()=>{activeCategory=c;renderQuick()};cats.append(b);});const list=products.filter(p=>(activeCategory==="الكل"||p.category===activeCategory)&&(!q||p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q)));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مطابقة. أضف منتجات أو اختر تصنيفًا آخر.</p>';return;}list.forEach(p=>{const card=document.createElement("div");card.className="quick-card";const b=document.createElement("button");b.className="quick-product";b.innerHTML="<strong></strong><small></small>";b.querySelector("strong").textContent=p.name;b.querySelector("small").textContent=money(p.price)+" / "+unit(p.unit);b.onclick=()=>{if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));};card.append(b);if(p.unit!=="piece"){const weights=document.createElement("div");weights.className="weight-chips";[[.25,"250 جم"],[.5,"500 جم"],[.75,"750 جم"],[1,"1 كجم"]].forEach(([n,label])=>{const x=document.createElement("button");x.textContent=label;x.onclick=()=>addProduct(p,weightQty(p,n));weights.append(x);});card.append(weights);}root.append(card);});}
 $("quickSearch").oninput=renderQuick;$("discount").oninput=renderCart;
 $("saleType").onchange=()=>{$("unitHint").textContent=$("saleType").value==="weight"?"أدخل الوزن بالكيلوجرام؛ 0.250 = 250 جرام.":$("saleType").value==="manual"?"بند يدوي لا يخصم من المخزون.":"الكمية بالقطعة أو العبوة.";$("itemQuantity").step=$("saleType").value==="weight"?"0.001":"1";if($("saleType").value!=="weight")$("itemQuantity").value="1";};
@@ -122,7 +122,7 @@ $("itemForm").onsubmit=e=>{e.preventDefault();const name=$("itemName").value.tri
 $("trackStock").onchange=()=>$("stockLabel").hidden=!$("trackStock").checked;
 function resetProduct(){$("productForm").reset();$("productId").value="";$("stockLabel").hidden=true;$("productStock").value="0";$("productMinStock").value="0";}
 $("resetProduct").onclick=resetProduct;
-$("productForm").onsubmit=async e=>{e.preventDefault();const id=$("productId").value||uid(),barcode=$("productBarcode").value.trim(),p={id,name:$("productName").value.trim(),barcode,category:$("productCategory").value.trim(),unit:$("productUnit").value,price:Number($("productPrice").value),cost:Number($("productCost").value)||0,trackStock:$("trackStock").checked,stock:$("trackStock").checked?Number($("productStock").value)||0:null,minStock:$("trackStock").checked?Math.max(0,Number($("productMinStock").value)||0):0,updatedAt:new Date().toISOString()};if(!p.name||!Number.isFinite(p.price)||p.price<0)return alert("راجع الاسم والسعر.");try{if(barcode){
+$("productForm").onsubmit=async e=>{e.preventDefault();const id=$("productId").value||uid(),barcode=$("productBarcode").value.trim(),p={id,name:$("productName").value.trim(),barcode,category:$("productCategory").value.trim(),unit:$("productUnit").value,price:Number($("productPrice").value),cost:Number($("productCost").value)||0,costKnown:$("productCost").value.trim()!=="",trackStock:$("trackStock").checked,stock:$("trackStock").checked?Number($("productStock").value)||0:null,minStock:$("trackStock").checked?Math.max(0,Number($("productMinStock").value)||0):0,updatedAt:new Date().toISOString()};if(!p.name||!Number.isFinite(p.price)||p.price<0)return alert("راجع الاسم والسعر.");try{if(barcode){
  const old=await POSDatabase.getProductByBarcode(barcode);
  if(old&&old.id!==id)return alert("الباركود مسجل للمنتج "+old.name);
 
@@ -167,7 +167,7 @@ function renderProducts(){
     edit.onclick=()=>{
       $("productId").value=p.id;$("productName").value=p.name;$("productBarcode").value=p.barcode||"";
       $("productCategory").value=p.category||"";$("productUnit").value=p.unit;$("productPrice").value=p.price;
-      $("productCost").value=p.cost||"";$("trackStock").checked=!!p.trackStock;$("stockLabel").hidden=!p.trackStock;
+      $("productCost").value=p.costKnown?String(p.cost):(Number(p.cost)>0?String(p.cost):"");$("trackStock").checked=!!p.trackStock;$("stockLabel").hidden=!p.trackStock;
       $("productStock").value=p.stock??0;$("productMinStock").value=p.minStock??0;
       activateSubtab("products","add");
       $("productForm").scrollIntoView({behavior:"smooth",block:"start"});
@@ -211,7 +211,7 @@ function renderCatalog(){
 async function addCatalogItem(item){
   if(products.some(p=>catalogNameKey(p.name)===catalogNameKey(item.name)))return alert("المنتج موجود بالفعل في قائمة المحل.");
   try{
-    await POSDatabase.saveProduct({id:uid(),name:item.name,barcode:"",category:item.category,unit:item.unit,price:Number(item.price),cost:0,trackStock:false,stock:null,updatedAt:new Date().toISOString()});
+    await POSDatabase.saveProduct({id:uid(),name:item.name,barcode:"",category:item.category,unit:item.unit,price:Number(item.price),cost:0,costKnown:false,trackStock:false,stock:null,updatedAt:new Date().toISOString()});
     await load();$("catalogMessage").textContent="تمت إضافة: "+item.name;
   }catch(error){alert("تعذرت إضافة المنتج: "+error.message);}
 }
