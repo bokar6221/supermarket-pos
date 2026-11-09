@@ -2,7 +2,7 @@ name: Build Android POS APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, "qayem-competitive-v1"]
     paths:
       - "android-app/**"
       - "app.js"
@@ -40,6 +40,17 @@ jobs:
 
       - name: Install Android SDK packages
         run: sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Validate JavaScript
+        run: |
+          node --check app.js
+          node --check db.js
+          node --check catalog.js
+
+      - name: Sync web app into Android assets
+        run: |
+          mkdir -p android-app/app/src/main/assets/www
+          cp index.html app.js db.js styles.css catalog.js icon.svg manifest.json android-app/app/src/main/assets/www/
 
       - name: Build APK
         working-directory: android-app
