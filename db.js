@@ -11,7 +11,7 @@
   function openDB(){
     return new Promise((resolve,reject)=>{
       const req=indexedDB.open(DB_NAME,DB_VERSION);
-      req.onupgradeneeded=()=>{
+      req.onupgradeneeded=event=>{
         const db=req.result,tx=req.transaction;
         let products;
         if(!db.objectStoreNames.contains("products")){
@@ -82,7 +82,7 @@
         ensureIndex(shifts,"openedAt","openedAt");ensureIndex(shifts,"status","status");
 
         // Upgrade legacy v3 financial data once, without deleting or rewriting old sales.
-        if(req.oldVersion<4){
+        if(event.oldVersion<4){
           const normalizePhone=value=>{
             let digits=String(value||"").replace(/\\D/g,"");
             if(digits.startsWith("0020"))digits="0"+digits.slice(4);
