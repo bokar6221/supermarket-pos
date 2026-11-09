@@ -118,7 +118,7 @@ async function load(){
   $("shopTitle").textContent=shopSettings.shopName||"كاشير المحل";
   renderQuick();renderProducts();renderCatalog();
 }
-function renderProducts(){const root=$("productList"),q=$("productSearch").value.trim().toLowerCase();root.replaceChildren();const list=products.filter(p=>p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مسجلة.</p>';return;}list.forEach(p=>{const row=document.createElement("div");row.className="product-row";const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");name.textContent=p.name;meta.textContent=(p.barcode?"باركود "+p.barcode:"بدون باركود")+" · "+money(p.price)+(p.trackStock?" · رصيد "+qtyText(p.stock)+" "+unit(p.unit)+" · حد الطلب "+qtyText(p.minStock||0):" · دون تتبع مخزون");info.append(name,meta);const actions=document.createElement("div"),edit=document.createElement("button"),del=document.createElement("button");edit.className="secondary";edit.textContent="تعديل";edit.onclick=()=>{$("productId").value=p.id;$("productName").value=p.name;$("productBarcode").value=p.barcode||"";$("productCategory").value=p.category||"";$("productUnit").value=p.unit;$("productPrice").value=p.price;$("productCost").value=p.cost||"";$("trackStock").checked=!!p.trackStock;$("stockLabel").hidden=!p.trackStock;$("productStock").value=p.stock??0;$("productMinStock").value=p.minStock??0;$("productForm").scrollIntoView({behavior:"smooth"});};del.className="remove";del.textContent="حذف";del.onclick=async()=>{if(confirm("حذف المنتج؟ الفواتير السابقة لن تتغير.")){await POSDatabase.deleteProduct(p.id);await load();}};actions.append(edit,del);row.append(info,actions);root.append(row);});}
+function renderProducts(){const root=$("productList"),q=$("productSearch").value.trim().toLowerCase();root.replaceChildren();const list=products.filter(p=>p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مسجلة.</p>';return;}list.forEach(p=>{const row=document.createElement("div");row.className="product-row";const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");name.textContent=p.name;meta.textContent=(p.barcode?"باركود "+p.barcode:"بدون باركود")+" · "+money(p.price)+(p.trackStock?" · رصيد "+qtyText(p.stock)+" "+unit(p.unit)+" · حد الطلب "+qtyText(p.minStock||0):" · دون تتبع مخزون");info.append(name,meta);const actions=document.createElement("div"),edit=document.createElement("button"),del=document.createElement("button");edit.className="secondary";edit.textContent="تعديل";edit.onclick=()=>{$("productId").value=p.id;$("productName").value=p.name;$("productBarcode").value=p.barcode||"";$("productCategory").value=p.category||"";$("productUnit").value=p.unit;$("productPrice").value=p.price;$("productCost").value=p.cost||"";$("trackStock").checked=!!p.trackStock;$("stockLabel").hidden=!p.trackStock;$("productStock").value=p.stock??0;$("productMinStock").value=p.minStock??0;$("productForm").scrollIntoView({behavior:"smooth"});};del.className="remove";del.textContent="حذف";del.onclick=async()=>{if(confirm("حذف المنتج؟ الفواتير والحركات السابقة لن تتغير.")){try{await POSDatabase.deleteProduct(p.id);await load();}catch(error){alert(error.message);}}};actions.append(edit,del);row.append(info,actions);root.append(row);});}
 function catalogNameKey(value){return String(value||"").trim().toLocaleLowerCase("ar").replace(/\s+/g," ");}
 let activeCatalogCategory="الكل";
 function renderCatalog(){
@@ -197,7 +197,7 @@ function renderProductSelects(){
   fillSelect("purchaseProduct",options,"اختر الصنف");
 }
 function movementLabel(type){
-  return ({sale:"بيع",purchase:"شراء",adjustment:"تسوية يدوية",stocktake:"تسوية جرد"}[type]||type||"حركة");
+  return ({sale:"بيع",purchase:"شراء",opening:"رصيد افتتاحي",adjustment:"تسوية يدوية",stocktake:"تسوية جرد"}[type]||type||"حركة");
 }
 function renderInventory(){
   renderProductSelects();
@@ -262,13 +262,32 @@ function renderInventory(){
     stocktakes.sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
     if(!stocktakes.length){root.innerHTML='<p class="empty">لم يتم تنفيذ جرد حتى الآن.</p>';return;}
     stocktakes.slice(0,10).forEach(stocktake=>{
-      const row=document.createElement("div");row.className="history-row";
+      const wrap=document.createElement("div"),row=document.createElement("div");wrap.className="stocktake-history-item";row.className="history-row";
       const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");
       const items=stocktake.items||[];
       const changed=items.filter(item=>Math.abs(Number(item.difference||0))>0.000001).length;
       title.textContent="جرد "+new Date(stocktake.createdAt).toLocaleString("ar-EG");
       meta.textContent=items.length+" صنف · "+changed+" صنف بفروق · "+(stocktake.note||"جرد فعلي");
-      info.append(title,meta);row.append(info);root.append(row);
+      info.append(title,meta);
+      const details=document.createElement("button");details.type="button";details.className="secondary";details.textContent="الفروق";
+      const detailBox=document.createElement("div");detailBox.className="stocktake-differences";detailBox.hidden=true;
+      details.onclick=()=>{
+        detailBox.hidden=!detailBox.hidden;
+        details.textContent=detailBox.hidden?"الفروق":"إخفاء";
+        if(detailBox.childElementCount===0){
+          const differences=items.filter(item=>Math.abs(Number(item.difference||0))>0.000001);
+          if(!differences.length)detailBox.textContent="لا توجد فروق في هذا الجرد.";
+          else differences.forEach(item=>{
+            const line=document.createElement("div"),name=document.createElement("span"),value=document.createElement("strong");
+            name.textContent=item.productName||"صنف";
+            const diff=Number(item.difference||0);
+            value.textContent=(diff>0?"+":"")+qtyText(diff)+" "+unit(item.unit);
+            value.className=diff>0?"movement-positive":"movement-negative";
+            line.append(name,value);detailBox.append(line);
+          });
+        }
+      };
+      row.append(info,details);wrap.append(row,detailBox);root.append(wrap);
     });
   }).catch(error=>console.warn("تعذر تحميل سجلات الجرد",error));
 }
@@ -373,12 +392,15 @@ function renderPurchases(){
     purchases.slice(0,80).forEach(p=>{
       const row=document.createElement("div");row.className="history-row";
       const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");
-      title.textContent=p.supplierName||"مشتريات بدون مورد";
-      meta.textContent=(p.createdAt?new Date(p.createdAt).toLocaleString("ar-EG"):"")+" · "+(p.items||[]).length+" صنف · مدفوع "+money(p.paidAmount||0)+" · متبقي "+money(p.balance||0);
+      title.textContent=p.number||"فاتورة مشتريات";
+      meta.textContent=(p.supplierName||"بدون مورد")+" · "+(p.createdAt?new Date(p.createdAt).toLocaleString("ar-EG"):"")+" · مدفوع "+money(p.paidAmount||0)+" · متبقي "+money(p.balance||0);
       if(p.note)meta.textContent+=" · "+p.note;
       info.append(title,meta);
+      const actions=document.createElement("div");actions.className="purchase-history-actions";
       const amount=document.createElement("strong");amount.textContent=money(p.total);
-      row.append(info,amount);history.append(row);
+      const details=document.createElement("button");details.type="button";details.className="secondary";details.textContent="تفاصيل";
+      details.onclick=()=>alert((p.items||[]).map(item=>item.name+" — "+qtyText(item.quantity)+" "+unit(item.unit)+" × "+money(item.unitCost)+" = "+money(item.total)).join("\n")+"\nالإجمالي: "+money(p.total)+"\nالمدفوع: "+money(p.paidAmount||0)+"\nالمتبقي: "+money(p.balance||0));
+      actions.append(amount,details);row.append(info,actions);history.append(row);
     });
 
     const statement=$("supplierStatement"),supplierId=$("statementSupplier").value;
