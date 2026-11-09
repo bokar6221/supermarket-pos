@@ -473,6 +473,8 @@ function renderPurchaseDraft(){
   root.replaceChildren();
   const total=purchaseDraft.reduce((sum,item)=>sum+item.total,0);
   $("purchaseDraftTotal").textContent=money(total);
+  const paid=Number($("purchasePaidAmount").value)||0;
+  $("purchaseDuePreview").textContent="المتبقي بعد السداد: "+money(Math.max(0,total-paid))+(paid>total?" · راجع المبلغ المدفوع":"");
   $("savePurchaseButton").disabled=!purchaseDraft.length;
   if(!purchaseDraft.length){root.innerHTML='<p class="empty">لم تتم إضافة أصناف إلى فاتورة الشراء.</p>';return;}
   purchaseDraft.forEach((item,index)=>{
@@ -485,6 +487,7 @@ function renderPurchaseDraft(){
     row.append(info,amount,del);root.append(row);
   });
 }
+$("purchasePaidAmount").oninput=renderPurchaseDraft;
 $("savePurchaseButton").onclick=async()=>{
   const total=purchaseDraft.reduce((sum,item)=>sum+item.total,0),paid=Number($("purchasePaidAmount").value)||0;
   if(!purchaseDraft.length)return alert("أضف أصنافًا للمشتريات.");
