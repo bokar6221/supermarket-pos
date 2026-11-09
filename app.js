@@ -201,7 +201,7 @@ function receiptDocument(inv){
 function receiptMessage(inv){
   const lines=(inv.items||[]).map(item=>'• '+item.name+' — '+receiptQuantity(item)+' × '+money(item.unitPrice)+' = '+money(item.total));
   return [shopSettings.shopName||"فاتورة مبيعات",shopSettings.shopAddress||"",shopSettings.shopPhone?"هاتف: "+shopSettings.shopPhone:"",
-    "فاتورة رقم: "+invoiceNumber(inv),"التاريخ: "+receiptDate(inv),inv.customerName?"العميل: "+inv.customerName:"",
+    "فاتورة رقم: "+invoiceNumber(inv),"التاريخ: "+receiptDate(inv),inv.customerName?"العميل: "+inv.customerName:"",inv.customerPhone?"هاتف العميل: "+inv.customerPhone:"",
     "--------------------",...lines,"--------------------",
     "الإجمالي قبل الخصم: "+money(inv.subtotal??(Number(inv.total||0)+Number(inv.discount||0))),
     "الخصم: "+money(inv.discount||0),"الإجمالي المطلوب: "+money(inv.total||0),
@@ -210,14 +210,26 @@ function receiptMessage(inv){
 }
 function showReceipt(inv){activeReceipt=inv;$("receiptPreview").innerHTML=receiptContent(inv);$("receiptModal").hidden=false;}
 function closeReceipt(){$("receiptModal").hidden=true;activeReceipt=null;}
+function normalizeWhatsAppPhone(phone){
+  let digits=String(phone||"").replace(/\D/g,"");
+  if(digits.startsWith("00"))digits=digits.slice(2);
+  else if(digits.startsWith("0"))digits="20"+digits.slice(1);
+  return digits.length>=10&&digits.length<=15?digits:"";
+}
 async function shareInvoice(inv){
-  const message=receiptMessage(inv);
-  if(window.AndroidScanner&&typeof window.AndroidScanner.shareText==="function"){window.AndroidScanner.shareText(message);return;}
+  const message=receiptMessage(inv),phone=normalizeWhatsAppPhone(inv.customerPhone);
+  if(phone&&window.AndroidScanner&&typeof window.AndroidScanner.sendWhatsApp==="function"){
+    window.AndroidScanner.sendWhatsApp(phone,message);return;
+  }
+  if(!phone&&window.AndroidScanner&&typeof window.AndroidScanner.shareText==="function"){
+    window.AndroidScanner.shareText(message);return;
+  }
   if(navigator.share){
     try{await navigator.share({title:"فاتورة "+invoiceNumber(inv),text:message});return;}
     catch(error){if(error&&error.name==="AbortError")return;}
   }
-  const opened=window.open("https://wa.me/?text="+encodeURIComponent(message),"_blank","noopener");
+  const url="https://wa.me/"+(phone||"")+"?text="+encodeURIComponent(message);
+  const opened=window.open(url,"_blank","noopener");
   if(!opened)alert("تعذر فتح واتساب تلقائيًا. اسمح بفتح الرابط من إعدادات المتصفح.");
 }
 function printInvoice(inv){
