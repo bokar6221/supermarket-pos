@@ -9,7 +9,8 @@ on:
       - "index.html"
       - "styles.css"
       - "db.js"
-      - "catalog.js", "accounts.js"
+      - "catalog.js"
+      - "accounts.js"
       - ".github/workflows/build-android-apk.yml"
   workflow_dispatch:
 
