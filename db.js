@@ -369,6 +369,7 @@
             p.trackStock=true;
             p.stock=nextQty;
             p.cost=nextQty>0?((oldQty*oldCost)+(qty*unitCost))/nextQty:unitCost;
+            p.costKnown=true;
             p.updatedAt=clean.createdAt;
             products.put(p);
             movements.add({
@@ -548,7 +549,8 @@
               const raw=qty*Number(sold.unitPrice||0),ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
               const lineAmount=Math.round(raw*ratio*100)/100;amount+=lineAmount;
               lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),
-                cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,amount:lineAmount});
+                cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,
+                costKnown:sold.costKnown===true||(sold.cost!==undefined&&sold.cost!==null&&Number(sold.cost)>0),amount:lineAmount});
             }
             const clean={...record,items:lines,amount:Math.round(amount*100)/100,createdAt:record.createdAt||new Date().toISOString()};
             rs.add(clean);
