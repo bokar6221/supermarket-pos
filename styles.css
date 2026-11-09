@@ -214,3 +214,55 @@
   .invoice-actions button{flex:1}
   .receipt-actions{grid-template-columns:1fr}
 }
+
+
+/* Inventory and purchasing workflows */
+.stock-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}
+.stock-stat{border:1px solid #e3ebe6;background:#f7faf8;border-radius:12px;padding:13px;min-width:0}
+.stock-stat span{display:block;color:#6d7a72;font-size:11px;margin-bottom:8px}
+.stock-stat strong{display:block;color:#174d3c;font-size:18px;overflow-wrap:anywhere}
+.stock-alert-row,.movement-row,.history-row,.supplier-row,.purchase-draft-row,.stocktake-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #edf0ee}
+.stock-alert-row:last-child,.movement-row:last-child,.history-row:last-child,.supplier-row:last-child,.purchase-draft-row:last-child,.stocktake-row:last-child{border-bottom:0}
+.stock-alert-row strong,.movement-row strong,.history-row strong,.supplier-row strong,.purchase-draft-row strong,.stocktake-row strong{display:block;font-size:13px}
+.stock-alert-row small,.movement-row small,.history-row small,.supplier-row small,.purchase-draft-row small,.stocktake-row small{display:block;color:#76827b;font-size:11px;margin-top:4px}
+.stock-status{display:inline-flex;align-items:center;white-space:nowrap;border-radius:20px;padding:5px 9px;font-size:10px;background:#edf3ef;color:#35614c}
+.stock-status.low{background:#fff2d9;color:#8b5b00}
+.stock-status.out{background:#fde9e7;color:#a2372d}
+.stock-alert-row.low{background:#fffdf8}
+.stock-alert-row.out{background:#fffafa}
+.table-scroll{width:100%;overflow:auto;overscroll-behavior-inline:contain}
+.data-table{width:100%;min-width:520px;border-collapse:collapse;font-size:12px}
+.data-table th,.data-table td{padding:10px 9px;border-bottom:1px solid #e9eeeb;text-align:right;white-space:nowrap}
+.data-table th{background:#f4f7f5;color:#42544a;font-weight:bold}
+.data-table tbody tr:last-child td{border-bottom:0}
+.movement-positive{color:#18764f}
+.movement-negative{color:#b23d32}
+.supplier-due{color:#a54a27}
+.supplier-clear{color:#18764f}
+.supplier-balance-summary{margin:10px 0 0;padding:11px;border-radius:9px;background:#f1f7f3;color:#244f3c}
+.purchase-total-row{display:flex;justify-content:space-between;align-items:center;padding:13px 0;margin:8px 0;border-top:1px solid #edf0ee;border-bottom:1px solid #edf0ee}
+.purchase-total-row strong{font-size:20px;color:#174d3c}
+.purchase-draft-row{gap:8px}
+.purchase-draft-row>div{min-width:0;flex:1}
+.purchase-draft-row>strong{white-space:nowrap}
+.stocktake-row{align-items:center}
+.stocktake-row>div{flex:1;min-width:0}
+.stocktake-row label{width:120px;max-width:38%;margin:0}
+.stocktake-row input{margin-top:4px}
+#stocktakeEditor{border-top:1px solid #e8eeea;padding-top:12px;margin-top:12px}
+#stocktakeRows{max-height:55vh;overflow:auto}
+@media(max-width:700px){
+  .stock-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stock-stat strong{font-size:16px}
+  .stock-alert-row,.movement-row,.history-row,.supplier-row{align-items:flex-start}
+  .stock-alert-row .stock-status{margin-inline-start:auto}
+  .stocktake-row label{width:104px}
+  #view-inventory.active,#view-purchases.active{grid-template-columns:1fr}
+  #view-inventory .panel,#view-purchases .panel{padding:14px}
+  .data-table{font-size:11px}
+}
+@media(max-width:360px){
+  .stocktake-row{gap:6px}
+  .stocktake-row label{width:88px;max-width:34%}
+  .stock-alert-row strong,.movement-row strong,.history-row strong,.supplier-row strong{font-size:12px}
+}
