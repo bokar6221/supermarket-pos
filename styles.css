@@ -266,3 +266,10 @@
   .stocktake-row label{width:88px;max-width:34%}
   .stock-alert-row strong,.movement-row strong,.history-row strong,.supplier-row strong{font-size:12px}
 }
+
+.stocktake-differences{background:#f8faf8;border-radius:9px;padding:8px 12px;margin:0 0 8px 0}
+.stocktake-differences>div{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #e8eeea;font-size:12px}
+.stocktake-differences>div:last-child{border-bottom:0}
+.purchase-history-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.purchase-history-actions button{padding:7px 9px;font-size:11px}
+@media(max-width:420px){.purchase-history-actions{flex-direction:column;align-items:flex-end}}
