@@ -260,7 +260,7 @@ function renderProductSelects(){
   fillSelect("purchaseProduct",options,"اختر الصنف");
 }
 function movementLabel(type){
-  return ({sale:"بيع",purchase:"شراء",opening:"رصيد افتتاحي",adjustment:"تسوية يدوية",stocktake:"تسوية جرد"}[type]||type||"حركة");
+  return ({sale:"بيع",purchase:"شراء",return:"مرتجع مبيعات",opening:"رصيد افتتاحي",adjustment:"تسوية يدوية",stocktake:"تسوية جرد"}[type]||type||"حركة");
 }
 function renderInventory(){
   renderProductSelects();
