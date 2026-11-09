@@ -101,11 +101,35 @@
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction("products","readwrite");
-        tx.objectStore("products").put(clean);
+        const tx=db.transaction(["products","movements"],"readwrite");
+        const store=tx.objectStore("products"),req=store.get(clean.id);
+        let failure="";
+        req.onsuccess=()=>{
+          const existing=req.result||null;
+          const oldTracked=!!(existing&&existing.trackStock);
+          const oldQty=oldTracked?Number(existing.stock||0):0;
+          if(oldTracked&&!clean.trackStock&&oldQty>0.000001){
+            failure="لا يمكن إيقاف تتبع المخزون لصنف له رصيد. سجّل تسوية أو جردًا حتى يصبح الرصيد صفرًا أولًا.";
+            try{tx.abort();}catch(e){}
+            return;
+          }
+          const newTracked=!!clean.trackStock,newQty=newTracked?Number(clean.stock||0):0;
+          if(newTracked&&(!oldTracked||Math.abs(newQty-oldQty)>0.000001)){
+            const delta=newQty-oldQty;
+            if(Math.abs(delta)>0.000001){
+              tx.objectStore("movements").add({
+                id:crypto.randomUUID(),productId:clean.id,productName:clean.name,
+                type:oldTracked?"adjustment":"opening",quantity:delta,unit:clean.unit,
+                createdAt:clean.updatedAt||new Date().toISOString(),
+                note:oldTracked?"تعديل الرصيد من بطاقة المنتج":"رصيد افتتاحي عند تسجيل الصنف"
+              });
+            }
+          }
+          store.put(clean);
+        };
         tx.oncomplete=()=>resolve(true);
         tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(tx.error);
+        tx.onabort=()=>reject(new Error(failure||"تعذر حفظ المنتج."));
       });
       return clean;
     }finally{db.close();}
@@ -126,16 +150,24 @@
   async function deleteProduct(id){
     const db=await openDB();
     try{
-      return await new Promise((resolve,reject)=>{
-        const tx=db.transaction("products","readwrite");
-        tx.objectStore("products").delete(id);
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction("products","readwrite"),store=tx.objectStore("products"),req=store.get(id);
+        let failure="";
+        req.onsuccess=()=>{
+          const product=req.result;
+          if(product&&product.trackStock&&Number(product.stock||0)>0.000001){
+            failure="لا يمكن حذف صنف له رصيد بالمخزون. صفّر رصيده بتسوية موثقة أولًا.";
+            try{tx.abort();}catch(e){}
+            return;
+          }
+          store.delete(id);
+        };
         tx.oncomplete=()=>resolve(true);
         tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(tx.error);
+        tx.onabort=()=>reject(new Error(failure||"تعذر حذف المنتج."));
       });
     }finally{db.close();}
   }
-
   async function saveInvoice(invoice){
     const db=await openDB();
     try{
