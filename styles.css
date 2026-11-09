@@ -176,3 +176,41 @@
   .invoice-panel{display:block}
   .invoice-drawer-top{display:none}
 }
+
+
+/* Receipt and store-profile experience */
+.invoice-customer-fields{margin-top:10px}
+.invoice-row{flex-wrap:wrap}
+.invoice-actions{display:flex;gap:6px;flex-wrap:wrap}
+.invoice-actions button{padding:8px 10px;font-size:12px}
+.receipt-modal-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(9,22,17,.68);display:flex;align-items:center;justify-content:center;padding:12px}
+.receipt-modal-backdrop[hidden]{display:none}
+.receipt-modal{width:min(100%,520px);max-height:94dvh;overflow:hidden;display:flex;flex-direction:column;gap:12px;background:#f4f6f4;border-radius:16px;padding:14px;box-shadow:0 18px 60px rgba(0,0,0,.28)}
+.receipt-modal-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.receipt-modal-heading h2{margin:0}
+.receipt-preview{overflow:auto;overscroll-behavior:contain;max-height:65dvh;background:#fff;border:1px solid #e1e7e3;border-radius:10px;padding:12px}
+.receipt-paper{margin:0 auto;color:#111;background:#fff;font-size:12px}
+.receipt-brand{text-align:center;border-bottom:1px dashed #9aa39d;padding-bottom:8px;margin-bottom:8px}
+.receipt-brand h2{font-size:18px;margin:0 0 5px}
+.receipt-brand p{margin:3px 0;font-size:11px}
+.receipt-meta{display:flex;justify-content:space-between;gap:8px;margin:8px 0}
+.receipt-meta div{display:flex;flex-direction:column;gap:3px}
+.receipt-meta span,.receipt-customer{font-size:10px;color:#424b45}
+.receipt-customer{border-block:1px dashed #aaa;padding:6px 0;margin:6px 0}
+.receipt-customer span{display:block;margin-top:3px}
+.receipt-table{width:100%;border-collapse:collapse;font-size:10px}
+.receipt-table th,.receipt-table td{padding:5px 3px;border-bottom:1px solid #e3e5e3;text-align:right;vertical-align:top}
+.receipt-table th{background:#f1f3f1}
+.receipt-totals{margin-top:8px;border-top:1px dashed #999;padding-top:6px}
+.receipt-totals div{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.receipt-grand{font-size:15px;border-top:1px solid #555;margin-top:4px;padding-top:7px!important}
+.receipt-payment{font-size:11px;margin:8px 0}
+.receipt-paper footer{text-align:center;border-top:1px dashed #999;padding-top:8px;margin-top:10px;font-weight:bold}
+.receipt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:420px){
+  .receipt-modal{padding:10px;border-radius:12px}
+  .receipt-modal-backdrop{padding:7px}
+  .invoice-actions{width:100%}
+  .invoice-actions button{flex:1}
+  .receipt-actions{grid-template-columns:1fr}
+}
