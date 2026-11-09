@@ -287,7 +287,6 @@ $("stockAdjustmentForm").onsubmit=async e=>{
   try{
     await POSDatabase.saveStockAdjustment({productId:product.id,delta,reason:$("adjustmentReason").value.trim()});
     $("adjustmentMessage").textContent="تم تسجيل الحركة وتحديث الرصيد.";
-    $("adjustmentForm");
     $("adjustmentQuantity").value="";$("adjustmentReason").value="";
     await load();renderInventory();
   }catch(error){$("adjustmentMessage").textContent="تعذر حفظ الحركة: "+error.message;}
@@ -323,7 +322,8 @@ $("completeStocktakeButton").onclick=async()=>{
   const inputs=[...$("stocktakeRows").querySelectorAll("input[data-product-id]")];
   const counts=new Map(inputs.map(input=>[input.dataset.productId,input.value]));
   const items=stocktakeDraft.map(item=>{
-    const counted=Number(counts.get(item.productId));
+    const raw=counts.get(item.productId);
+    const counted=raw===""||raw===undefined?NaN:Number(raw);
     return {...item,countedQty:counted,difference:counted-Number(item.expectedQty||0)};
   });
   if(items.some(item=>!Number.isFinite(item.countedQty)||item.countedQty<0))return alert("راجع الكميات الفعلية؛ لا تقبل القيم السالبة أو الفارغة.");
@@ -427,6 +427,10 @@ $("supplierPaymentForm").onsubmit=async e=>{
     $("supplierPaymentAmount").value="";$("supplierPaymentNote").value="";
     $("supplierPaymentMessage").textContent="تم تسجيل السداد وتحديث كشف الحساب.";renderPurchases();
   }catch(error){$("supplierPaymentMessage").textContent="تعذر تسجيل السداد: "+error.message;}
+};
+$("purchaseProduct").onchange=()=>{
+  const product=products.find(p=>p.id===$("purchaseProduct").value);
+  $("purchaseUnitCost").value=product?String(product.cost||""):"";
 };
 $("purchaseItemForm").onsubmit=e=>{
   e.preventDefault();
