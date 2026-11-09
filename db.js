@@ -80,6 +80,47 @@
         if(!db.objectStoreNames.contains("shifts"))shifts=db.createObjectStore("shifts",{keyPath:"id"});
         else shifts=tx.objectStore("shifts");
         ensureIndex(shifts,"openedAt","openedAt");ensureIndex(shifts,"status","status");
+
+        // Upgrade legacy v3 financial data once, without deleting or rewriting old sales.
+        if(req.oldVersion<4){
+          const normalizePhone=value=>{
+            let digits=String(value||"").replace(/\\D/g,"");
+            if(digits.startsWith("0020"))digits="0"+digits.slice(4);
+            else if(digits.startsWith("20")&&digits.length===12)digits="0"+digits.slice(2);
+            return digits;
+          };
+          const invoiceCursor=invoices.openCursor();
+          invoiceCursor.onsuccess=()=>{
+            const cursor=invoiceCursor.result;if(!cursor)return;
+            const invoice=cursor.value||{},createdAt=invoice.createdAt||new Date().toISOString();
+            if(invoice.paymentMethod==="cash"||invoice.paymentMethod==="electronic"){
+              const amount=Number(invoice.total||0);
+              if(amount>0)cashEntries.add({id:"migration-sale-"+String(invoice.id),type:"income",category:"sale",amount,method:invoice.paymentMethod,referenceId:invoice.id,note:"مبيعات سابقة "+String(invoice.id||""),createdAt});
+            }
+            if(invoice.paymentMethod==="credit"&&String(invoice.customerName||"").trim()){
+              const phone=normalizePhone(invoice.customerPhone);
+              const customerId=phone?"legacy-customer-"+phone:"legacy-customer-"+String(invoice.id);
+              invoice.customerId=invoice.customerId||customerId;
+              cursor.update(invoice);
+              customers.put({id:invoice.customerId,name:String(invoice.customerName).trim(),phone:phone||String(invoice.customerPhone||""),openingBalance:0,active:true,note:"تم ترحيله من فواتير الإصدار السابق",createdAt,updatedAt:createdAt});
+            }
+            cursor.continue();
+          };
+          const purchaseCursor=purchases.openCursor();
+          purchaseCursor.onsuccess=()=>{
+            const cursor=purchaseCursor.result;if(!cursor)return;
+            const purchase=cursor.value||{},amount=Number(purchase.paidAmount||0);
+            if(amount>0)cashEntries.add({id:"migration-purchase-"+String(purchase.id),type:"expense",category:"purchase",amount,method:purchase.paymentMethod||"cash",referenceId:purchase.id,note:"مدفوع مشتريات سابقة "+String(purchase.number||""),createdAt:purchase.createdAt||new Date().toISOString()});
+            cursor.continue();
+          };
+          const supplierPaymentCursor=payments.openCursor();
+          supplierPaymentCursor.onsuccess=()=>{
+            const cursor=supplierPaymentCursor.result;if(!cursor)return;
+            const payment=cursor.value||{},amount=Number(payment.amount||0);
+            if(amount>0)cashEntries.add({id:"migration-supplier-payment-"+String(payment.id),type:"expense",category:"supplier_payment",amount,method:payment.method||"cash",referenceId:payment.id,note:"سداد مورد سابق "+String(payment.supplierName||""),createdAt:payment.createdAt||new Date().toISOString()});
+            cursor.continue();
+          };
+        }
       };
       req.onsuccess=()=>resolve(req.result);
       req.onerror=()=>reject(req.error);
