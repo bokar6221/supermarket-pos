@@ -247,8 +247,9 @@
        !["cash","electronic","credit"].includes(invoice.paymentMethod))throw new Error("راجع إجمالي الفاتورة والخصم وطريقة الدفع.");
     const quantities=new Map();
     for(const item of invoice.items){
+      if(!item||!String(item.name||"").trim())throw new Error("يوجد بند غير صحيح في الفاتورة.");
       const quantity=Number(item.stockQuantity??item.quantity),price=Number(item.unitPrice);
-      if(!item||!String(item.name||"").trim()||!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)throw new Error("يوجد بند غير صحيح في الفاتورة.");
+      if(!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)throw new Error("راجع كمية وسعر كل بند في الفاتورة.");
       if(item.productId)quantities.set(item.productId,(quantities.get(item.productId)||0)+quantity);
     }
     const db=await openDB();
@@ -260,6 +261,7 @@
         for(const [productId,quantity] of quantities){
           const req=ps.get(productId);
           req.onsuccess=()=>{
+            if(failure)return;
             const p=req.result;
             if(!p){failure="يوجد صنف غير موجود ضمن هذه الفاتورة.";try{tx.abort();}catch(e){}return;}
             if(!p.trackStock)return;
