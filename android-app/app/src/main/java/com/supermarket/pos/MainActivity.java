@@ -245,6 +245,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
+        public void sendWhatsApp(String phone, String text) {
+            runOnUiThread(() -> sendWhatsAppNative(phone, text));
+        }
+
+        @JavascriptInterface
         public void printHtml(String html, String jobName) {
             runOnUiThread(() -> printHtmlNative(html, jobName));
         }
@@ -278,6 +283,22 @@ public class MainActivity extends AppCompatActivity {
             startActivity(Intent.createChooser(sendIntent, "مشاركة الفاتورة"));
         } catch (Exception e) {
             Toast.makeText(this, "تعذر فتح تطبيقات المشاركة: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void sendWhatsAppNative(String phone, String text) {
+        String digits = phone == null ? "" : phone.replaceAll("\\D", "");
+        if (digits.startsWith("00")) digits = digits.substring(2);
+        else if (digits.startsWith("0")) digits = "20" + digits.substring(1);
+        if (digits.length() < 10 || digits.length() > 15) {
+            shareTextNative(text);
+            return;
+        }
+        try {
+            Uri uri = Uri.parse("https://wa.me/" + digits + "?text=" + Uri.encode(text == null ? "" : text));
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (Exception e) {
+            shareTextNative(text);
         }
     }
 
