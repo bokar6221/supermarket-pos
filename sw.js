@@ -1,4 +1,4 @@
-const CACHE_NAME="supermarket-pos-shell-v11";
+const CACHE_NAME="supermarket-pos-shell-v12";
 const APP_FILES=["./","./index.html","./styles.css","./db.js","./app.js","./catalog.js","./manifest.json","./icon.svg"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_FILES)));self.skipWaiting();});
 self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
