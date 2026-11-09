@@ -94,12 +94,11 @@
     <div id="movementList"></div>
   </div></div></section>
 
-<section class="view" id="view-purchases"><div class="inner-tabs" data-subtab-group="purchases"><button type="button" class="inner-tab active" data-subtab="suppliers">الموردون وأرصدتهم</button><button type="button" class="inner-tab" data-subtab="add-supplier">إضافة مورد</button><button type="button" class="inner-tab" data-subtab="purchase">فاتورة مشتريات</button><button type="button" class="inner-tab" data-subtab="payment">سداد حساب مورد</button><button type="button" class="inner-tab" data-subtab="history">سجل المشتريات</button></div><div class="inner-tab-panel active" data-subpanel-group="purchases" data-subpanel="suppliers"><div class="panel">
-    <div class="section-heading"><div><h2>الموردون وأرصدتهم</h2><p>الرصيد الموجب يعني مبلغًا مستحقًا للمورد</p></div></div>
+<section class="view" id="view-purchases"><div class="inner-tabs" data-subtab-group="purchases"><button type="button" class="inner-tab active" data-subtab="add-supplier">إضافة مورد</button><button type="button" class="inner-tab" data-subtab="purchase">فاتورة مشتريات</button><button type="button" class="inner-tab" data-subtab="payment">سداد حساب مورد</button><button type="button" class="inner-tab" data-subtab="history">سجل المشتريات</button></div>
     <div id="supplierList"></div>
     <label>كشف حساب مورد<select id="statementSupplier"></select></label>
     <div id="supplierStatement"><p class="empty">اختر موردًا لعرض كشف حسابه.</p></div>
-  </div></div><div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="add-supplier"><div class="panel">
+  </div></div><div class="inner-tab-panel active" data-subpanel-group="purchases" data-subpanel="add-supplier"><div class="panel">
     <h2>إضافة مورد</h2>
     <form id="supplierForm">
       <label>اسم المورد<input id="supplierName" required maxlength="90" placeholder="اسم المورد أو الشركة"></label>
@@ -144,7 +143,8 @@
       <button class="primary" type="submit">تسجيل السداد</button>
       <p class="hint" id="supplierPaymentMessage" role="status"></p>
     </form>
-  </div></div><div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="history"><div class="panel">
+  </div><div class="panel">
+    <div class="section-heading"><div><h2>الموردون وأرصدتهم</h2><p>الرصيد الموجب يعني مبلغًا مستحقًا للمورد</p></div></div><div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="history"><div class="panel">
     <div class="section-heading"><div><h2>سجل المشتريات</h2><p>فواتير الشراء والمدفوع والمتبقي</p></div></div>
     <div id="purchaseHistory"></div>
   </div></div></section>
