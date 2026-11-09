@@ -240,43 +240,45 @@
     }finally{db.close();}
   }
   async function saveInvoice(invoice){
+    if(!invoice||!String(invoice.id||"").trim()||!Array.isArray(invoice.items)||!invoice.items.length)throw new Error("بيانات الفاتورة غير مكتملة.");
+    const subtotal=Number(invoice.subtotal),discount=Number(invoice.discount||0),total=Number(invoice.total);
+    if(!Number.isFinite(subtotal)||subtotal<0||!Number.isFinite(discount)||discount<0||discount>subtotal+0.000001||
+       !Number.isFinite(total)||total<0||Math.abs(total-Math.round((subtotal-discount)*100)/100)>0.02||
+       !["cash","electronic","credit"].includes(invoice.paymentMethod))throw new Error("راجع إجمالي الفاتورة والخصم وطريقة الدفع.");
+    const quantities=new Map();
+    for(const item of invoice.items){
+      const quantity=Number(item.stockQuantity??item.quantity),price=Number(item.unitPrice);
+      if(!item||!String(item.name||"").trim()||!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)throw new Error("يوجد بند غير صحيح في الفاتورة.");
+      if(item.productId)quantities.set(item.productId,(quantities.get(item.productId)||0)+quantity);
+    }
     const db=await openDB();
     try{
       return await new Promise((resolve,reject)=>{
         const tx=db.transaction(["invoices","products","movements","cashEntries"],"readwrite");
         const ps=tx.objectStore("products"),ms=tx.objectStore("movements");
-        for(const item of invoice.items||[]){
-          if(!item.productId)continue;
-          const req=ps.get(item.productId);
+        let failure="";
+        for(const [productId,quantity] of quantities){
+          const req=ps.get(productId);
           req.onsuccess=()=>{
             const p=req.result;
-            if(!p)return;
-            if(p.trackStock){
-              const quantity=Number(item.stockQuantity||item.quantity||0);
-              const next=Number(p.stock||0)-quantity;
-              if(!Number.isFinite(quantity)||quantity<0||next< -0.000001){try{tx.abort();}catch(e){}return;}
-              p.stock=Math.max(0,next);
-              p.updatedAt=invoice.createdAt;
-              ps.put(p);
-              ms.add({
-                id:crypto.randomUUID(),productId:p.id,productName:p.name,type:"sale",
-                quantity:-quantity,unit:p.unit,referenceId:invoice.id,referenceNumber:invoice.id,
-                createdAt:invoice.createdAt,note:"بيع"
-              });
-            }
+            if(!p){failure="يوجد صنف غير موجود ضمن هذه الفاتورة.";try{tx.abort();}catch(e){}return;}
+            if(!p.trackStock)return;
+            const next=Number(p.stock||0)-quantity;
+            if(!Number.isFinite(next)||next< -0.000001){failure="الكمية المتاحة لا تكفي لإتمام الفاتورة.";try{tx.abort();}catch(e){}return;}
+            p.stock=Math.max(0,next);p.updatedAt=invoice.createdAt;ps.put(p);
+            ms.add({id:crypto.randomUUID(),productId:p.id,productName:p.name,type:"sale",quantity:-quantity,unit:p.unit,
+              referenceId:invoice.id,referenceNumber:invoice.id,createdAt:invoice.createdAt,note:"بيع"});
           };
         }
         tx.objectStore("invoices").add(invoice);
-        if(Number(invoice.total||0)>0&&(invoice.paymentMethod==="cash"||invoice.paymentMethod==="electronic")){
-          tx.objectStore("cashEntries").add({
-            id:crypto.randomUUID(),type:"income",category:"sale",amount:Number(invoice.total),
+        if(total>0&&(invoice.paymentMethod==="cash"||invoice.paymentMethod==="electronic")){
+          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"income",category:"sale",amount:total,
             method:invoice.paymentMethod,referenceId:invoice.id,note:"مبيعات "+String(invoice.id||""),
-            createdAt:invoice.createdAt||new Date().toISOString()
-          });
+            createdAt:invoice.createdAt||new Date().toISOString()});
         }
         tx.oncomplete=()=>resolve(true);
         tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(new Error("تعذر حفظ الفاتورة. قد تكون الكمية غير كافية أو حدث خطأ في قاعدة البيانات."));
+        tx.onabort=()=>reject(new Error(failure||"تعذر حفظ الفاتورة. لم يتم تغيير الأرصدة."));
       });
     }finally{db.close();}
   }
@@ -299,25 +301,34 @@
     }finally{db.close();}
   }
   async function saveSupplierPayment(payment){
-    const amount=Number(payment&&payment.amount);
-    if(!payment||!payment.supplierId||!Number.isFinite(amount)||amount<=0)throw new Error("بيانات دفعة المورد غير صحيحة.");
-    const clean={...payment,amount,createdAt:payment.createdAt||new Date().toISOString()};
+    const amount=Number(payment&&payment.amount),method=payment&&payment.method||"cash";
+    if(!payment||!payment.id||!payment.supplierId||!Number.isFinite(amount)||amount<=0||!["cash","electronic"].includes(method))
+      throw new Error("بيانات دفعة المورد غير صحيحة.");
+    const clean={...payment,amount,method,createdAt:payment.createdAt||new Date().toISOString()};
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction(["supplierPayments","suppliers","cashEntries"],"readwrite");
+        const tx=db.transaction(["supplierPayments","suppliers","purchases","cashEntries"],"readwrite");
         const supplierReq=tx.objectStore("suppliers").get(clean.supplierId);
-        supplierReq.onsuccess=()=>{
-          if(!supplierReq.result){try{tx.abort();}catch(e){}return;}
+        const purchasesReq=tx.objectStore("purchases").getAll();
+        const paymentsReq=tx.objectStore("supplierPayments").getAll();
+        let supplier=null,purchases=null,payments=null,failure="";
+        const commit=()=>{
+          if(!supplier||!purchases||!payments)return;
+          const balance=Number(supplier.openingBalance||0)
+            +purchases.filter(x=>x.supplierId===clean.supplierId).reduce((sum,x)=>sum+Number(x.total||0)-Number(x.paidAmount||0),0)
+            -payments.filter(x=>x.supplierId===clean.supplierId).reduce((sum,x)=>sum+Number(x.amount||0),0);
+          if(amount>balance+0.005){failure="مبلغ السداد أكبر من رصيد المورد المستحق: "+balance.toFixed(2)+" جنيه.";try{tx.abort();}catch(e){}return;}
+          clean.supplierName=supplier.name;
           tx.objectStore("supplierPayments").add(clean);
-          tx.objectStore("cashEntries").add({
-            id:crypto.randomUUID(),type:"expense",category:"supplier_payment",amount,
-            method:clean.method||"cash",referenceId:clean.id,note:"سداد المورد "+String(clean.supplierName||""),
-            createdAt:clean.createdAt
-          });
+          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"expense",category:"supplier_payment",amount,method,
+            referenceId:clean.id,note:"سداد المورد "+String(clean.supplierName||""),createdAt:clean.createdAt});
         };
+        supplierReq.onsuccess=()=>{supplier=supplierReq.result;if(!supplier){failure="المورد غير موجود.";try{tx.abort();}catch(e){}return;}commit();};
+        purchasesReq.onsuccess=()=>{purchases=purchasesReq.result;commit();};
+        paymentsReq.onsuccess=()=>{payments=paymentsReq.result;commit();};
         tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(new Error("تعذر تسجيل دفعة المورد."));
+        tx.onabort=()=>reject(new Error(failure||"تعذر تسجيل دفعة المورد."));
       });
     }finally{db.close();}
   }
@@ -465,23 +476,50 @@
     }finally{db.close();}
   }
   async function saveCustomerPayment(payment){
-    const amount=Number(payment&&payment.amount);
-    if(!payment||!payment.customerId||!Number.isFinite(amount)||amount<=0)throw new Error("بيانات تحصيل العميل غير صحيحة.");
-    const clean={...payment,amount,createdAt:payment.createdAt||new Date().toISOString()};
+    const amount=Number(payment&&payment.amount),method=payment&&payment.method||"cash";
+    if(!payment||!payment.id||!payment.customerId||!Number.isFinite(amount)||amount<=0||!["cash","electronic"].includes(method))
+      throw new Error("بيانات تحصيل العميل غير صحيحة.");
+    const clean={...payment,amount,method,createdAt:payment.createdAt||new Date().toISOString()};
+    const normalizePhone=value=>{
+      let digits=String(value||"").replace(/\D/g,"");
+      if(digits.startsWith("0020"))digits="0"+digits.slice(4);
+      else if(digits.startsWith("20")&&digits.length===12)digits="0"+digits.slice(2);
+      return digits;
+    };
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction(["customerPayments","customers","cashEntries"],"readwrite");
-        const req=tx.objectStore("customers").get(clean.customerId);
-        req.onsuccess=()=>{
-          if(!req.result){try{tx.abort();}catch(e){}return;}
+        const tx=db.transaction(["customerPayments","customers","invoices","returns","cashEntries"],"readwrite");
+        const customerReq=tx.objectStore("customers").get(clean.customerId);
+        const invoicesReq=tx.objectStore("invoices").getAll();
+        const paymentsReq=tx.objectStore("customerPayments").getAll();
+        const returnsReq=tx.objectStore("returns").getAll();
+        let customer=null,invoices=null,payments=null,returns=null,failure="";
+        const commit=()=>{
+          if(!customer||!invoices||!payments||!returns)return;
+          const matches=invoice=>invoice.customerId===customer.id||
+            (!!customer.phone&&normalizePhone(invoice.customerPhone)===normalizePhone(customer.phone));
+          const sales=invoices.filter(x=>x.paymentMethod==="credit"&&matches(x)).reduce((sum,x)=>sum+Number(x.total||0),0);
+          const collected=payments.filter(x=>x.customerId===customer.id).reduce((sum,x)=>sum+Number(x.amount||0),0);
+          const credited=returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&matches(inv)))
+            .reduce((sum,x)=>sum+Number(x.amount||0),0);
+          const balance=Number(customer.openingBalance||0)+sales-collected-credited;
+          if(amount>balance+0.005){failure="مبلغ التحصيل أكبر من مديونية العميل: "+balance.toFixed(2)+" جنيه.";try{tx.abort();}catch(e){}return;}
+          clean.customerName=customer.name;
           tx.objectStore("customerPayments").add(clean);
-          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"income",category:"customer_collection",amount,method:clean.method||"cash",referenceId:clean.id,note:"تحصيل من "+String(clean.customerName||""),createdAt:clean.createdAt});
+          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"income",category:"customer_collection",amount,method,
+            referenceId:clean.id,note:"تحصيل من "+String(clean.customerName||""),createdAt:clean.createdAt});
         };
-        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(new Error("تعذر تسجيل التحصيل."));
+        customerReq.onsuccess=()=>{customer=customerReq.result;if(!customer){failure="العميل غير موجود.";try{tx.abort();}catch(e){}return;}commit();};
+        invoicesReq.onsuccess=()=>{invoices=invoicesReq.result;commit();};
+        paymentsReq.onsuccess=()=>{payments=paymentsReq.result;commit();};
+        returnsReq.onsuccess=()=>{returns=returnsReq.result;commit();};
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);
+        tx.onabort=()=>reject(new Error(failure||"تعذر تسجيل التحصيل."));
       });
     }finally{db.close();}
   }
+
   async function saveReturn(record){
     if(!record||!record.invoiceId||!Array.isArray(record.items)||!record.items.length)throw new Error("بيانات المرتجع غير مكتملة.");
     const db=await openDB();
@@ -493,6 +531,8 @@
         invoiceReq.onsuccess=()=>{
           const invoice=invoiceReq.result;
           if(!invoice){failed=true;try{tx.abort();}catch(e){}return;}
+          const expectedMethod=invoice.paymentMethod==="credit"?"credit":invoice.paymentMethod==="electronic"?"electronic":"cash";
+          if(record.refundMethod!==expectedMethod){failed=true;try{tx.abort();}catch(e){}return;}
           const existingReq=rs.getAll();
           existingReq.onsuccess=()=>{
             const prior=existingReq.result.filter(x=>x.invoiceId===record.invoiceId);
@@ -505,7 +545,8 @@
               if(!Number.isFinite(qty)||qty<=0||qty>remaining+0.000001){failed=true;try{tx.abort();}catch(e){}return;}
               const raw=qty*Number(sold.unitPrice||0),ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
               const lineAmount=Math.round(raw*ratio*100)/100;amount+=lineAmount;
-              lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),amount:lineAmount});
+              lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),
+                cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,amount:lineAmount});
             }
             const clean={...record,items:lines,amount:Math.round(amount*100)/100,createdAt:record.createdAt||new Date().toISOString()};
             rs.add(clean);
@@ -531,9 +572,10 @@
     }finally{db.close();}
   }
   async function saveCashEntry(entry){
-    const amount=Number(entry&&entry.amount);
-    if(!entry||!Number.isFinite(amount)||amount<=0||!["income","expense"].includes(entry.type))throw new Error("راجع نوع وقيمة الحركة المالية.");
-    const clean={...entry,amount,category:String(entry.category||"other"),method:entry.method||"cash",note:String(entry.note||"").trim(),createdAt:entry.createdAt||new Date().toISOString()};
+    const amount=Number(entry&&entry.amount),method=entry&&entry.method||"cash";
+    if(!entry||!Number.isFinite(amount)||amount<=0||!["income","expense"].includes(entry.type)||!["cash","electronic"].includes(method))
+      throw new Error("راجع نوع وقيمة الحركة المالية وطريقة الدفع.");
+    const clean={...entry,amount,method,category:String(entry.category||"other"),note:String(entry.note||"").trim(),createdAt:entry.createdAt||new Date().toISOString()};
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
@@ -544,11 +586,26 @@
   }
   async function saveShift(shift){
     if(!shift||!shift.id||!["open","closed"].includes(shift.status))throw new Error("بيانات الوردية غير صحيحة.");
+    if(shift.status==="open"&&(!Number.isFinite(Number(shift.openingCash))||Number(shift.openingCash)<0))throw new Error("رصيد بداية الوردية غير صحيح.");
+    if(shift.status==="closed"&&(!Number.isFinite(Number(shift.countedCash))||Number(shift.countedCash)<0||!Number.isFinite(Number(shift.expectedCash))))throw new Error("بيانات إغلاق الوردية غير صحيحة.");
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction("shifts","readwrite");tx.objectStore("shifts").put(shift);
-        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        const tx=db.transaction("shifts","readwrite"),store=tx.objectStore("shifts");let failure="";
+        if(shift.status==="open"){
+          const req=store.getAll();
+          req.onsuccess=()=>{
+            if(req.result.some(x=>x.status==="open"&&x.id!==shift.id)){failure="توجد وردية مفتوحة بالفعل. أغلقها أولًا.";try{tx.abort();}catch(e){}return;}
+            store.put({...shift,openingCash:Number(shift.openingCash)});
+          };
+        }else{
+          const req=store.get(shift.id);
+          req.onsuccess=()=>{
+            if(!req.result||req.result.status!=="open"){failure="لا يمكن إغلاق وردية غير مفتوحة.";try{tx.abort();}catch(e){}return;}
+            store.put({...req.result,...shift,countedCash:Number(shift.countedCash),expectedCash:Number(shift.expectedCash)});
+          };
+        }
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(new Error(failure||"تعذر حفظ الوردية."));
       });
     }finally{db.close();}
   }
