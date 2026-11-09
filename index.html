@@ -8,7 +8,7 @@
 <body class="sales-view">
 <header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1></div><span class="offline-tag" id="connectionState">محلي</span></header>
 <nav class="tabs" aria-label="أقسام التطبيق">
-<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button>
+<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button>
 </nav>
 <div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه كاميرا الموبايل إلى باركود المنتج. عند سماع الرنة ارفع الباركود لمسح الصنف التالي.</p><button class="secondary" id="closeScanner">إغلاق المسح</button></div>
 <main class="layout">
@@ -27,6 +27,10 @@
   <div class="cart-head"><h3>الأصناف في الفاتورة</h3><span id="cartCount">0 صنف</span></div>
   <div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
   <div class="checkout-fields"><label>طريقة الدفع<select id="paymentMethod"><option value="cash">نقدي</option><option value="electronic">دفع إلكتروني</option><option value="credit">آجل</option></select></label><label>خصم الفاتورة (جنيه)<input id="discount" type="number" min="0" step="0.01" value="0"></label></div>
+  <div class="form-grid invoice-customer-fields">
+    <label>اسم العميل (اختياري)<input id="customerName" autocomplete="name" placeholder="اسم العميل"></label>
+    <label>رقم واتساب العميل (اختياري)<input id="customerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="01xxxxxxxxx"></label>
+  </div>
   <div class="total-row"><span>الإجمالي بعد الخصم</span><strong id="grandTotal">0.00 ج.م</strong></div>
   <button class="checkout" id="checkoutButton" disabled>حفظ الفاتورة</button>
 </div>
@@ -54,8 +58,35 @@
 </div>
 </section>
 <section class="view" id="view-invoices"><div class="panel"><h2>سجل الفواتير</h2><p class="hint">الفواتير محفوظة على هذا الجهاز فقط.</p><div id="invoiceList"></div></div></section>
+<section class="view" id="view-settings">
+  <div class="panel">
+    <h2>بيانات المحل والفاتورة</h2>
+    <p class="hint">تظهر البيانات التالية في الفواتير المطبوعة والمُرسلة. تحفظ محليًا على هذا الجهاز.</p>
+    <form id="shopSettingsForm">
+      <label>اسم المحل<input id="shopName" required maxlength="70" placeholder="اسم المحل"></label>
+      <div class="form-grid">
+        <label>رقم هاتف المحل<input id="shopPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
+        <label>عرض ورق الفاتورة<select id="paperWidth"><option value="58">58 مم</option><option value="80" selected>80 مم</option><option value="A4">A4</option></select></label>
+      </div>
+      <label>العنوان<input id="shopAddress" maxlength="140" placeholder="عنوان المحل"></label>
+      <label>عبارة أسفل الفاتورة<input id="receiptFooter" maxlength="120" value="شكراً لزيارتكم" placeholder="شكراً لزيارتكم"></label>
+      <button class="primary" type="submit">حفظ بيانات المحل</button>
+      <p class="hint" id="settingsMessage" role="status"></p>
+    </form>
+  </div>
+</section>
 <section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
 </main>
+<div class="receipt-modal-backdrop" id="receiptModal" hidden>
+  <section class="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receiptModalTitle">
+    <div class="receipt-modal-heading"><h2 id="receiptModalTitle">معاينة الفاتورة</h2><button class="secondary" id="closeReceiptModal" type="button">إغلاق</button></div>
+    <div class="receipt-preview" id="receiptPreview"></div>
+    <div class="receipt-actions">
+      <button class="primary" id="receiptPrint" type="button">طباعة الفاتورة</button>
+      <button class="secondary" id="receiptShare" type="button">مشاركة عبر واتساب</button>
+    </div>
+  </section>
+</div>
 <div class="invoice-backdrop" id="invoiceBackdrop" hidden></div>
 <button class="mobile-invoice-toggle" id="mobileInvoiceToggle" type="button" aria-controls="invoicePanel" aria-expanded="false">
   <span class="mobile-invoice-count"><strong id="mobileCartCount">0</strong><small>صنف في الفاتورة</small></span>
