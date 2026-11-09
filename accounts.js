@@ -10,7 +10,7 @@ const unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
 const localKey=d=>{const x=new Date(d);return Number.isNaN(x.getTime())?"":x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");};
 const localToday=()=>localKey(new Date());
 const localMonth=()=>localToday().slice(0,7);
-const digits=p=>String(p||"").replace(/\D/g,"");
+const digits=p=>{let value=String(p||"").replace(/\D/g,"");if(value.startsWith("0020"))value="0"+value.slice(4);else if(value.startsWith("20")&&value.length===12)value="0"+value.slice(2);return value;};
 let activeReturn=null;
 
 function customerMatches(invoice,customer){
