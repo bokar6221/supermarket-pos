@@ -1,5 +1,5 @@
-/* IndexedDB persistence: version 3 adds suppliers, purchases, payments and stocktakes.
-   Existing products, invoices, settings and movements are retained during upgrade. */
+/* IndexedDB persistence: version 4 adds customers, returns, cash entries and shifts.
+   Earlier products, invoices, suppliers and stock records are retained during upgrade. */
 (function(){
   "use strict";
   const DB_NAME="supermarket_pos", DB_VERSION=4;
@@ -516,7 +516,7 @@
     const values=await Promise.all(STORE_NAMES.map(name=>all(name)));
     const data={};
     STORE_NAMES.forEach((name,index)=>data[name]=values[index]);
-    return {app:"supermarket-pos",schemaVersion:3,exportedAt:new Date().toISOString(),data};
+    return {app:"supermarket-pos",schemaVersion:4,exportedAt:new Date().toISOString(),data};
   }
   async function restoreData(payload){
     if(!payload||payload.app!=="supermarket-pos"||!payload.data||!Array.isArray(payload.data.products)||!Array.isArray(payload.data.invoices))throw new Error("ملف النسخة الاحتياطية غير صحيح.");
