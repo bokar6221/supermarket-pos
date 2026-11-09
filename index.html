@@ -94,60 +94,85 @@
     <div id="movementList"></div>
   </div></div></section>
 
-<section class="view" id="view-purchases"><div class="inner-tabs" data-subtab-group="purchases"><button type="button" class="inner-tab active" data-subtab="add-supplier">إضافة مورد</button><button type="button" class="inner-tab" data-subtab="purchase">فاتورة مشتريات</button><button type="button" class="inner-tab" data-subtab="payment">سداد حساب مورد</button><button type="button" class="inner-tab" data-subtab="history">سجل المشتريات</button></div>
-    <div id="supplierList"></div>
-    <label>كشف حساب مورد<select id="statementSupplier"></select></label>
-    <div id="supplierStatement"><p class="empty">اختر موردًا لعرض كشف حسابه.</p></div>
-  </div></div><div class="inner-tab-panel active" data-subpanel-group="purchases" data-subpanel="add-supplier"><div class="panel">
-    <h2>إضافة مورد</h2>
-    <form id="supplierForm">
-      <label>اسم المورد<input id="supplierName" required maxlength="90" placeholder="اسم المورد أو الشركة"></label>
-      <div class="form-grid">
-        <label>رقم الهاتف<input id="supplierPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
-        <label>رصيد سابق مستحق للمورد (جنيه)<input id="supplierOpeningBalance" type="number" min="0" step="0.01" value="0"></label>
-      </div>
-      <button class="primary" type="submit">حفظ المورد</button>
-      <p class="hint" id="supplierMessage" role="status"></p>
-    </form>
-  </div></div><div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="purchase"><div class="panel">
-    <h2>فاتورة مشتريات جديدة</h2>
-    <p class="hint">إضافة المشتريات تزيد رصيد المخزون تلقائيًا، وتحدّث تكلفة الصنف بمتوسط التكلفة المرجح. اختر المورد والمبلغ المدفوع لحساب المديونية.</p>
-    <form id="purchaseItemForm">
-      <label>الصنف<select id="purchaseProduct" required></select></label>
-      <div class="form-grid">
-        <label>الكمية<input id="purchaseQuantity" type="number" min="0.001" step="0.001" value="1" required inputmode="decimal"></label>
-        <label>تكلفة الوحدة<input id="purchaseUnitCost" type="number" min="0" step="0.01" required inputmode="decimal"></label>
-      </div>
-      <button class="secondary" type="submit">إضافة إلى المشتريات</button>
-    </form>
-    <div id="purchaseDraftList"><p class="empty">لم تتم إضافة أصناف إلى فاتورة الشراء.</p></div>
-    <div class="purchase-total-row"><span>إجمالي المشتريات</span><strong id="purchaseDraftTotal">0.00 ج.م</strong></div>
-    <label>المورد<select id="purchaseSupplier"><option value="">بدون مورد محدد</option></select></label>
-    <div class="form-grid">
-      <label>المدفوع الآن<input id="purchasePaidAmount" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label><p class="hint" id="purchaseDuePreview">المتبقي بعد السداد: 0.00 ج.م</p>
-      <label>طريقة الدفع<select id="purchasePaymentMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label>
+<section class="view" id="view-purchases">
+  <div class="inner-tabs" data-subtab-group="purchases">
+    <button type="button" class="inner-tab active" data-subtab="add-supplier">إضافة مورد</button>
+    <button type="button" class="inner-tab" data-subtab="purchase">فاتورة مشتريات</button>
+    <button type="button" class="inner-tab" data-subtab="payment">سداد حساب مورد</button>
+    <button type="button" class="inner-tab" data-subtab="history">سجل المشتريات</button>
+  </div>
+
+  <div class="inner-tab-panel active" data-subpanel-group="purchases" data-subpanel="add-supplier">
+    <div class="panel">
+      <h2>إضافة مورد</h2>
+      <form id="supplierForm">
+        <label>اسم المورد<input id="supplierName" required maxlength="90" placeholder="اسم المورد أو الشركة"></label>
+        <div class="form-grid">
+          <label>رقم الهاتف<input id="supplierPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
+          <label>رصيد سابق مستحق للمورد (جنيه)<input id="supplierOpeningBalance" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <button class="primary" type="submit">حفظ المورد</button>
+        <p class="hint" id="supplierMessage" role="status"></p>
+      </form>
     </div>
-    <label>ملاحظة / رقم فاتورة المورد<input id="purchaseNote" maxlength="140" placeholder="اختياري"></label>
-    <button class="checkout" id="savePurchaseButton" type="button" disabled>حفظ فاتورة المشتريات وتحديث المخزون</button>
-    <p class="hint" id="purchaseMessage" role="status"></p>
-  </div></div><div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="payment"><div class="panel">
-    <h2>سداد حساب مورد</h2>
-    <p class="hint">سجل أي دفعة لاحقة للمورد؛ سيتم خصمها من رصيده المستحق.</p>
-    <form id="supplierPaymentForm">
-      <label>المورد<select id="paymentSupplier" required></select></label>
+  </div>
+
+  <div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="purchase">
+    <div class="panel">
+      <h2>فاتورة مشتريات جديدة</h2>
+      <p class="hint">إضافة المشتريات تزيد رصيد المخزون تلقائيًا، وتحدّث تكلفة الصنف بمتوسط التكلفة المرجح. اختر المورد والمبلغ المدفوع لحساب المديونية.</p>
+      <form id="purchaseItemForm">
+        <label>الصنف<select id="purchaseProduct" required></select></label>
+        <div class="form-grid">
+          <label>الكمية<input id="purchaseQuantity" type="number" min="0.001" step="0.001" value="1" required inputmode="decimal"></label>
+          <label>تكلفة الوحدة<input id="purchaseUnitCost" type="number" min="0" step="0.01" required inputmode="decimal"></label>
+        </div>
+        <button class="secondary" type="submit">إضافة إلى المشتريات</button>
+      </form>
+      <div id="purchaseDraftList"><p class="empty">لم تتم إضافة أصناف إلى فاتورة الشراء.</p></div>
+      <div class="purchase-total-row"><span>إجمالي المشتريات</span><strong id="purchaseDraftTotal">0.00 ج.م</strong></div>
+      <label>المورد<select id="purchaseSupplier"><option value="">بدون مورد محدد</option></select></label>
       <div class="form-grid">
-        <label>مبلغ السداد<input id="supplierPaymentAmount" type="number" min="0.01" step="0.01" required inputmode="decimal"></label>
-        <label>طريقة السداد<select id="supplierPaymentMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label>
+        <label>المدفوع الآن<input id="purchasePaidAmount" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+        <label>طريقة الدفع<select id="purchasePaymentMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label>
       </div>
-      <label>ملاحظة<input id="supplierPaymentNote" maxlength="140" placeholder="رقم إيصال أو ملاحظة"></label>
-      <button class="primary" type="submit">تسجيل السداد</button>
-      <p class="hint" id="supplierPaymentMessage" role="status"></p>
-    </form>
-  </div><div class="panel">
-    <div class="section-heading"><div><h2>الموردون وأرصدتهم</h2><p>الرصيد الموجب يعني مبلغًا مستحقًا للمورد</p></div></div><div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="history"><div class="panel">
-    <div class="section-heading"><div><h2>سجل المشتريات</h2><p>فواتير الشراء والمدفوع والمتبقي</p></div></div>
-    <div id="purchaseHistory"></div>
-  </div></div></section>
+      <p class="hint" id="purchaseDuePreview">المتبقي بعد السداد: 0.00 ج.م</p>
+      <label>ملاحظة / رقم فاتورة المورد<input id="purchaseNote" maxlength="140" placeholder="اختياري"></label>
+      <button class="checkout" id="savePurchaseButton" type="button" disabled>حفظ فاتورة المشتريات وتحديث المخزون</button>
+      <p class="hint" id="purchaseMessage" role="status"></p>
+    </div>
+  </div>
+
+  <div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="payment">
+    <div class="panel">
+      <h2>سداد حساب مورد</h2>
+      <p class="hint">سجل أي دفعة لاحقة للمورد؛ سيتم خصمها من رصيده المستحق.</p>
+      <form id="supplierPaymentForm">
+        <label>المورد<select id="paymentSupplier" required></select></label>
+        <div class="form-grid">
+          <label>مبلغ السداد<input id="supplierPaymentAmount" type="number" min="0.01" step="0.01" required inputmode="decimal"></label>
+          <label>طريقة السداد<select id="supplierPaymentMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label>
+        </div>
+        <label>ملاحظة<input id="supplierPaymentNote" maxlength="140" placeholder="رقم إيصال أو ملاحظة"></label>
+        <button class="primary" type="submit">تسجيل السداد</button>
+        <p class="hint" id="supplierPaymentMessage" role="status"></p>
+      </form>
+    </div>
+    <div class="panel">
+      <div class="section-heading"><div><h2>الموردون وأرصدتهم</h2><p>الرصيد الموجب يعني مبلغًا مستحقًا للمورد</p></div></div>
+      <div id="supplierList"></div>
+      <label>كشف حساب مورد<select id="statementSupplier"></select></label>
+      <div id="supplierStatement"><p class="empty">اختر موردًا لعرض كشف حسابه.</p></div>
+    </div>
+  </div>
+
+  <div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="history">
+    <div class="panel">
+      <div class="section-heading"><div><h2>سجل المشتريات</h2><p>فواتير الشراء والمدفوع والمتبقي</p></div></div>
+      <div id="purchaseHistory"></div>
+    </div>
+  </div>
+</section>
 
 <section class="view" id="view-invoices"><div class="panel"><h2>سجل الفواتير</h2><p class="hint">الفواتير محفوظة على هذا الجهاز فقط.</p><div id="invoiceList"></div></div></section>
 <section class="view" id="view-settings">
