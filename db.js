@@ -2,8 +2,8 @@
    Existing products, invoices, settings and movements are retained during upgrade. */
 (function(){
   "use strict";
-  const DB_NAME="supermarket_pos", DB_VERSION=3;
-  const STORE_NAMES=["products","invoices","settings","movements","suppliers","purchases","supplierPayments","stocktakes"];
+  const DB_NAME="supermarket_pos", DB_VERSION=4;
+  const STORE_NAMES=["products","invoices","settings","movements","suppliers","purchases","supplierPayments","stocktakes","customers","customerPayments","returns","cashEntries","shifts"];
 
   function ensureIndex(store,name,keyPath,options){
     if(!store.indexNames.contains(name))store.createIndex(name,keyPath,options||{unique:false});
@@ -55,6 +55,31 @@
         if(!db.objectStoreNames.contains("stocktakes"))stocktakes=db.createObjectStore("stocktakes",{keyPath:"id"});
         else stocktakes=tx.objectStore("stocktakes");
         ensureIndex(stocktakes,"createdAt","createdAt");
+
+        let customers;
+        if(!db.objectStoreNames.contains("customers"))customers=db.createObjectStore("customers",{keyPath:"id"});
+        else customers=tx.objectStore("customers");
+        ensureIndex(customers,"name","name");ensureIndex(customers,"phone","phone");
+
+        let customerPayments;
+        if(!db.objectStoreNames.contains("customerPayments"))customerPayments=db.createObjectStore("customerPayments",{keyPath:"id"});
+        else customerPayments=tx.objectStore("customerPayments");
+        ensureIndex(customerPayments,"createdAt","createdAt");ensureIndex(customerPayments,"customerId","customerId");
+
+        let returns;
+        if(!db.objectStoreNames.contains("returns"))returns=db.createObjectStore("returns",{keyPath:"id"});
+        else returns=tx.objectStore("returns");
+        ensureIndex(returns,"createdAt","createdAt");ensureIndex(returns,"invoiceId","invoiceId");
+
+        let cashEntries;
+        if(!db.objectStoreNames.contains("cashEntries"))cashEntries=db.createObjectStore("cashEntries",{keyPath:"id"});
+        else cashEntries=tx.objectStore("cashEntries");
+        ensureIndex(cashEntries,"createdAt","createdAt");ensureIndex(cashEntries,"type","type");ensureIndex(cashEntries,"method","method");
+
+        let shifts;
+        if(!db.objectStoreNames.contains("shifts"))shifts=db.createObjectStore("shifts",{keyPath:"id"});
+        else shifts=tx.objectStore("shifts");
+        ensureIndex(shifts,"openedAt","openedAt");ensureIndex(shifts,"status","status");
       };
       req.onsuccess=()=>resolve(req.result);
       req.onerror=()=>reject(req.error);
@@ -90,6 +115,11 @@
   async function getPurchases(){return all("purchases");}
   async function getSupplierPayments(){return all("supplierPayments");}
   async function getStocktakes(){return all("stocktakes");}
+  async function getCustomers(){return all("customers");}
+  async function getCustomerPayments(){return all("customerPayments");}
+  async function getReturns(){return all("returns");}
+  async function getCashEntries(){return all("cashEntries");}
+  async function getShifts(){return all("shifts");}
 
   async function getProductByBarcode(code){
     const db=await openDB();
@@ -172,7 +202,7 @@
     const db=await openDB();
     try{
       return await new Promise((resolve,reject)=>{
-        const tx=db.transaction(["invoices","products","movements"],"readwrite");
+        const tx=db.transaction(["invoices","products","movements","cashEntries"],"readwrite");
         const ps=tx.objectStore("products"),ms=tx.objectStore("movements");
         for(const item of invoice.items||[]){
           if(!item.productId)continue;
@@ -196,6 +226,13 @@
           };
         }
         tx.objectStore("invoices").add(invoice);
+        if(Number(invoice.total||0)>0&&(invoice.paymentMethod==="cash"||invoice.paymentMethod==="electronic")){
+          tx.objectStore("cashEntries").add({
+            id:crypto.randomUUID(),type:"income",category:"sale",amount:Number(invoice.total),
+            method:invoice.paymentMethod,referenceId:invoice.id,note:"مبيعات "+String(invoice.id||""),
+            createdAt:invoice.createdAt||new Date().toISOString()
+          });
+        }
         tx.oncomplete=()=>resolve(true);
         tx.onerror=()=>reject(tx.error);
         tx.onabort=()=>reject(new Error("تعذر حفظ الفاتورة. قد تكون الكمية غير كافية أو حدث خطأ في قاعدة البيانات."));
@@ -227,11 +264,16 @@
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction(["supplierPayments","suppliers"],"readwrite");
+        const tx=db.transaction(["supplierPayments","suppliers","cashEntries"],"readwrite");
         const supplierReq=tx.objectStore("suppliers").get(clean.supplierId);
         supplierReq.onsuccess=()=>{
           if(!supplierReq.result){try{tx.abort();}catch(e){}return;}
           tx.objectStore("supplierPayments").add(clean);
+          tx.objectStore("cashEntries").add({
+            id:crypto.randomUUID(),type:"expense",category:"supplier_payment",amount,
+            method:clean.method||"cash",referenceId:clean.id,note:"سداد المورد "+String(clean.supplierName||""),
+            createdAt:clean.createdAt
+          });
         };
         tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);
         tx.onabort=()=>reject(new Error("تعذر تسجيل دفعة المورد."));
@@ -253,9 +295,14 @@
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction(["purchases","products","movements"],"readwrite");
+        const tx=db.transaction(["purchases","products","movements","cashEntries"],"readwrite");
         const products=tx.objectStore("products"),movements=tx.objectStore("movements");
         tx.objectStore("purchases").add(clean);
+        if(paid>0)tx.objectStore("cashEntries").add({
+          id:crypto.randomUUID(),type:"expense",category:"purchase",amount:paid,
+          method:clean.paymentMethod||"cash",referenceId:clean.id,note:"مدفوع فاتورة مشتريات "+String(clean.number||""),
+          createdAt:clean.createdAt
+        });
         for(const item of clean.items){
           const req=products.get(item.productId);
           req.onsuccess=()=>{
@@ -358,6 +405,113 @@
     }finally{db.close();}
   }
 
+
+  async function saveCustomer(customer){
+    if(!customer||!String(customer.name||"").trim())throw new Error("اكتب اسم العميل.");
+    const phone=String(customer.phone||"").replace(/\s+/g,"").trim();
+    const clean={...customer,name:String(customer.name).trim(),phone,openingBalance:Math.max(0,Number(customer.openingBalance)||0),active:customer.active!==false,updatedAt:new Date().toISOString()};
+    const db=await openDB();
+    try{
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction("customers","readwrite"),store=tx.objectStore("customers");
+        if(clean.phone){
+          const req=store.index("phone").get(clean.phone);
+          req.onsuccess=()=>{const old=req.result;if(old&&old.id!==clean.id){clean.id=old.id;clean.openingBalance=old.openingBalance||clean.openingBalance;}store.put(clean);};
+        }else store.put(clean);
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+      });
+      return clean;
+    }finally{db.close();}
+  }
+  async function saveCustomerPayment(payment){
+    const amount=Number(payment&&payment.amount);
+    if(!payment||!payment.customerId||!Number.isFinite(amount)||amount<=0)throw new Error("بيانات تحصيل العميل غير صحيحة.");
+    const clean={...payment,amount,createdAt:payment.createdAt||new Date().toISOString()};
+    const db=await openDB();
+    try{
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction(["customerPayments","customers","cashEntries"],"readwrite");
+        const req=tx.objectStore("customers").get(clean.customerId);
+        req.onsuccess=()=>{
+          if(!req.result){try{tx.abort();}catch(e){}return;}
+          tx.objectStore("customerPayments").add(clean);
+          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"income",category:"customer_collection",amount,method:clean.method||"cash",referenceId:clean.id,note:"تحصيل من "+String(clean.customerName||""),createdAt:clean.createdAt});
+        };
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(new Error("تعذر تسجيل التحصيل."));
+      });
+    }finally{db.close();}
+  }
+  async function saveReturn(record){
+    if(!record||!record.invoiceId||!Array.isArray(record.items)||!record.items.length)throw new Error("بيانات المرتجع غير مكتملة.");
+    const db=await openDB();
+    try{
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction(["returns","invoices","products","movements","cashEntries"],"readwrite");
+        const rs=tx.objectStore("returns"),is=tx.objectStore("invoices"),ps=tx.objectStore("products"),ms=tx.objectStore("movements");
+        const invoiceReq=is.get(record.invoiceId);let failed=false;
+        invoiceReq.onsuccess=()=>{
+          const invoice=invoiceReq.result;
+          if(!invoice){failed=true;try{tx.abort();}catch(e){}return;}
+          const existingReq=rs.getAll();
+          existingReq.onsuccess=()=>{
+            const prior=existingReq.result.filter(x=>x.invoiceId===record.invoiceId);
+            let amount=0;const lines=[];
+            for(const line of record.items){
+              const index=Number(line.itemIndex),sold=(invoice.items||[])[index];
+              if(!sold){failed=true;try{tx.abort();}catch(e){}return;}
+              const returned=prior.reduce((sum,r)=>sum+(r.items||[]).filter(x=>Number(x.itemIndex)===index).reduce((n,x)=>n+Number(x.quantity||0),0),0);
+              const qty=Number(line.quantity),remaining=Number(sold.quantity||0)-returned;
+              if(!Number.isFinite(qty)||qty<=0||qty>remaining+0.000001){failed=true;try{tx.abort();}catch(e){}return;}
+              const raw=qty*Number(sold.unitPrice||0),ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
+              const lineAmount=Math.round(raw*ratio*100)/100;amount+=lineAmount;
+              lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),amount:lineAmount});
+            }
+            const clean={...record,items:lines,amount:Math.round(amount*100)/100,createdAt:record.createdAt||new Date().toISOString()};
+            rs.add(clean);
+            for(const line of lines){
+              if(!line.productId)continue;
+              const req=ps.get(line.productId);
+              req.onsuccess=()=>{
+                const p=req.result;if(!p)return;
+                if(p.trackStock){
+                  p.stock=Number(p.stock||0)+line.quantity;p.updatedAt=clean.createdAt;ps.put(p);
+                  ms.add({id:crypto.randomUUID(),productId:p.id,productName:p.name,type:"return",quantity:line.quantity,unit:p.unit,referenceId:clean.id,referenceNumber:clean.invoiceId,createdAt:clean.createdAt,note:"مرتجع مبيعات"});
+                }
+              };
+            }
+            if(clean.refundMethod==="cash"||clean.refundMethod==="electronic"){
+              tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"expense",category:"sales_return",amount:clean.amount,method:clean.refundMethod,referenceId:clean.id,note:"رد قيمة مرتجع فاتورة",createdAt:clean.createdAt});
+            }
+          };
+        };
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);
+        tx.onabort=()=>reject(new Error(failed?"كمية المرتجع أكبر من الكمية المتبقية أو بيانات الفاتورة غير صحيحة.":"تعذر حفظ المرتجع."));
+      });
+    }finally{db.close();}
+  }
+  async function saveCashEntry(entry){
+    const amount=Number(entry&&entry.amount);
+    if(!entry||!Number.isFinite(amount)||amount<=0||!["income","expense"].includes(entry.type))throw new Error("راجع نوع وقيمة الحركة المالية.");
+    const clean={...entry,amount,category:String(entry.category||"other"),method:entry.method||"cash",note:String(entry.note||"").trim(),createdAt:entry.createdAt||new Date().toISOString()};
+    const db=await openDB();
+    try{
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction("cashEntries","readwrite");tx.objectStore("cashEntries").add(clean);
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+      });
+    }finally{db.close();}
+  }
+  async function saveShift(shift){
+    if(!shift||!shift.id||!["open","closed"].includes(shift.status))throw new Error("بيانات الوردية غير صحيحة.");
+    const db=await openDB();
+    try{
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction("shifts","readwrite");tx.objectStore("shifts").put(shift);
+        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+      });
+    }finally{db.close();}
+  }
+
   async function backupData(){
     const values=await Promise.all(STORE_NAMES.map(name=>all(name)));
     const data={};
@@ -399,6 +553,8 @@
   window.POSDatabase={
     getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,saveInvoice,
     getMovements,getSuppliers,getPurchases,getSupplierPayments,getStocktakes,
+    getCustomers,getCustomerPayments,getReturns,getCashEntries,getShifts,
+    saveCustomer,saveCustomerPayment,saveReturn,saveCashEntry,saveShift,
     saveSupplier,saveSupplierPayment,savePurchase,saveStockAdjustment,saveStocktake,
     backupData,restoreData,getSettings,saveSettings
   };
