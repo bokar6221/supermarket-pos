@@ -295,14 +295,16 @@
       await new Promise((resolve,reject)=>{
         const tx=db.transaction(["stocktakes","products","movements"],"readwrite");
         const products=tx.objectStore("products"),movements=tx.objectStore("movements");
-        tx.objectStore("stocktakes").add(clean);
+        let completed=0,failed=false;
         for(const item of clean.items){
           const req=products.get(item.productId);
           req.onsuccess=()=>{
             const p=req.result;
-            if(!p){try{tx.abort();}catch(e){}return;}
+            if(!p){failed=true;try{tx.abort();}catch(e){}return;}
             const before=p.trackStock?Number(p.stock||0):0;
             const counted=Number(item.countedQty),difference=counted-before;
+            item.systemQtyAtCommit=before;
+            item.difference=difference;
             p.trackStock=true;p.stock=counted;p.updatedAt=clean.createdAt;products.put(p);
             if(Math.abs(difference)>0.0000001){
               movements.add({
@@ -312,11 +314,14 @@
                 note:"تسوية ناتجة عن الجرد الفعلي"
               });
             }
+            completed++;
+            if(completed===clean.items.length)tx.objectStore("stocktakes").add(clean);
           };
+          req.onerror=()=>{failed=true;try{tx.abort();}catch(e){}};
         }
         tx.oncomplete=()=>resolve(true);
         tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(new Error("تعذر اعتماد الجرد. لم يتم تغيير أرصدة المنتجات."));
+        tx.onabort=()=>reject(new Error(failed?"تعذر العثور على صنف من أصناف الجرد. لم يتم تعديل الأرصدة.":"تعذر اعتماد الجرد. لم يتم تغيير أرصدة المنتجات."));
       });
     }finally{db.close();}
   }
