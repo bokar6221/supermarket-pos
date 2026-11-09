@@ -126,7 +126,7 @@ $("productForm").onsubmit=async e=>{e.preventDefault();const id=$("productId").v
  const old=await POSDatabase.getProductByBarcode(barcode);
  if(old&&old.id!==id)return alert("الباركود مسجل للمنتج "+old.name);
 
-}await POSDatabase.saveProduct(p);await load();resetProduct();activateSubtab("products","list");alert("تم حفظ المنتج.");}catch(err){alert("تعذر الحفظ: "+err.message);}};
+}await POSDatabase.saveProduct(p);$("productSearch").value="";activeProductCategory="الكل";await load();resetProduct();activateSubtab("products","list");alert("تم حفظ المنتج.");}catch(err){alert("تعذر الحفظ: "+err.message);}};
 async function load(){
   const [items,settings]=await Promise.all([POSDatabase.getProducts(),POSDatabase.getSettings()]);
   products=items;shopSettings={...shopSettings,...settings};
