@@ -422,7 +422,7 @@ function renderPurchases(){
       running+=event.debit-event.credit;
       return '<tr><td>'+escapeHtml(event.date?new Date(event.date).toLocaleDateString("ar-EG"):"—")+'</td><td>'+escapeHtml(event.kind)+'</td><td>'+escapeHtml(money(event.debit))+'</td><td>'+escapeHtml(money(event.credit))+'</td><td>'+escapeHtml(money(running))+'</td></tr>';
     }).join("");
-    statement.innerHTML='<div class="table-scroll"><table class="data-table"><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="supplier-balance-summary">الرصيد المستحق حاليًا: <strong>'+escapeHtml(money(supplierBalance(supplierId,suppliers,purchases,payments)))+'</strong></p>';
+    statement.innerHTML='<div class="table-scroll"><table class="data-table"><thead><tr><th>التاريخ</th><th>البيان</th><th>مستحق</th><th>سداد</th><th>الرصيد</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="supplier-balance-summary">الرصيد المستحق حاليًا: <strong>'+escapeHtml(money(supplierBalance(supplierId,suppliers,purchases,payments)))+'</strong></p>';
   }).catch(error=>console.warn("تعذر تحميل الموردين والمشتريات",error));
   renderPurchaseDraft();
 }
@@ -453,6 +453,9 @@ $("supplierPaymentForm").onsubmit=async e=>{
 $("purchaseProduct").onchange=()=>{
   const product=products.find(p=>p.id===$("purchaseProduct").value);
   $("purchaseUnitCost").value=product?String(product.cost||""):"";
+  $("purchaseQuantity").step=product&&product.unit==="piece"?"1":"0.001";
+  $("purchaseQuantity").min=product&&product.unit==="piece"?"1":"0.001";
+  if(product&&product.unit==="piece"&&Number($("purchaseQuantity").value)<1)$("purchaseQuantity").value="1";
 };
 $("purchaseItemForm").onsubmit=e=>{
   e.preventDefault();
@@ -497,7 +500,7 @@ $("savePurchaseButton").onclick=async()=>{
   const supplier=suppliers.find(s=>s.id===supplierId);
   if(supplierId&&!supplier)return alert("المورد المختار غير موجود.");
   const purchase={
-    id:uid(),number:"PUR-"+new Date().toISOString().replace(/[-:TZ.]/g,"").slice(0,14),
+    id:uid(),number:"PUR-"+new Date().toISOString().replace(/[-:TZ.]/g,"").slice(0,14)+"-"+uid().slice(0,4).toUpperCase(),
     createdAt:new Date().toISOString(),supplierId:supplierId||null,supplierName:supplier?supplier.name:"",
     items:purchaseDraft.map(item=>({...item})),total,paidAmount:paid,balance:Math.max(0,total-paid),
     paymentMethod:$("purchasePaymentMethod").value,note:$("purchaseNote").value.trim()
