@@ -683,7 +683,8 @@ async function renderInvoices(){
     const detail=document.createElement("button");detail.className="secondary";detail.textContent="عرض";detail.onclick=()=>showReceipt(inv);
     const print=document.createElement("button");print.className="secondary";print.textContent="طباعة";print.onclick=()=>printInvoice(inv);
     const share=document.createElement("button");share.className="secondary";share.textContent="واتساب";share.onclick=()=>shareInvoice(inv);
-    actions.append(detail,print,share);row.append(info,total,actions);root.append(row);
+    const returnButton=document.createElement("button");returnButton.type="button";returnButton.className="secondary";returnButton.textContent="مرتجع";returnButton.dataset.returnInvoice=inv.id;
+    actions.append(detail,print,share,returnButton);row.append(info,total,actions);root.append(row);
   });
 }
 $("checkoutButton").onclick=async()=>{
