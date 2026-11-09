@@ -507,3 +507,40 @@ body{
   .tabs{padding-inline:6px}
   .tabs .tab{padding-inline:10px;font-size:12px}
 }
+
+/* Customer accounts, returns, cash drawer and reports */
+.customer-summary{max-width:620px;margin:12px 0}
+.customer-row-side{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.customer-row-side>strong{margin-inline-start:8px;white-space:nowrap}
+.customer-row-side button{padding:7px 9px;font-size:11px}
+.customer-balance-preview{padding:12px 14px;margin:10px 0;border:1px solid #dce8e0;border-radius:10px;background:#f4f8f5;color:#244f3c;font-size:13px;overflow-wrap:anywhere}
+.customer-balance-preview p{margin:5px 0}
+.table-note{display:block;color:#78847d;font-size:10px;margin-top:3px}
+.return-line{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #e7ece8}
+.return-line:last-child{border-bottom:0}
+.return-line>div{min-width:0;flex:1}
+.return-line strong,.return-line small{display:block}
+.return-line small{font-size:11px;color:#77837c;margin-top:4px}
+.return-line label{width:120px;max-width:34%;margin:0;flex-shrink:0}
+.return-line input{margin-top:5px}
+.sales-return-modal{max-height:94dvh}
+#salesReturnLines{max-height:42dvh}
+#view-customers .inner-tabs,#view-cash .inner-tabs,#view-reports .inner-tabs{position:sticky;top:56px;z-index:18;background:#edf3ef}
+#view-customers .inner-tab-panel>.panel,#view-cash .inner-tab-panel>.panel,#view-reports .inner-tab-panel>.panel{width:100%;min-width:0}
+#customerList,#cashLedger,#shiftPanel,#customerStatement{width:100%;min-width:0}
+#customerList .supplier-row,#cashLedger .movement-row{min-width:0}
+@media(max-width:640px){
+  .customer-row-side{justify-content:flex-start}
+  .customer-row-side>strong{width:100%;margin:0}
+  .customer-row-side button{flex:1}
+  .return-line{align-items:flex-start;gap:7px}
+  .return-line label{width:94px;max-width:36%}
+  #view-customers .form-grid,#view-cash .form-grid{grid-template-columns:minmax(0,1fr)}
+  #view-reports .stock-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:360px){
+  .customer-row-side button{font-size:10px;padding:7px 6px}
+  .return-line strong{font-size:12px}
+  .return-line small{font-size:10px}
+  .return-line label{width:82px}
+}
