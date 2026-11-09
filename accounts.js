@@ -103,6 +103,8 @@ POSDatabase.saveInvoice=async invoice=>{
   }
   return originalSaveInvoice(invoice);
 };
+function updateCreditHint(){const hint=$("creditHint");if(hint)hint.hidden=$("paymentMethod").value!=="credit";}
+$("paymentMethod").addEventListener("change",updateCreditHint);updateCreditHint();
 $("customerForm").onsubmit=async e=>{
   e.preventDefault();
   const id=$("customerId").value||uid();
@@ -207,12 +209,12 @@ async function renderCash(){
     const amount=document.createElement("strong");amount.className=entry.type==="income"?"movement-positive":"movement-negative";amount.textContent=(entry.type==="income"?"+":"−")+money(entry.amount);
     row.append(info,amount);ledger.append(row);
   });
-  renderShift(open,entries);
+  renderShift(open,entries,shifts);
 }
 function expectedShiftCash(shift,entries){
   return Number(shift.openingCash||0)+entries.filter(x=>x.method!=="electronic"&&new Date(x.createdAt)>=new Date(shift.openedAt)&&(!shift.closedAt||new Date(x.createdAt)<=new Date(shift.closedAt))).reduce((s,x)=>s+(x.type==="income"?1:-1)*Number(x.amount||0),0);
 }
-function renderShift(open,entries){
+function renderShift(open,entries,shifts){
   const root=$("shiftPanel"),summary=$("activeShiftSummary");
   if(!open){
     summary.textContent="لا توجد وردية مفتوحة حاليًا.";
@@ -225,6 +227,19 @@ function renderShift(open,entries){
         await renderCash();
       }catch(error){alert("تعذر فتح الوردية: "+error.message);}
     };
+    const history=$("closedShiftHistory"),closed=(shifts||[]).filter(x=>x.status==="closed").sort((a,b)=>String(b.closedAt||"").localeCompare(String(a.closedAt||""))).slice(0,8);
+    if(closed.length){
+      const heading=document.createElement("h3");heading.textContent="آخر الورديات المغلقة";history.append(heading);
+      closed.forEach(shift=>{
+        const row=document.createElement("div");row.className="history-row";
+        const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");
+        title.textContent="وردية "+new Date(shift.openedAt).toLocaleDateString("ar-EG");
+        meta.textContent="إغلاق: "+new Date(shift.closedAt).toLocaleTimeString("ar-EG")+" · متوقع "+money(shift.expectedCash)+" · فعلي "+money(shift.countedCash);
+        info.append(title,meta);
+        const diff=document.createElement("strong");diff.className=Number(shift.difference||0)<0?"movement-negative":"movement-positive";diff.textContent=(Number(shift.difference||0)>0?"+":"")+money(shift.difference||0);
+        row.append(info,diff);history.append(row);
+      });
+    }
   }else{
     const expected=expectedShiftCash(open,entries);
     summary.textContent="وردية مفتوحة منذ "+new Date(open.openedAt).toLocaleString("ar-EG")+" · الرصيد المتوقع الآن "+money(expected);
