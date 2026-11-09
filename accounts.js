@@ -276,8 +276,8 @@ function periodProfitSnapshot(invoices,returns,cashEntries,dateFilter){
       const quantity=Number(item.stockQuantity??item.quantity)||0;
       const lineRevenue=quantity*Number(item.unitPrice||0)*factor;
       totalLineRevenue+=lineRevenue;
-      if(item.cost!==undefined&&item.cost!==null&&item.cost!==""&&Number.isFinite(Number(item.cost))){
-        salesCost+=Number(item.cost)*quantity;
+      if(item.costKnown===true||(item.cost!==undefined&&item.cost!==null&&Number.isFinite(Number(item.cost))&&Number(item.cost)>0)){
+        salesCost+=Number(item.cost||0)*quantity;
         knownRevenue+=lineRevenue;
       }
     });
@@ -288,9 +288,11 @@ function periodProfitSnapshot(invoices,returns,cashEntries,dateFilter){
     const invoice=invoiceById.get(record.invoiceId);
     (record.items||[]).forEach(line=>{
       const original=(invoice?.items||[])[Number(line.itemIndex)];
-      const cost=line.cost!==undefined&&line.cost!==null&&line.cost!==""&&Number.isFinite(Number(line.cost))
-        ?Number(line.cost):(original?.cost!==undefined&&original?.cost!==null&&Number.isFinite(Number(original.cost))?Number(original.cost):null);
-      if(cost!==null)returnedCost+=cost*Number(line.quantity||0);
+      const lineHasCost=line.costKnown===true||(line.cost!==undefined&&line.cost!==null&&Number(line.cost)>0);
+      const originalHasCost=original?.costKnown===true||(original?.cost!==undefined&&original?.cost!==null&&Number(original.cost)>0);
+      const cost=lineHasCost&&line.cost!==undefined&&line.cost!==null?Number(line.cost)
+        :originalHasCost?Number(original.cost):null;
+      if(cost!==null&&Number.isFinite(cost))returnedCost+=cost*Number(line.quantity||0);
     });
   });
   const netSales=sales-returnedAmount,cogs=salesCost-returnedCost;
