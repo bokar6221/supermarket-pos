@@ -20,7 +20,7 @@ function customerBalance(customer,invoices,payments,returns){
   const sales=invoices.filter(x=>x.paymentMethod==="credit"&&customerMatches(x,customer)).reduce((s,x)=>s+Number(x.total||0),0);
   const collected=payments.filter(x=>x.customerId===customer.id).reduce((s,x)=>s+Number(x.amount||0),0);
   const credited=returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).reduce((s,x)=>s+Number(x.amount||0),0);
-  return Math.max(0,Number(customer.openingBalance||0)+sales-collected-credited);
+  return Math.round((Number(customer.openingBalance||0)+sales-collected-credited)*100)/100;
 }
 async function loadCustomerData(){
   return Promise.all([POSDatabase.getCustomers(),POSDatabase.getInvoices(),POSDatabase.getCustomerPayments(),POSDatabase.getReturns()]);
@@ -42,7 +42,7 @@ async function renderCustomers(){
   const list=$("customerList");list.replaceChildren();
   const shown=active.filter(x=>(x.name+" "+(x.phone||"")).toLocaleLowerCase("ar").includes(q));
   $("customerCount").textContent=String(active.length);
-  $("customerDebt").textContent=money(active.reduce((s,x)=>s+customerBalance(x,invoices,payments,returns),0));
+  $("customerDebt").textContent=money(active.reduce((s,x)=>s+Math.max(0,customerBalance(x,invoices,payments,returns)),0));
   if(!shown.length)list.innerHTML='<p class="empty">لا توجد نتائج مطابقة.</p>';
   shown.forEach(customer=>{
     const balance=customerBalance(customer,invoices,payments,returns);
@@ -51,11 +51,11 @@ async function renderCustomers(){
     name.textContent=customer.name;meta.textContent=(customer.phone?"هاتف: "+customer.phone+" · ":"")+"رصيد سابق: "+money(customer.openingBalance||0)+(customer.note?" · "+customer.note:"");
     info.append(name,meta);
     const side=document.createElement("div");side.className="customer-row-side";
-    const due=document.createElement("strong");due.className=balance>0.005?"supplier-due":"supplier-clear";due.textContent=money(balance);
+    const due=document.createElement("strong");due.className=balance>0.005?"supplier-due":"supplier-clear";due.textContent=balance< -0.005?"رصيد لصالح العميل: "+money(Math.abs(balance)):money(balance);
     const edit=document.createElement("button");edit.type="button";edit.className="secondary";edit.textContent="تعديل";
     edit.onclick=()=>{ $("customerId").value=customer.id;$("customerNameForm").value=customer.name;$("customerPhoneForm").value=customer.phone||"";$("customerOpeningBalance").value=String(customer.openingBalance||0);$("customerNote").value=customer.note||"";activate("add"); };
     const collect=document.createElement("button");collect.type="button";collect.className="secondary";collect.textContent="تحصيل";
-    collect.onclick=()=>{ $("collectionCustomer").value=customer.id;updateCollectionBalance();activate("collect"); };
+    collect.disabled=balance<=0.005;collect.onclick=()=>{ $("collectionCustomer").value=customer.id;updateCollectionBalance();activate("collect"); };
     const statement=document.createElement("button");statement.type="button";statement.className="secondary";statement.textContent="كشف";
     statement.onclick=()=>{ $("statementCustomer").value=customer.id;renderCustomerStatement();activate("statement"); };
     side.append(due,edit,collect,statement);row.append(info,side);list.append(row);
@@ -74,7 +74,7 @@ async function updateCollectionBalance(){
   if(!id){$("collectionBalance").textContent="اختر العميل لعرض رصيده.";return;}
   const [customers,invoices,payments,returns]=await loadCustomerData();
   const customer=customers.find(x=>x.id===id);
-  $("collectionBalance").textContent=customer?"الرصيد المستحق: "+money(customerBalance(customer,invoices,payments,returns)):"العميل غير موجود.";
+  const balance=customer?customerBalance(customer,invoices,payments,returns):0;$("collectionBalance").textContent=customer?(balance>0.005?"الرصيد المستحق: "+money(balance):balance< -0.005?"رصيد لصالح العميل: "+money(Math.abs(balance)):"لا توجد مديونية على العميل."):"العميل غير موجود.";
 }
 async function renderCustomerStatement(){
   const root=$("customerStatement"),id=$("statementCustomer")?.value;
@@ -89,7 +89,8 @@ async function renderCustomerStatement(){
   events.sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
   let balance=0;
   const rows=events.map(e=>{balance+=e.debit-e.credit;return '<tr><td>'+esc(e.date?new Date(e.date).toLocaleDateString("ar-EG"):"—")+'</td><td>'+esc(e.kind)+(e.note?"<small class='table-note'>"+esc(e.note)+"</small>":"")+'</td><td>'+esc(money(e.debit))+'</td><td>'+esc(money(e.credit))+'</td><td>'+esc(money(balance))+'</td></tr>';}).join("");
-  root.innerHTML='<div class="table-scroll"><table class="data-table"><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="supplier-balance-summary">الرصيد المستحق حاليًا: <strong>'+esc(money(customerBalance(customer,invoices,payments,returns)))+'</strong></p>';
+  const finalBalance=customerBalance(customer,invoices,payments,returns),balanceLabel=finalBalance< -0.005?"رصيد لصالح العميل":"الرصيد المستحق حاليًا";
+  root.innerHTML='<div class="table-scroll"><table class="data-table"><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr></thead><tbody>'+rows+'</tbody></table></div><p class="supplier-balance-summary">'+balanceLabel+': <strong>'+esc(money(Math.abs(finalBalance)))+'</strong></p>';
 }
 const phoneClean=v=>digits(v);
 const originalSaveInvoice=POSDatabase.saveInvoice.bind(POSDatabase);
@@ -276,7 +277,7 @@ async function renderReports(){
   $("reportTodaySales").textContent=money(todaySales);$("reportTodayInvoices").textContent=String(todayInvoices.length);$("reportTodayReturns").textContent=money(todayReturns);$("reportTodayNet").textContent=money(todaySales-todayReturns);
   $("reportMonthSales").textContent=money(monthSales);$("reportMonthInvoices").textContent=String(monthInvoices.length);$("reportMonthReturns").textContent=money(monthReturns);$("reportMonthNet").textContent=money(monthSales-monthReturns);
   const inventoryValue=products.filter(p=>p.trackStock).reduce((s,p)=>s+Number(p.stock||0)*Number(p.cost||0),0);
-  const customerDebt=customers.filter(x=>x.active!==false).reduce((s,x)=>s+customerBalance(x,invoices,customerPayments,returns),0);
+  const customerDebt=customers.filter(x=>x.active!==false).reduce((s,x)=>s+Math.max(0,customerBalance(x,invoices,customerPayments,returns)),0);
   const supplierDebt=suppliers.filter(x=>x.active!==false).reduce((s,x)=>s+Number(x.openingBalance||0),0)+purchases.reduce((s,x)=>s+Number(x.total||0)-Number(x.paidAmount||0),0)-supplierPayments.reduce((s,x)=>s+Number(x.amount||0),0);
   const monthOut=cashEntries.filter(x=>x.type==="expense"&&localKey(x.createdAt).startsWith(month)).reduce((s,x)=>s+Number(x.amount||0),0);
   $("reportStockValue").textContent=money(inventoryValue);$("reportCustomerDebt").textContent=money(customerDebt);$("reportSupplierDebt").textContent=money(supplierDebt);$("reportMonthExpenses").textContent=money(monthOut);
