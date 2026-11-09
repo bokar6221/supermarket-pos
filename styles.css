@@ -217,7 +217,7 @@
 
 
 /* Inventory and purchasing workflows */
-.stock-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}
+.report-subheading{margin:18px 0 7px;font-size:15px;color:#244f40}.report-subheading+.stock-summary-grid{margin-top:8px}.stock-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}
 .stock-stat{border:1px solid #e3ebe6;background:#f7faf8;border-radius:12px;padding:13px;min-width:0}
 .stock-stat span{display:block;color:#6d7a72;font-size:11px;margin-bottom:8px}
 .stock-stat strong{display:block;color:#174d3c;font-size:18px;overflow-wrap:anywhere}
