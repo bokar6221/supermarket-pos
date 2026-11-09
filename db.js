@@ -561,13 +561,51 @@
   }
   async function restoreData(payload){
     if(!payload||payload.app!=="supermarket-pos"||!payload.data||!Array.isArray(payload.data.products)||!Array.isArray(payload.data.invoices))throw new Error("ملف النسخة الاحتياطية غير صحيح.");
+    const restored={...payload.data};
+    if(Number(payload.schemaVersion||0)<4||!Array.isArray(restored.cashEntries)||!Array.isArray(restored.customers)){
+      restored.invoices=(restored.invoices||[]).map(invoice=>({...invoice}));
+      const normalizedPhone=value=>{
+        let digits=String(value||"").replace(/\D/g,"");
+        if(digits.startsWith("0020"))digits="0"+digits.slice(4);
+        else if(digits.startsWith("20")&&digits.length===12)digits="0"+digits.slice(2);
+        return digits;
+      };
+      if(!Array.isArray(restored.customers)){
+        const customersById=new Map();
+        restored.invoices.forEach(invoice=>{
+          if(invoice.paymentMethod!=="credit"||!String(invoice.customerName||"").trim())return;
+          const phone=normalizedPhone(invoice.customerPhone);
+          const id=invoice.customerId|| (phone?"legacy-customer-"+phone:"legacy-customer-"+String(invoice.id));
+          invoice.customerId=id;
+          customersById.set(id,{id,name:String(invoice.customerName).trim(),phone:phone||String(invoice.customerPhone||""),openingBalance:0,active:true,note:"تم ترحيله من نسخة احتياطية سابقة",createdAt:invoice.createdAt||new Date().toISOString()});
+        });
+        restored.customers=[...customersById.values()];
+      }
+      if(!Array.isArray(restored.cashEntries)){
+        const entries=[];
+        (restored.invoices||[]).forEach(invoice=>{
+          const amount=Number(invoice.total||0);
+          if(amount>0&&(invoice.paymentMethod==="cash"||invoice.paymentMethod==="electronic"))entries.push({id:"migration-sale-"+String(invoice.id),type:"income",category:"sale",amount,method:invoice.paymentMethod,referenceId:invoice.id,note:"مبيعات سابقة "+String(invoice.id||""),createdAt:invoice.createdAt||new Date().toISOString()});
+        });
+        (restored.purchases||[]).forEach(purchase=>{
+          const amount=Number(purchase.paidAmount||0);
+          if(amount>0)entries.push({id:"migration-purchase-"+String(purchase.id),type:"expense",category:"purchase",amount,method:purchase.paymentMethod||"cash",referenceId:purchase.id,note:"مدفوع مشتريات سابقة "+String(purchase.number||""),createdAt:purchase.createdAt||new Date().toISOString()});
+        });
+        (restored.supplierPayments||[]).forEach(payment=>{
+          const amount=Number(payment.amount||0);
+          if(amount>0)entries.push({id:"migration-supplier-payment-"+String(payment.id),type:"expense",category:"supplier_payment",amount,method:payment.method||"cash",referenceId:payment.id,note:"سداد مورد سابق "+String(payment.supplierName||""),createdAt:payment.createdAt||new Date().toISOString()});
+        });
+        restored.cashEntries=entries;
+      }
+    }
+    for(const name of STORE_NAMES)if(!Array.isArray(restored[name]))restored[name]=[];
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
         const tx=db.transaction(STORE_NAMES,"readwrite");
         for(const name of STORE_NAMES)tx.objectStore(name).clear();
         for(const name of STORE_NAMES){
-          const rows=payload.data[name]||[];
+          const rows=restored[name]||[];
           if(Array.isArray(rows))for(const row of rows)tx.objectStore(name).put(row);
         }
         tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
