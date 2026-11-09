@@ -278,7 +278,7 @@ async function renderReports(){
   $("reportMonthSales").textContent=money(monthSales);$("reportMonthInvoices").textContent=String(monthInvoices.length);$("reportMonthReturns").textContent=money(monthReturns);$("reportMonthNet").textContent=money(monthSales-monthReturns);
   const inventoryValue=products.filter(p=>p.trackStock).reduce((s,p)=>s+Number(p.stock||0)*Number(p.cost||0),0);
   const customerDebt=customers.filter(x=>x.active!==false).reduce((s,x)=>s+Math.max(0,customerBalance(x,invoices,customerPayments,returns)),0);
-  const supplierDebt=suppliers.filter(x=>x.active!==false).reduce((s,x)=>s+Number(x.openingBalance||0),0)+purchases.reduce((s,x)=>s+Number(x.total||0)-Number(x.paidAmount||0),0)-supplierPayments.reduce((s,x)=>s+Number(x.amount||0),0);
+  const supplierDebt=suppliers.filter(x=>x.active!==false).reduce((s,x)=>s+Number(x.openingBalance||0),0)+purchases.filter(x=>x.supplierId).reduce((s,x)=>s+Number(x.total||0)-Number(x.paidAmount||0),0)-supplierPayments.reduce((s,x)=>s+Number(x.amount||0),0);
   const monthOut=cashEntries.filter(x=>x.type==="expense"&&localKey(x.createdAt).startsWith(month)).reduce((s,x)=>s+Number(x.amount||0),0);
   $("reportStockValue").textContent=money(inventoryValue);$("reportCustomerDebt").textContent=money(customerDebt);$("reportSupplierDebt").textContent=money(supplierDebt);$("reportMonthExpenses").textContent=money(monthOut);
 }
