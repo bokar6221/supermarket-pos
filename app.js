@@ -182,7 +182,6 @@ function renderProducts(){
     actions.append(edit,del);row.append(info,actions);root.append(row);
   });
 }
-function catalogNameKey
 function catalogNameKey(value){return String(value||"").trim().toLocaleLowerCase("ar").replace(/\s+/g," ");}
 let activeCatalogCategory="الكل";
 function renderCatalog(){
