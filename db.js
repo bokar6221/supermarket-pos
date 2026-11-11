@@ -246,12 +246,19 @@
        !Number.isFinite(total)||total<0||Math.abs(total-Math.round((subtotal-discount)*100)/100)>0.02||
        !["cash","electronic","credit"].includes(invoice.paymentMethod))throw new Error("راجع إجمالي الفاتورة والخصم وطريقة الدفع.");
     const quantities=new Map();
+    let linesTotal=0;
     for(const item of invoice.items){
       if(!item||!String(item.name||"").trim())throw new Error("يوجد بند غير صحيح في الفاتورة.");
       const quantity=Number(item.stockQuantity??item.quantity),price=Number(item.unitPrice);
-      if(!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)throw new Error("راجع كمية وسعر كل بند في الفاتورة.");
+      const lineTotal=Number(item.total??(quantity*price));
+      if(!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0||
+         !Number.isFinite(lineTotal)||lineTotal<0||
+         (item.unit==="piece"&&!Number.isInteger(quantity)))
+        throw new Error("راجع كمية وسعر وإجمالي كل بند في الفاتورة.");
+      linesTotal+=lineTotal;
       if(item.productId)quantities.set(item.productId,(quantities.get(item.productId)||0)+quantity);
     }
+    if(Math.abs(linesTotal-subtotal)>0.02)throw new Error("مجموع بنود الفاتورة لا يطابق الإجمالي قبل الخصم.");
     const db=await openDB();
     try{
       return await new Promise((resolve,reject)=>{
@@ -463,17 +470,34 @@
 
   async function saveCustomer(customer){
     if(!customer||!String(customer.name||"").trim())throw new Error("اكتب اسم العميل.");
-    const phone=String(customer.phone||"").replace(/\s+/g,"").trim();
+    const normalizePhone=value=>{
+      let digits=String(value||"")
+        .replace(/[٠-٩]/g,d=>String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+        .replace(/[۰-۹]/g,d=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+        .replace(/\D/g,"");
+      if(digits.startsWith("0020"))digits="0"+digits.slice(4);
+      else if(digits.startsWith("20")&&digits.length===12)digits="0"+digits.slice(2);
+      return digits;
+    };
+    const phone=normalizePhone(customer.phone);
+    if(phone&&(phone.length<8||phone.length>15))throw new Error("رقم هاتف العميل غير صحيح.");
     const clean={...customer,name:String(customer.name).trim(),phone,openingBalance:Math.max(0,Number(customer.openingBalance)||0),active:customer.active!==false,updatedAt:new Date().toISOString()};
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
         const tx=db.transaction("customers","readwrite"),store=tx.objectStore("customers");
+        let failure="";
         if(clean.phone){
-          const req=store.index("phone").get(clean.phone);
-          req.onsuccess=()=>{const old=req.result;if(old&&old.id!==clean.id){clean.id=old.id;clean.openingBalance=old.openingBalance||clean.openingBalance;}store.put(clean);};
+          const req=store.getAll();
+          req.onsuccess=()=>{
+            const duplicate=req.result.find(old=>old.id!==clean.id&&normalizePhone(old.phone)===clean.phone);
+            if(duplicate){failure="رقم الهاتف مسجل بالفعل للعميل: "+duplicate.name;try{tx.abort();}catch(e){}return;}
+            store.put(clean);
+          };
         }else store.put(clean);
-        tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error);
+        tx.oncomplete=()=>resolve(true);
+        tx.onerror=()=>reject(tx.error);
+        tx.onabort=()=>reject(new Error(failure||"تعذر حفظ بيانات العميل."));
       });
       return clean;
     }finally{db.close();}
@@ -539,15 +563,20 @@
           const existingReq=rs.getAll();
           existingReq.onsuccess=()=>{
             const prior=existingReq.result.filter(x=>x.invoiceId===record.invoiceId);
-            let amount=0;const lines=[];
+            let amount=0;const lines=[],seenIndexes=new Set(),returnedInRequest=new Map();
             for(const line of record.items){
               const index=Number(line.itemIndex),sold=(invoice.items||[])[index];
-              if(!sold){failed=true;try{tx.abort();}catch(e){}return;}
+              if(!Number.isInteger(index)||index<0||!sold||seenIndexes.has(index)){failed=true;try{tx.abort();}catch(e){}return;}
+              seenIndexes.add(index);
               const returned=prior.reduce((sum,r)=>sum+(r.items||[]).filter(x=>Number(x.itemIndex)===index).reduce((n,x)=>n+Number(x.quantity||0),0),0);
-              const qty=Number(line.quantity),remaining=Number(sold.quantity||0)-returned;
-              if(!Number.isFinite(qty)||qty<=0||qty>remaining+0.000001){failed=true;try{tx.abort();}catch(e){}return;}
-              const raw=qty*Number(sold.unitPrice||0),ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
-              const lineAmount=Math.round(raw*ratio*100)/100;amount+=lineAmount;
+              const qty=Number(line.quantity),alreadyRequested=returnedInRequest.get(index)||0;
+              const remaining=Number(sold.quantity||0)-returned-alreadyRequested;
+              if(!Number.isFinite(qty)||qty<=0||qty>remaining+0.000001||(sold.unit==="piece"&&!Number.isInteger(qty))){failed=true;try{tx.abort();}catch(e){}return;}
+              returnedInRequest.set(index,alreadyRequested+qty);
+              const ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
+              const unitAmount=Number.isFinite(Number(sold.total))&&Number(sold.quantity)>0
+                ?Number(sold.total)/Number(sold.quantity):Number(sold.unitPrice||0)*ratio;
+              const lineAmount=Math.round(qty*unitAmount*100)/100;amount+=lineAmount;
               lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),
                 cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,
                 costKnown:sold.costKnown===true||(sold.cost!==undefined&&sold.cost!==null&&Number(sold.cost)>0),amount:lineAmount});
@@ -565,7 +594,7 @@
                 }
               };
             }
-            if(clean.refundMethod==="cash"||clean.refundMethod==="electronic"){
+            if(clean.amount>0&&(clean.refundMethod==="cash"||clean.refundMethod==="electronic")){
               tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"expense",category:"sales_return",amount:clean.amount,method:clean.refundMethod,referenceId:clean.id,note:"رد قيمة مرتجع فاتورة",createdAt:clean.createdAt});
             }
           };
