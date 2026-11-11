@@ -20,7 +20,8 @@ import {
   writeBatch,
   runTransaction,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 
 "use strict";
@@ -52,6 +53,8 @@ let activeShopName = "";
 let syncBusy = false;
 let syncTimer = null;
 let suppressSync = false;
+let stopRecordsListener = null;
+let remoteChain = Promise.resolve();
 
 function randomId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
@@ -121,6 +124,7 @@ function showSignedIn(user, shopName) {
   activeUser = user;
   if ($("cloudAuthPanel")) $("cloudAuthPanel").hidden = !!(user && shopName);
   if ($("cloudConnectedPanel")) $("cloudConnectedPanel").hidden = !(user && shopName);
+  if ($("cloudCreateShop")) $("cloudCreateShop").hidden = !(user && !shopName);
   if ($("cloudAccountEmail")) $("cloudAccountEmail").textContent = user ? (user.email || "حساب Google/Firebase") : "";
   if ($("cloudConnectedShop")) $("cloudConnectedShop").textContent = shopName || "";
 }
@@ -260,6 +264,7 @@ async function restoreFullShop(shopId) {
   state.records = records;
   state.cursor = last;
   writeState(state);
+  startRealtimeListener(shopId);
   await refreshLocalViews();
   return state;
 }
@@ -306,6 +311,7 @@ async function createShopForUser(user, shopName) {
   const settings = await window.POSDatabase.getSettings();
   const name = String(shopName || settings.shopName || "").trim();
   if (!name) throw new Error("اكتب اسم المحل أولًا.");
+  await window.POSDatabase.saveSettings({ shopName: name });
   const newShop = doc(collection(cloudDb, "shops"));
   const batch = writeBatch(cloudDb);
   batch.set(newShop, {
@@ -334,6 +340,7 @@ async function createShopForUser(user, shopName) {
   showSignedIn(user, name);
   setStatus("تم إنشاء المحل السحابي. جارٍ رفع بيانات هذا الجهاز لأول مرة...", "info");
   const state = await initialUpload(newShop.id);
+  startRealtimeListener(newShop.id);
   setStatus("تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.", "success");
   return state;
 }
@@ -432,6 +439,72 @@ async function pullIncremental(state) {
   }
   return applied;
 }
+function startRealtimeListener(shopId) {
+  if (stopRecordsListener) {
+    stopRecordsListener();
+    stopRecordsListener = null;
+  }
+  const cloudQuery = query(recordsRef(shopId), orderBy("updatedAt"), orderBy(documentId()));
+  stopRecordsListener = onSnapshot(cloudQuery, snapshot => {
+    const changed = snapshot.docChanges().map(change => change.doc);
+    if (!changed.length) return;
+    remoteChain = remoteChain
+      .then(() => applyRealtimeDocuments(changed, shopId))
+      .catch(error => setStatus("تعذر استقبال تحديثات المحل: " + firebaseError(error), "error"));
+  }, error => setStatus("انقطع استقبال المزامنة اللحظية: " + firebaseError(error), "warning"));
+}
+async function applyRealtimeDocuments(snapshots, shopId) {
+  const state = readState();
+  if (!state || state.shopId !== shopId) return;
+  const local = await buildLocalRecords();
+  const changes = [];
+  let conflictAdded = false;
+  for (const snapshot of snapshots) {
+    const remote = snapshot.data();
+    if (!SYNC_STORES.includes(remote.store) || typeof remote.recordId !== "string") continue;
+    const remoteHash = await cloudHash(remote);
+    const baseline = state.records[snapshot.id] || null;
+    const localRecord = local.get(snapshot.id) || null;
+    if (baseline && baseline.hash === remoteHash) continue;
+    if (localRecord && localRecord.hash === remoteHash) {
+      state.records[snapshot.id] = { hash: remoteHash, deleted: !!remote.deleted };
+      continue;
+    }
+    const localUnchanged = baseline
+      ? (!localRecord && baseline.deleted) || (localRecord && localRecord.hash === baseline.hash)
+      : !localRecord;
+    if (localUnchanged) {
+      changes.push(cloudToLocalChange(remote));
+      state.records[snapshot.id] = { hash: remoteHash, deleted: !!remote.deleted };
+    } else {
+      state.conflicts = state.conflicts || [];
+      if (!state.conflicts.some(item => item.docId === snapshot.id)) {
+        state.conflicts.push({ docId: snapshot.id, store: remote.store, recordId: remote.recordId, detectedAt: new Date().toISOString() });
+        conflictAdded = true;
+      }
+    }
+    const cursor = cursorFromDocument(snapshot);
+    if (cursor) {
+      const previous = state.cursor;
+      const newer = !previous || cursor.seconds > previous.seconds ||
+        (cursor.seconds === previous.seconds && cursor.nanoseconds > previous.nanoseconds) ||
+        (cursor.seconds === previous.seconds && cursor.nanoseconds === previous.nanoseconds && cursor.id > previous.id);
+      if (newer) state.cursor = cursor;
+    }
+  }
+  if (changes.length) {
+    suppressSync = true;
+    try { await window.POSDatabase.applyCloudRecords(changes, false); }
+    finally { suppressSync = false; }
+    await refreshLocalViews();
+  }
+  writeState(state);
+  if (conflictAdded) {
+    setStatus("وصل تحديث على سجل تم تعديله محليًا أيضًا. أوقفنا استبداله تلقائيًا لحماية البيانات؛ يلزم حل التعارض.", "warning");
+  } else if (changes.length) {
+    setStatus("تم استقبال " + changes.length + " تحديث من أجهزة المحل.", "success");
+  }
+}
 async function pushLocalChanges(state) {
   const local = await buildLocalRecords();
   const candidates = [];
@@ -498,7 +571,7 @@ async function pushLocalChanges(state) {
   }
   return pushed;
 }
-async function syncNow() {
+async function syncNow(includePull) {
   if (syncBusy) return;
   if (!navigator.onLine) {
     setStatus("دون إنترنت. البيع محفوظ محليًا وستتم المزامنة عند عودة الاتصال.", "warning");
@@ -513,12 +586,16 @@ async function syncNow() {
   setBusy(true);
   try {
     setStatus("جارٍ استقبال التغييرات...", "info");
-    const pulled = await pullIncremental(state);
+    const pulled = includePull === false ? 0 : await pullIncremental(state);
     const pushed = await pushLocalChanges(state);
-    const pulledAfterWrite = await pullIncremental(state);
+    const pulledAfterWrite = includePull === false ? 0 : await pullIncremental(state);
     writeState(state);
     const conflictCount = (state.conflicts || []).length;
-    if (conflictCount) {
+    const products = await window.POSDatabase.getProducts();
+    const negativeStockCount = products.filter(product => product.trackStock && Number(product.stock || 0) < -0.001).length;
+    if (negativeStockCount) {
+      setStatus("المزامنة مكتملة، لكن يوجد " + negativeStockCount + " صنف برصيد سالب بسبب بيع متزامن من أجهزة كانت غير متصلة. راجع المخزون قبل متابعة البيع.", "error");
+    } else if (conflictCount) {
       setStatus("اكتملت المزامنة مع وجود " + conflictCount + " تعارض يحتاج مراجعة. لم نستبدل بيانات متعارضة تلقائيًا.", "warning");
     } else {
       setStatus("المزامنة مكتملة. تغييرات مستلمة: " + (pulled + pulledAfterWrite) + "، تغييرات مرسلة: " + pushed + ".", "success");
@@ -534,7 +611,7 @@ async function syncNow() {
 function scheduleSync() {
   if (suppressSync || !activeUser || !activeShopId) return;
   if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => syncNow(), 1800);
+  syncTimer = setTimeout(() => syncNow(false), 1800);
 }
 async function handleLogin() {
   const email = $("cloudEmail").value.trim();
@@ -609,9 +686,10 @@ function bindUI() {
       await connectExistingShop(activeUser, activeShopId);
       return;
     }
-    await syncNow();
+    await syncNow(true);
   }));
   if ($("cloudSignOut")) $("cloudSignOut").addEventListener("click", () => clickAction(async () => {
+    if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
     await signOut(auth);
     activeShopId = "";
     activeShopName = "";
@@ -625,7 +703,7 @@ function wrapLocalMutations() {
     "saveProduct", "saveProducts", "deleteProduct", "saveInvoice",
     "saveSupplier", "saveSupplierPayment", "savePurchase", "saveStockAdjustment",
     "saveStocktake", "saveCustomer", "saveCustomerPayment", "saveReturn",
-    "saveCashEntry", "saveShift", "saveSettings"
+    "saveCashEntry", "saveShift", "saveSettings", "restoreData"
   ];
   methods.forEach(name => {
     const original = window.POSDatabase[name];
@@ -644,6 +722,9 @@ wrapLocalMutations();
 onAuthStateChanged(auth, async user => {
   activeUser = user || null;
   if (!user) {
+    if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
+    activeShopId = "";
+    activeShopName = "";
     showSignedIn(null, "");
     return;
   }
@@ -664,8 +745,9 @@ onAuthStateChanged(auth, async user => {
     activeShopName = shop.exists() ? String(shop.data().name || "المحل") : "المحل";
     showSignedIn(user, activeShopName);
     if (state && state.shopId === shopId) {
+      startRealtimeListener(shopId);
       setStatus("المحل متصل. ستتم المزامنة تلقائيًا عند إجراء تعديل أو عودة الإنترنت.", "success");
-      if (navigator.onLine) setTimeout(() => syncNow(), 2500);
+      if (navigator.onLine) setTimeout(() => syncNow(false), 2500);
     } else {
       setStatus("سجّل الدخول على هذا الجهاز ثم اضغط مزامنة الآن لتنزيل بيانات المحل.", "info");
     }
@@ -675,8 +757,5 @@ onAuthStateChanged(auth, async user => {
   }
 });
 window.addEventListener("online", () => {
-  if (activeUser && activeShopId) setTimeout(() => syncNow(), 1200);
+  if (activeUser && activeShopId) setTimeout(() => syncNow(true), 1200);
 });
-setInterval(() => {
-  if (activeUser && activeShopId && navigator.onLine && !document.hidden) syncNow();
-}, 45000);
