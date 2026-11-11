@@ -9,6 +9,9 @@ const app = read("app.js");
 const accounts = read("accounts.js");
 const db = read("db.js");
 const gradle = read("android-app/app/build.gradle");
+const firebase = read("firebase-sync.js");
+const rules = read("firestore.rules");
+const manifest = read("android-app/app/src/main/AndroidManifest.xml");
 
 for (const file of ["app.js", "db.js", "accounts.js", "catalog.js", "sw.js"]) {
   const source = read(file);
@@ -24,7 +27,7 @@ const dynamicIds = new Set([
   "openShiftForm", "openingCash", "shiftOpenNote", "closedShiftHistory",
   "closeShiftForm", "countedCash"
 ]);
-const referencedIds = [...(app + "\n" + accounts).matchAll(/\$\(["']([^"']+)["']\)/g)]
+const referencedIds = [...(app + "\n" + accounts + "\n" + firebase).matchAll(/\$\(["']([^"']+)["']\)/g)]
   .map(match => match[1]);
 const missingIds = [...new Set(referencedIds)].filter(id => !ids.includes(id) && !dynamicIds.has(id));
 assert.deepEqual(missingIds, [], "Every static JavaScript DOM reference must exist in index.html");
@@ -40,4 +43,12 @@ assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate custome
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
 assert.match(gradle, /versionName '1\.6\.0'/, "Android version must match this release");
 
-console.log("POS integrity checks passed: syntax, HTML IDs, script assets, invoice totals, returns, customers and release version.");
+assert.match(firebase, /projectId: "supermarketpos-e448a"/, "Firebase project ID must match the registered web app");
+assert.match(firebase, /firebasejs\/13\.2\.0/, "Firebase SDK version must be pinned");
+assert.match(firebase, /applyCloudRecords/, "Cloud sync must use the guarded local database adapter");
+assert.match(db, /async function applyCloudRecords/, "Local database must safely apply cloud changes");
+assert.match(rules, /function isMember\(shopId\)/, "Firestore rules must enforce shop membership");
+assert.match(rules, /allow get, list: if isMember\(shopId\)/, "Cloud records must not be publicly readable");
+assert.match(manifest, /android\.permission\.INTERNET/, "Android must have network permission");
+
+console.log("POS integrity checks passed: syntax, HTML IDs, script assets, invoice totals, returns, customers, Firebase tenant rules and release version.");
