@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   build:
-    name: Build installable debug APK
+    name: Build and verify installable Android APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -75,6 +75,15 @@ jobs:
       - name: Build APK
         working-directory: android-app
         run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK package and signature
+        run: |
+          APK=android-app/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -F "package: name='com.supermarket.pos'" /tmp/apk-badging.txt
+          grep -F "versionCode='11'" /tmp/apk-badging.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
