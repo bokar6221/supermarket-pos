@@ -11,6 +11,8 @@ on:
       - "db.js"
       - "catalog.js"
       - "accounts.js"
+      - "firebase-sync.js"
+      - "firestore.rules"
       - "tests/**"
       - ".github/workflows/build-android-apk.yml"
   pull_request:
@@ -51,6 +53,7 @@ jobs:
           node --check db.js
           node --check catalog.js
           node --check accounts.js
+          node --input-type=module --check < firebase-sync.js
 
       - name: Validate POS data integrity and UI references
         run: node tests/validate-integrity.js
@@ -58,7 +61,7 @@ jobs:
       - name: Sync web app into Android assets
         run: |
           mkdir -p android-app/app/src/main/assets/www
-          cp index.html app.js db.js styles.css catalog.js accounts.js icon.svg manifest.json android-app/app/src/main/assets/www/
+          cp index.html app.js db.js styles.css catalog.js accounts.js firebase-sync.js icon.svg manifest.json android-app/app/src/main/assets/www/
 
       - name: Build APK
         working-directory: android-app
