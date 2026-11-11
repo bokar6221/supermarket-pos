@@ -60,8 +60,10 @@ async function run(){
 
   await assert.rejects(
     db.savePurchase({id:"purchase-fraction",items:[{productId:"piece-1",quantity:1.5,unitCost:10}],total:15,paidAmount:0}),
-    /كمية القطعة يجب أن تكون عددًا صحيحًا/
+    /كمية القطعة يجب أن تكون عددًا صحيحًا|تعذر حفظ فاتورة الشراء/
   );
+  assert.equal((await db.getProducts()).find(p=>p.id==="piece-1").stock,10,"Rejected purchase must not change stock");
+  assert.equal((await db.getPurchases()).length,0,"Rejected purchase must not create a purchase record");
 
   const deletion=await db.deleteProduct("piece-1");
   assert.deepEqual(deletion,{deleted:false,archived:true},"A referenced product must be archived, never physically deleted");
