@@ -53,7 +53,7 @@ service cloud.firestore {
         || (
           isMember(shopId)
           && get(memberPath(shopId, request.auth.uid)).data.role == 'cashier'
-          && store in ['products', 'invoices', 'movements', 'cashEntries']
+          && store in ['products', 'invoices', 'movements', 'cashEntries', 'customers']
         )
         || (
           isMember(shopId)
