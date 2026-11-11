@@ -10,8 +10,8 @@ const ROLE_LABELS={owner:"صاحب المحل",manager:"مدير",cashier:"كا�
 const ROLE_METHODS={
   owner:["*"],
   manager:["saveProduct","saveProducts","deleteProduct","setProductActive","saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveStockAdjustment","saveStocktake","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift","saveSettings","restoreData"],
-  cashier:["saveInvoice"],
-  accountant:["saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
+  cashier:["saveInvoice","saveCustomer"],
+  accountant:["saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
 };
 let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false;
 let publicKeyPromise=null;
