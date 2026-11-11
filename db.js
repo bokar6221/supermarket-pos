@@ -743,7 +743,7 @@
           newProducts.forEach(product=>{
             if(!product.trackStock)return;
             const base=Number(product.cloudStockBase!==undefined?product.cloudStockBase:product.stock||0);
-            product.stock=Math.max(0,Math.round((base+Number(totals.get(String(product.id))||0))*1000)/1000);
+            product.stock=Math.round((base+Number(totals.get(String(product.id))||0))*1000)/1000;
             productsStore.put(product);
           });
         };
