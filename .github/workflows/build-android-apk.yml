@@ -11,6 +11,7 @@ on:
       - "db.js"
       - "catalog.js"
       - "accounts.js"
+      - "tests/**"
       - ".github/workflows/build-android-apk.yml"
   workflow_dispatch:
 
@@ -48,6 +49,9 @@ jobs:
           node --check db.js
           node --check catalog.js
           node --check accounts.js
+
+      - name: Validate POS data integrity and UI references
+        run: node tests/validate-integrity.js
 
       - name: Sync web app into Android assets
         run: |
