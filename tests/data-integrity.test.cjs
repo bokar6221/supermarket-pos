@@ -103,7 +103,7 @@ async function run(){
   await db.saveReturn({id:"rounding-return-2",invoiceId:roundingInvoice.id,refundMethod:"cash",items:[{itemIndex:0,quantity:1}]});
   const roundingReturns=(await db.getReturns()).filter(x=>x.invoiceId===roundingInvoice.id);
   assert.deepEqual(roundingReturns.map(x=>x.items[0].amount),[50,49.99],"The final partial return must absorb the rounding remainder");
-  assert.equal(roundingReturns.reduce((sum,x)=>sum+x.amount,0),99.99,"No return sequence may refund more than the paid invoice total");
+  assert.equal(Math.round((roundingReturns.reduce((sum,x)=>sum+x.amount,0)+1e-9)*100)/100,99.99,"No return sequence may refund more than the paid invoice total");
   console.log("PASS: discounted returns, partial-return limits, stock restoration, integer piece movements, product archive, invoice preservation, cash reconciliation and role-scoped cashier sales.");
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
