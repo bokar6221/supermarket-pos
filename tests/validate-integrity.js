@@ -57,6 +57,8 @@ assert.match(app, /document\.querySelectorAll\('\[data-subpanel-group=/, "Nested
 assert.match(manifest, /android\.permission\.INTERNET/, "Android must have network permission");
 assert.match(accessGate, /subtle\.verify/, "Offline licenses must be verified using the embedded public key");
 assert.match(accessGate, /expiresAt/, "License expiry must be enforced locally");
+assert.match(accessGate, /const licenseStatus=licenseCheck\(license,managedShop\)/, "Every protected mutation must re-check license expiry");
+assert.match(accessGate, /setInterval\(recheckLocalLicenseExpiry,15000\)/, "An open app must lock when an offline license expires");
 assert.match(firebase, /async function createEmployeeInvite/, "Owner employee invitations must be implemented");
 assert.match(firebase, /async function handleEmployeeRegister/, "Employees must be able to register with an invitation");
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");

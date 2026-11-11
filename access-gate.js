@@ -112,9 +112,14 @@ function assertMutation(method){
   if(!managedShop)return true;
   if(!session||!session.uid||!session.active||session.shopId!==managedShop)
     throw new Error("يجب تسجيل الدخول بحساب موظف نشط لهذا المحل.");
+  const licenseStatus=licenseCheck(license,managedShop);
+  if(!licenseStatus.ok){
+    licenseReady=false;
+    showLock("البرنامج متوقف",licenseStatus.reason);
+    throw new Error(licenseStatus.reason+" لا يمكن تنفيذ العمليات.");
+  }
   if(!licenseReady){
-    const check=licenseCheck(license,managedShop);
-    showLock("البرنامج متوقف",check.ok?"يلزم إعادة التحقق من الترخيص.":check.reason);
+    showLock("البرنامج متوقف","يلزم إعادة التحقق من الترخيص عبر الاتصال بالإنترنت.");
     throw new Error("البرنامج غير مفعل. لا يمكن تنفيذ العمليات.");
   }
   if(!roleCan(method))throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية. راجع صاحب المحل.");
@@ -157,6 +162,20 @@ async function initialize(){
   }
   await applyLicense(doc,shopId,false);
 }
+function recheckLocalLicenseExpiry(){
+  if(platformAdminSession||!licenseReady)return;
+  const shopId=localStorage.getItem(MANAGED_KEY);
+  if(!shopId||!license)return;
+  const check=licenseCheck(license,shopId);
+  if(!check.ok){
+    licenseReady=false;
+    showLock("البرنامج متوقف",check.reason);
+  }
+}
+window.addEventListener("focus",recheckLocalLicenseExpiry);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)recheckLocalLicenseExpiry();});
+setInterval(recheckLocalLicenseExpiry,15000);
+
 function installMutationGuards(){
   if(!window.POSDatabase||window.POSDatabase.__localRoleGuarded)return;
   const methods=["saveProduct","saveProducts","deleteProduct","setProductActive","saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveStockAdjustment","saveStocktake","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift","saveSettings","restoreData"];
