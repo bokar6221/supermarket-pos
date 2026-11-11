@@ -145,6 +145,7 @@ function showSignedIn(user, shopName) {
   if ($("cloudCreateShop")) $("cloudCreateShop").hidden = !(user && !shopName);
   if ($("cloudAccountEmail")) $("cloudAccountEmail").textContent = user ? (user.email || "حساب Google/Firebase") : "";
   if ($("cloudConnectedShop")) $("cloudConnectedShop").textContent = shopName || "";
+  if ($("shopTitle") && user && shopName) $("shopTitle").textContent = shopName;
 }
 function firebaseError(error) {
   const code = String(error && error.code || "");
@@ -393,7 +394,7 @@ async function connectExistingShop(user, shopId) {
     if(identityChanged){
       if(backupHasBusinessData(currentSnapshot)){
         const accepted=window.confirm("هذا الجهاز مرتبط بحساب أو دور مختلف. ستتم إعادة تحميل البيانات المسموح بها لهذا الدور من السحابة. صدّر نسخة احتياطية أولًا إن كنت تحتاجها. هل تريد المتابعة؟");
-        if(!accepted){setStatus("لم يتم تغيير بيانات الجهاز أو ربط الحساب.", "warning");return;}
+        if(!accepted){setStatus("تم إلغاء تبديل الحساب ولم يتم السماح بالوصول إلى بيانات الجهاز السابقة.", "warning");await signOut(auth);return;}
       }
       setStatus("جارٍ إعادة تحميل بيانات الدور الحالي وحذف البيانات غير المسموح بها من هذا الجهاز...", "info");
       await restoreFullShop(shopId);
@@ -415,7 +416,8 @@ async function connectExistingShop(user, shopId) {
     if (backupHasBusinessData(localSnapshot)) {
       const accepted = window.confirm("هذا الجهاز يحتوي على بيانات محلية. عند ربطه بمحل موجود ستُستبدل بياناته ببيانات المحل السحابية. صدّر نسخة احتياطية أولًا إن كنت تحتاجها. هل تريد المتابعة؟");
       if (!accepted) {
-        setStatus("لم يتم استبدال بيانات هذا الجهاز.", "warning");
+        setStatus("تم إلغاء ربط المحل. لن تبقى جلسة الحساب الجديد مفتوحة على بيانات الجهاز السابقة.", "warning");
+        await signOut(auth);
         return;
       }
     }
@@ -1022,6 +1024,7 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   const state = readState();
+  const previousGateSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
   try {
     isPlatformAdmin=await verifyPlatformAdmin(user);
     if(window.POSGate)window.POSGate.setPlatformAdmin(isPlatformAdmin);
@@ -1044,16 +1047,25 @@ onAuthStateChanged(auth, async user => {
     const shop = await getDoc(shopRef(shopId));
     activeShopId = shopId;
     activeShopName = shop.exists() ? String(shop.data().name || "المحل") : "المحل";
-    activeMember=member.data();localStorage.setItem(MANAGED_SHOP_KEY,shopId);setGateSession();
+    activeMember=member.data();localStorage.setItem(MANAGED_SHOP_KEY,shopId);
+    const identityChanged=!previousGateSession||previousGateSession.uid!==user.uid||previousGateSession.shopId!==shopId||previousGateSession.role!==activeMember.role;
+    setGateSession();
     showSignedIn(user, activeShopName);applyRoleAccess();
     startMemberListener(shopId,user.uid);
     const licensed=await checkShopLicense(shopId);if(licensed)startLicenseListener(shopId);if(!licensed)return;
-    if (state && state.shopId === shopId) {
+    if(!state||state.shopId!==shopId||identityChanged){
+      const localSnapshot=await window.POSDatabase.backupData();
+      if(backupHasBusinessData(localSnapshot)){
+        const accepted=window.confirm("هذا الجهاز يحتوي بيانات لحساب أو محل سابق. سيتم استبدالها بالبيانات المسموح بها للحساب الحالي. صدّر نسخة احتياطية أولًا إن كنت تحتاجها. هل تريد المتابعة؟");
+        if(!accepted){setStatus("تم إلغاء تبديل الحساب. لن يبقى الحساب الجديد متصلًا ببيانات الجهاز السابقة.","warning");await signOut(auth);return;}
+      }
+      setStatus("جارٍ تنزيل البيانات المسموح بها لهذا الدور وحذف بيانات الأدوار الأخرى من الجهاز...", "info");
+      await restoreFullShop(shopId);
+      setStatus("تم ربط الحساب وتنزيل بيانات الدور الحالي.", "success");
+    } else {
       startRealtimeListener(shopId);
       setStatus("المحل متصل. ستتم المزامنة تلقائيًا عند إجراء تعديل أو عودة الإنترنت.", "success");
       if (navigator.onLine) setTimeout(() => syncNow(false), 2500);
-    } else {
-      setStatus("سجّل الدخول على هذا الجهاز ثم اضغط مزامنة الآن لتنزيل بيانات المحل.", "info");
     }
   } catch (error) {
     if(window.POSGate&&window.POSGate.isManaged())window.POSGate.lock("تعذر التحقق من الحساب أو الترخيص. اتصل بالإنترنت ثم سجّل الدخول مرة أخرى.");
