@@ -13,6 +13,7 @@ import {
   getDoc,
   getDocs,
   query,
+  where,
   orderBy,
   documentId,
   startAfter,
@@ -50,6 +51,12 @@ const $ = id => document.getElementById(id);
 let activeUser = null;
 let activeShopId = "";
 let activeShopName = "";
+let activeMember = null;
+let isPlatformAdmin = false;
+let licensePrivateKeyPem = "";
+let stopMemberListener = null;
+let stopLicenseListener = null;
+let platformShops = [];
 let syncBusy = false;
 let syncTimer = null;
 let suppressSync = false;
@@ -335,11 +342,17 @@ async function createShopForUser(user, shopName) {
   await batch.commit();
   activeShopId = newShop.id;
   activeShopName = name;
+  activeMember = {uid:user.uid,email:user.email||"",role:"owner",active:true};
+  localStorage.setItem(MANAGED_SHOP_KEY,newShop.id);
+  setGateSession();
   showSignedIn(user, name);
   setStatus("تم إنشاء المحل السحابي. جارٍ رفع بيانات هذا الجهاز لأول مرة...", "info");
   const state = await initialUpload(newShop.id);
   startRealtimeListener(newShop.id);
-  setStatus("تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.", "success");
+  startMemberListener(newShop.id,user.uid);
+  const licensed=await checkShopLicense(newShop.id);
+  if(licensed)startLicenseListener(newShop.id);
+  setStatus(licensed?"تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.":"تم إنشاء المحل؛ ينتظر إصدار الترخيص من مدير المشروع.","warning");
   return state;
 }
 async function connectExistingShop(user, shopId) {
@@ -349,7 +362,15 @@ async function connectExistingShop(user, shopId) {
   if (!shop.exists()) throw new Error("بيانات المحل غير موجودة في السحابة.");
   activeShopId = shopId;
   activeShopName = String(shop.data().name || "المحل");
+  activeMember = member.data();
+  localStorage.setItem(MANAGED_SHOP_KEY,shopId);
+  setGateSession();
   showSignedIn(user, activeShopName);
+  applyRoleAccess();
+  startMemberListener(shopId,user.uid);
+  const licensed=await checkShopLicense(shopId);
+  if(licensed)startLicenseListener(shopId);
+  if(!licensed){setStatus("الحساب متصل لكن الترخيص غير ساري؛ تم قفل الاستخدام.","error");return;}
   startRealtimeListener(shopId);
   const oldState = readState();
   if (oldState && oldState.shopId === shopId) {
@@ -581,6 +602,10 @@ async function syncNow(includePull) {
     setStatus("سجّل الدخول واربط هذا الجهاز بالمحل أولًا.", "warning");
     return;
   }
+  if(window.POSGate&&!window.POSGate.isLicensed()){
+    await checkShopLicense(activeShopId);
+    if(!window.POSGate.isLicensed())return;
+  }
   syncBusy = true;
   setBusy(true);
   try {
@@ -624,7 +649,14 @@ async function handleLogin() {
     await connectExistingShop(credential.user, String(profileData.activeShopId));
     return;
   }
+  const inviteCode=$("cloudInviteCode")?.value.trim();
+  if(inviteCode){await acceptEmployeeInvite(credential.user,inviteCode);return;}
   await createShopForUser(credential.user, $("cloudShopName").value.trim());
+}
+async function handleEmployeeRegister(){
+  const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value,code=$("cloudInviteCode").value.trim();
+  if(!email||!password||password.length<6||!code)throw new Error("اكتب البريد وكلمة المرور وكود الدعوة الصحيح.");
+  const credential=await createUserWithEmailAndPassword(auth,email,password);activeUser=credential.user;await acceptEmployeeInvite(credential.user,code);
 }
 async function handleRegister() {
   const email = $("cloudEmail").value.trim();
@@ -653,6 +685,224 @@ async function clickAction(action) {
     setBusy(false);
   }
 }
+
+const EMPLOYEE_ROLES={owner:"صاحب المحل",manager:"مدير",cashier:"كاشير",accountant:"محاسب"};
+const ROLE_VIEWS={
+ owner:["sale","products","inventory","purchases","invoices","customers","cash","reports","backup","settings","employees"],
+ manager:["sale","products","inventory","purchases","invoices","customers","cash","reports","backup"],
+ cashier:["sale","invoices"],
+ accountant:["sale","purchases","inventory","invoices","customers","cash","reports"]
+};
+const LICENSE_CACHE_PREFIX="supermarket-pos-signed-license-v1:";
+const MANAGED_SHOP_KEY="supermarket-pos-managed-shop-v1";
+function roleLabel(role){return EMPLOYEE_ROLES[role]||"غير محدد";}
+function applyRoleAccess(){
+ const role=activeMember&&activeMember.role||"",allowed=new Set(ROLE_VIEWS[role]||[]);
+ document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:!allowed.has(name);});
+ if($("employeesTab"))$("employeesTab").hidden=role!=="owner";
+ if($("platformTab"))$("platformTab").hidden=!isPlatformAdmin;
+ if($("cloudAccountRole"))$("cloudAccountRole").textContent=activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط");
+ if($("cloudAccountUid"))$("cloudAccountUid").textContent=activeUser?activeUser.uid:"";
+ if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner";
+ if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.";
+ if($("platformAdminEmail"))$("platformAdminEmail").textContent=activeUser&&activeUser.email||"";
+ if($("platformAdminUid"))$("platformAdminUid").textContent=activeUser&&activeUser.uid||"";
+ const current=document.querySelector(".tab.active");
+ if(current&&!current.hidden)return;
+ const first=document.querySelector('.tab[data-view="sale"]:not([hidden])')||document.querySelector('.tab:not([hidden])');
+ if(first)first.click();
+}
+function platformAdminRef(uid){return doc(cloudDb,"platformAdmins",uid);}
+function employeeInviteRef(code){return doc(cloudDb,"employeeInvites",code);}
+function licenseRef(shopId){return doc(cloudDb,"licenses",shopId);}
+function memberCollection(shopId){return collection(cloudDb,"shops",shopId,"members");}
+function stopGovernanceListeners(){if(stopMemberListener){stopMemberListener();stopMemberListener=null;}if(stopLicenseListener){stopLicenseListener();stopLicenseListener=null;}}
+async function verifyPlatformAdmin(user){
+ if(!user)return false;
+ try{const snapshot=await getDoc(platformAdminRef(user.uid));return snapshot.exists()&&snapshot.data().active===true;}
+ catch(error){console.warn("Platform admin check unavailable",error);return false;}
+}
+function setGateSession(){
+ if(window.POSGate){
+  if(activeUser&&activeShopId&&activeMember)window.POSGate.setSession({uid:activeUser.uid,shopId:activeShopId,role:activeMember.role,active:activeMember.active!==false});
+  else if(!activeUser)window.POSGate.setSession(null);
+ }
+ applyRoleAccess();
+}
+async function checkShopLicense(shopId){
+ if(!shopId)return false;
+ let licenseDocument=null,onlineReadSucceeded=false;
+ if(navigator.onLine){
+  try{
+   const snapshot=await getDoc(licenseRef(shopId));onlineReadSucceeded=true;
+   if(!snapshot.exists()){
+    localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
+    if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص صادر لهذا المحل. تواصل مع مدير المشروع لإصدار ترخيص.");
+    setStatus("البرنامج غير مفعل لهذا المحل. يلزم إصدار ترخيص من مدير المشروع.","error");return false;
+   }
+   licenseDocument=snapshot.data();
+  }catch(error){console.warn("Online license check failed; trying signed offline license",error);}
+ }
+ if(licenseDocument){
+  const valid=await window.POSGate.applyLicense(licenseDocument,shopId,true);
+  if(!valid){setStatus("البرنامج متوقف: حالة الترخيص أو تاريخ صلاحيته لا يسمحان بالتشغيل.","error");return false;}
+  setStatus("الترخيص ساري حتى "+new Date(licenseDocument.payload.expiresAt).toLocaleDateString("ar-EG")+".","success");return true;
+ }
+ let cached=null;try{cached=JSON.parse(localStorage.getItem(LICENSE_CACHE_PREFIX+shopId)||"null");}catch(_){}
+ if(cached&&window.POSGate){
+  const valid=await window.POSGate.applyLicense(cached,shopId,false);
+  if(valid){setStatus("يعمل التطبيق دون اتصال بترخيص محفوظ وموقّع. الإيقاف الإداري المركزي يظهر عند عودة الإنترنت.","warning");return true;}
+ }
+ if(window.POSGate)window.POSGate.lock(onlineReadSucceeded?"لا يوجد ترخيص فعال لهذا المحل.":"لا يوجد ترخيص محلي صالح. اتصل بالإنترنت ثم تواصل مع إدارة البرنامج.");
+ return false;
+}
+function startMemberListener(shopId,uid){
+ if(stopMemberListener){stopMemberListener();stopMemberListener=null;}
+ stopMemberListener=onSnapshot(memberRef(shopId,uid),snapshot=>{
+  if(!snapshot.exists()||snapshot.data().active!==true){
+   activeMember=null;if(window.POSGate){window.POSGate.setSession(null);window.POSGate.lock("تم إيقاف حساب الموظف من صاحب المحل. تواصل معه لإعادة التفعيل.");}
+   showSignedIn(null,"");setStatus("تم إيقاف عضوية هذا الحساب.","error");signOut(auth).catch(()=>{});return;
+  }
+  activeMember=snapshot.data();setGateSession();
+ },error=>setStatus("تعذر تحديث صلاحيات الموظف: "+firebaseError(error),"warning"));
+}
+function startLicenseListener(shopId){
+ if(stopLicenseListener){stopLicenseListener();stopLicenseListener=null;}
+ stopLicenseListener=onSnapshot(licenseRef(shopId),async snapshot=>{
+  if(!snapshot.exists()){if(window.POSGate)window.POSGate.lock("تم سحب الترخيص أو لم يعد موجودًا. اتصل بمدير المشروع.");setStatus("الترخيص غير موجود؛ تم إيقاف الاستخدام.","error");return;}
+  const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true);
+  setStatus(valid?"تم تحديث حالة الترخيص المركزي بنجاح.":"أوقف مدير المشروع الترخيص أو انتهت مدته.",valid?"success":"error");
+ },error=>setStatus("تعذر تحديث حالة الترخيص: "+firebaseError(error),"warning"));
+}
+async function acceptEmployeeInvite(user,code){
+ const cleanCode=String(code||"").trim();if(!cleanCode)throw new Error("أدخل كود الدعوة الذي أرسله صاحب المحل.");
+ const inviteRef=employeeInviteRef(cleanCode),snapshot=await getDoc(inviteRef);
+ if(!snapshot.exists())throw new Error("كود الدعوة غير صحيح أو غير موجود.");
+ const invitation=snapshot.data(),email=String(user.email||"").trim().toLowerCase();
+ if(invitation.active!==true)throw new Error("هذه الدعوة مستخدمة أو أوقفها صاحب المحل.");
+ if(String(invitation.email||"").trim().toLowerCase()!==email)throw new Error("الدعوة مخصصة لبريد إلكتروني مختلف.");
+ if(!["manager","cashier","accountant"].includes(invitation.role))throw new Error("الدور الوظيفي في الدعوة غير صحيح.");
+ const shopId=String(invitation.shopId||"");if(!shopId)throw new Error("الدعوة لا تحتوي على معرّف محل صالح.");
+ const batch=writeBatch(cloudDb);
+ batch.set(memberRef(shopId,user.uid),{uid:user.uid,email,role:invitation.role,active:true,invitedBy:invitation.createdBy||"",inviteCode:cleanCode,joinedAt:serverTimestamp(),createdAt:serverTimestamp()});
+ batch.update(inviteRef,{active:false,acceptedByUid:user.uid,acceptedAt:serverTimestamp()});
+ batch.set(userRef(user.uid),{activeShopId:shopId,email,displayName:user.displayName||"",updatedAt:serverTimestamp()},{merge:true});
+ await batch.commit();await connectExistingShop(user,shopId);
+}
+async function createEmployeeInvite(email,role){
+ if(!activeUser||!activeShopId||!activeMember||activeMember.role!=="owner")throw new Error("هذه العملية متاحة لصاحب المحل فقط.");
+ const cleanEmail=String(email||"").trim().toLowerCase();
+ if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cleanEmail))throw new Error("اكتب بريدًا إلكترونيًا صحيحًا.");
+ if(!["manager","cashier","accountant"].includes(role))throw new Error("اختر دورًا وظيفيًا صحيحًا.");
+ const code=randomId().replace(/[^a-zA-Z0-9]/g,"").slice(0,22),batch=writeBatch(cloudDb);
+ batch.set(employeeInviteRef(code),{code,shopId:activeShopId,shopName:activeShopName,email:cleanEmail,role,active:true,createdBy:activeUser.uid,createdAt:serverTimestamp()});
+ await batch.commit();return code;
+}
+async function loadEmployeeWorkspace(){
+ if(!activeShopId||!activeMember||activeMember.role!=="owner")return;
+ const [membersSnapshot,invitesSnapshot]=await Promise.all([getDocs(memberCollection(activeShopId)),getDocs(query(collection(cloudDb,"employeeInvites"),where("shopId","==",activeShopId)))]);
+ const members=$("employeeMembers"),invites=$("employeeInvites");members.replaceChildren();invites.replaceChildren();
+ const staff=membersSnapshot.docs.map(x=>({uid:x.id,...x.data()})).filter(x=>x.role!=="owner");
+ if(!staff.length)members.innerHTML='<p class="empty">لم تتم إضافة موظفين بعد.</p>';
+ staff.forEach(member=>{
+  const row=document.createElement("div");row.className="employee-row";const main=document.createElement("div");main.className="employee-row-main";
+  const name=document.createElement("strong");name.textContent=member.email||member.uid;
+  const meta=document.createElement("small");meta.textContent=roleLabel(member.role)+" · "+(member.active?"نشط":"موقوف");main.append(name,meta);
+  const actions=document.createElement("div");actions.className="employee-row-actions";const role=document.createElement("select");
+  [["cashier","كاشير"],["accountant","محاسب"],["manager","مدير"]].forEach(([value,label])=>{const option=document.createElement("option");option.value=value;option.textContent=label;role.append(option);});role.value=member.role||"cashier";
+  const save=document.createElement("button");save.type="button";save.className="secondary";save.textContent="حفظ الدور";
+  save.onclick=async()=>{try{const batch=writeBatch(cloudDb);batch.set(memberRef(activeShopId,member.uid),{...member,role:role.value,updatedAt:serverTimestamp()});await batch.commit();await loadEmployeeWorkspace();setStatus("تم تحديث دور الموظف.","success");}catch(error){setStatus("تعذر تحديث الدور: "+firebaseError(error),"error");}};
+  const toggle=document.createElement("button");toggle.type="button";toggle.className=member.active?"remove":"primary";toggle.textContent=member.active?"إيقاف":"تفعيل";
+  toggle.onclick=async()=>{try{const batch=writeBatch(cloudDb);batch.set(memberRef(activeShopId,member.uid),{...member,active:!member.active,updatedAt:serverTimestamp()});await batch.commit();await loadEmployeeWorkspace();setStatus(member.active?"تم إيقاف حساب الموظف.":"تم تفعيل حساب الموظف.","success");}catch(error){setStatus("تعذر تغيير حالة الموظف: "+firebaseError(error),"error");}};
+  actions.append(role,save,toggle);row.append(main,actions);members.append(row);
+ });
+ const pending=invitesSnapshot.docs.map(x=>({id:x.id,...x.data()})).filter(x=>x.active===true);
+ if(!pending.length)invites.innerHTML='<p class="empty">لا توجد دعوات معلقة.</p>';
+ pending.forEach(invitation=>{
+  const row=document.createElement("div");row.className="employee-row";const main=document.createElement("div");main.className="employee-row-main";
+  const email=document.createElement("strong");email.textContent=invitation.email||"";const meta=document.createElement("small");meta.textContent=roleLabel(invitation.role)+" · كود: "+invitation.code;main.append(email,meta);
+  const cancel=document.createElement("button");cancel.type="button";cancel.className="remove";cancel.textContent="إلغاء الدعوة";
+  cancel.onclick=async()=>{try{const batch=writeBatch(cloudDb);batch.set(employeeInviteRef(invitation.code),{...invitation,active:false,cancelledAt:serverTimestamp()});await batch.commit();await loadEmployeeWorkspace();}catch(error){setStatus("تعذر إلغاء الدعوة: "+firebaseError(error),"error");}};
+  row.append(main,cancel);invites.append(row);
+ });
+}
+function addCalendarMonths(date,months){
+ const source=new Date(date),day=source.getUTCDate();source.setUTCDate(1);source.setUTCMonth(source.getUTCMonth()+months);
+ const last=new Date(Date.UTC(source.getUTCFullYear(),source.getUTCMonth()+1,0)).getUTCDate();source.setUTCDate(Math.min(day,last));return source;
+}
+let platformKeyPromise=null;
+async function importLicenseSigningKey(pem){
+ const base64=String(pem||"").replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g,"");
+ if(!base64)throw new Error("ملف مفتاح التوقيع الخاص فارغ أو ليس بصيغة PKCS#8 PEM.");
+ const raw=Uint8Array.from(atob(base64),char=>char.charCodeAt(0));
+ platformKeyPromise=crypto.subtle.importKey("pkcs8",raw,{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);await platformKeyPromise;licensePrivateKeyPem=pem;
+}
+async function signLicensePayload(payload){
+ if(!licensePrivateKeyPem||!platformKeyPromise)throw new Error("ارفع ملف مفتاح التوقيع الخاص أولًا.");
+ const signature=await crypto.subtle.sign({name:"ECDSA",hash:"SHA-256"},await platformKeyPromise,new TextEncoder().encode(stable(payload)));
+ return btoa(String.fromCharCode(...new Uint8Array(signature)));
+}
+async function writeLicense(shop,months,status){
+ if(!isPlatformAdmin)throw new Error("ليس لديك صلاحية مدير المشروع.");
+ if(!licensePrivateKeyPem)throw new Error("ارفع ملف مفتاح التوقيع الخاص أولًا.");
+ const now=new Date(),nowIso=now.toISOString(),oldSnapshot=await getDoc(licenseRef(shop.id)),old=oldSnapshot.exists()?oldSnapshot.data().payload:null;
+ let start=new Date(now);
+ if(status==="active"&&old&&old.status==="active"&&Date.parse(old.expiresAt)>now.getTime())start=new Date(old.expiresAt);
+ let expires=status==="active"?addCalendarMonths(start,months):new Date(old&&old.expiresAt||nowIso);
+ if(status==="active"&&expires.getTime()<=now.getTime())expires=addCalendarMonths(now,months);
+ const payload={schema:1,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,planMonths:Number(months)||0,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:expires.toISOString(),issuerUid:activeUser.uid};
+ const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
+ batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
+ setStatus(status==="active"?"تم إصدار/تجديد الترخيص بنجاح.":"تم تعليق الترخيص مركزيًا.","success");await loadPlatformShops();
+}
+function formatLicenseState(value){
+ if(!value)return "لا يوجد ترخيص";const p=value.payload||{};if(p.status==="suspended")return "موقوف";
+ const expiry=Date.parse(p.expiresAt||"");if(!Number.isFinite(expiry))return "ترخيص غير صالح";
+ return expiry<=Date.now()?"منتهي":"ساري حتى "+new Date(expiry).toLocaleDateString("ar-EG");
+}
+async function loadPlatformShops(){
+ if(!isPlatformAdmin)return;const root=$("platformShopList");root.innerHTML='<p class="empty">جارٍ تحميل المحلات...</p>';
+ try{
+  const snapshot=await getDocs(query(collection(cloudDb,"shops"),orderBy("createdAt","desc"),limit(200)));platformShops=[];
+  for(const shopDoc of snapshot.docs){const shop={id:shopDoc.id,...shopDoc.data()},licenseSnapshot=await getDoc(licenseRef(shop.id));shop.license=licenseSnapshot.exists()?licenseSnapshot.data():null;platformShops.push(shop);}
+  renderPlatformShops();
+ }catch(error){root.innerHTML='<p class="empty">تعذر تحميل المحلات: '+firebaseError(error)+'</p>';}
+}
+function renderPlatformShops(){
+ const root=$("platformShopList");if(!root)return;root.replaceChildren();const q=($("platformShopSearch")?.value||"").trim().toLowerCase();
+ const rows=platformShops.filter(shop=>(String(shop.name||"")+" "+shop.id+" "+String(shop.ownerUid||"")).toLowerCase().includes(q));
+ if(!rows.length){root.innerHTML='<p class="empty">لا توجد محلات مطابقة.</p>';return;}
+ rows.forEach(shop=>{
+  const row=document.createElement("div");row.className="platform-shop-row";const main=document.createElement("div");main.className="platform-shop-main";
+  const name=document.createElement("strong");name.textContent=shop.name||"محل بدون اسم";const meta=document.createElement("small");meta.textContent="Shop ID: "+shop.id+" · "+formatLicenseState(shop.license);main.append(name,meta);
+  const actions=document.createElement("div");actions.className="platform-shop-actions";const duration=document.createElement("select");
+  [[1,"شهر واحد"],[6,"6 شهور"],[12,"سنة كاملة"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=String(v);o.textContent=l;duration.append(o);});
+  const activate=document.createElement("button");activate.type="button";activate.className="primary";activate.textContent=shop.license&&shop.license.payload&&shop.license.payload.status==="active"?"تجديد/تمديد":"تفعيل";
+  activate.onclick=async()=>{try{await writeLicense(shop,Number(duration.value),"active");}catch(error){$("platformMessage").textContent="تعذر إصدار الترخيص: "+firebaseError(error);}};
+  const suspend=document.createElement("button");suspend.type="button";suspend.className="remove";suspend.textContent="إيقاف";suspend.disabled=!shop.license;
+  suspend.onclick=async()=>{if(!confirm("سيتم تعليق ترخيص "+(shop.name||shop.id)+" عند اتصال أجهزته بالإنترنت. هل تتابع؟"))return;try{await writeLicense(shop,Number(duration.value),"suspended");}catch(error){$("platformMessage").textContent="تعذر إيقاف الترخيص: "+firebaseError(error);}};
+  actions.append(duration,activate,suspend);row.append(main,actions);root.append(row);
+ });
+ $("platformMessage").textContent="عدد المحلات: "+rows.length+" · مفاتيح التوقيع الخاصة غير محفوظة داخل التطبيق.";
+}
+function bindGovernanceUI(){
+ if($("cloudEmployeeRegister"))$("cloudEmployeeRegister").addEventListener("click",()=>clickAction(handleEmployeeRegister));
+ if($("employeeInviteForm"))$("employeeInviteForm").addEventListener("submit",async event=>{
+  event.preventDefault();try{const code=await createEmployeeInvite($("employeeInviteEmail").value,$("employeeInviteRole").value);$("employeeInviteCode").textContent=code;$("employeeInviteCodeBox").hidden=false;$("employeeInviteMessage").textContent="تم إنشاء الدعوة. أرسل الكود والبريد المحدد للموظف.";await loadEmployeeWorkspace();}
+  catch(error){$("employeeInviteMessage").textContent="تعذر إنشاء الدعوة: "+firebaseError(error);}
+ });
+ if($("copyEmployeeInvite"))$("copyEmployeeInvite").onclick=async()=>{try{await navigator.clipboard.writeText($("employeeInviteCode").textContent);$("employeeInviteMessage").textContent="تم نسخ كود الدعوة.";}catch(_){$("employeeInviteMessage").textContent="انسخ كود الدعوة يدويًا.";}};
+ if($("licensePrivateKeyFile"))$("licensePrivateKeyFile").addEventListener("change",async event=>{
+  const file=event.target.files&&event.target.files[0];if(!file)return;
+  try{await importLicenseSigningKey(await file.text());$("licenseKeyStatus").textContent="تم تحميل مفتاح التوقيع لهذه الجلسة فقط. لن يُحفظ داخل التطبيق.";}
+  catch(error){licensePrivateKeyPem="";platformKeyPromise=null;$("licenseKeyStatus").textContent="فشل تحميل المفتاح: "+error.message;}
+  event.target.value="";
+ });
+ if($("refreshPlatformShops"))$("refreshPlatformShops").onclick=loadPlatformShops;
+ if($("platformShopSearch"))$("platformShopSearch").oninput=renderPlatformShops;
+ document.addEventListener("click",event=>{const tab=event.target.closest('[data-view="employees"]');if(tab)setTimeout(loadEmployeeWorkspace,0);});
+}
+
 function bindUI() {
   if ($("cloudRegister")) $("cloudRegister").addEventListener("click", () => clickAction(handleRegister));
   if ($("cloudLogin")) $("cloudLogin").addEventListener("click", () => clickAction(handleLogin));
@@ -690,6 +940,7 @@ function bindUI() {
   }));
   if ($("cloudSignOut")) $("cloudSignOut").addEventListener("click", () => clickAction(async () => {
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
+    stopGovernanceListeners();
     await signOut(auth);
     activeShopId = "";
     activeShopName = "";
@@ -700,7 +951,7 @@ function bindUI() {
 function wrapLocalMutations() {
   if (!window.POSDatabase || window.POSDatabase.__cloudWrapped) return;
   const methods = [
-    "saveProduct", "saveProducts", "deleteProduct", "saveInvoice",
+    "saveProduct", "saveProducts", "deleteProduct", "setProductActive", "saveInvoice",
     "saveSupplier", "saveSupplierPayment", "savePurchase", "saveStockAdjustment",
     "saveStocktake", "saveCustomer", "saveCustomerPayment", "saveReturn",
     "saveCashEntry", "saveShift", "saveSettings", "restoreData"
@@ -709,6 +960,7 @@ function wrapLocalMutations() {
     const original = window.POSDatabase[name];
     if (typeof original !== "function") return;
     window.POSDatabase[name] = async function () {
+      if(window.POSGate)window.POSGate.assertMutation(name);
       const result = await original.apply(this, arguments);
       scheduleSync();
       return result;
@@ -719,31 +971,46 @@ function wrapLocalMutations() {
 
 bindUI();
 wrapLocalMutations();
+bindGovernanceUI();
 onAuthStateChanged(auth, async user => {
   activeUser = user || null;
   if (!user) {
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
+    stopGovernanceListeners();
     activeShopId = "";
     activeShopName = "";
+    activeMember = null;
+    isPlatformAdmin = false;
+    if(window.POSGate)window.POSGate.setSession(null);
     showSignedIn(null, "");
     return;
   }
   const state = readState();
   try {
+    isPlatformAdmin=await verifyPlatformAdmin(user);
+    if(isPlatformAdmin){
+      showSignedIn(user,"إدارة المنصة");
+      if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
+      if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=false;
+      if($("cloudSyncNow"))$("cloudSyncNow").hidden=true;
+      applyRoleAccess();loadPlatformShops();
+    }
     const profile = await getDoc(userRef(user.uid));
     const shopId = profile.exists() ? String(profile.data().activeShopId || "") : "";
     if (!shopId) {
-      showSignedIn(user, "");
-      setStatus("الحساب مسجل. أكمل إنشاء المحل من زر إنشاء المحل.", "info");
-      if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;
-      return;
+      if(isPlatformAdmin){if($("cloudCreateShop"))$("cloudCreateShop").hidden=true;applyRoleAccess();return;}
+      showSignedIn(user, "");setStatus("الحساب مسجل. أكمل إنشاء المحل أو استخدم كود دعوة الموظف.", "info");
+      if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;return;
     }
     const member = await getDoc(memberRef(shopId, user.uid));
     if (!member.exists() || member.data().active !== true) throw new Error("لا توجد عضوية نشطة لهذا الحساب.");
     const shop = await getDoc(shopRef(shopId));
     activeShopId = shopId;
     activeShopName = shop.exists() ? String(shop.data().name || "المحل") : "المحل";
-    showSignedIn(user, activeShopName);
+    activeMember=member.data();localStorage.setItem(MANAGED_SHOP_KEY,shopId);setGateSession();
+    showSignedIn(user, activeShopName);applyRoleAccess();
+    startMemberListener(shopId,user.uid);
+    const licensed=await checkShopLicense(shopId);if(licensed)startLicenseListener(shopId);if(!licensed)return;
     if (state && state.shopId === shopId) {
       startRealtimeListener(shopId);
       setStatus("المحل متصل. ستتم المزامنة تلقائيًا عند إجراء تعديل أو عودة الإنترنت.", "success");
@@ -752,8 +1019,8 @@ onAuthStateChanged(auth, async user => {
       setStatus("سجّل الدخول على هذا الجهاز ثم اضغط مزامنة الآن لتنزيل بيانات المحل.", "info");
     }
   } catch (error) {
-    showSignedIn(user, "");
-    setStatus(firebaseError(error), "error");
+    if(window.POSGate&&window.POSGate.isManaged())window.POSGate.lock("تعذر التحقق من الحساب أو الترخيص. اتصل بالإنترنت ثم سجّل الدخول مرة أخرى.");
+    showSignedIn(user, "");setStatus(firebaseError(error), "error");
   }
 });
 window.addEventListener("online", () => {
