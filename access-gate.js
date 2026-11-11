@@ -9,7 +9,7 @@ const LICENSE_PREFIX="supermarket-pos-signed-license-v1:";
 const ROLE_LABELS={owner:"صاحب المحل",manager:"مدير",cashier:"كاشير",accountant:"محاسب"};
 const ROLE_METHODS={
   owner:["*"],
-  manager:["saveProduct","saveProducts","deleteProduct","setProductActive","saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveStockAdjustment","saveStocktake","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift","saveSettings","restoreData"],
+  manager:["saveProduct","saveProducts","deleteProduct","setProductActive","saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveStockAdjustment","saveStocktake","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift","restoreData"],
   cashier:["saveInvoice","saveCustomer"],
   accountant:["saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
 };
