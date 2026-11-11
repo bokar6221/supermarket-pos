@@ -27,7 +27,7 @@ import {
 "use strict";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCPepE0goHlInv4kydpdkBNcEAxcYaN-Q",
+  apiKey: "AIzaSyCPepE0egoHlInv4kydpdkBNcEAxcYaN-Q",
   authDomain: "supermarketpos-e448a.firebaseapp.com",
   projectId: "supermarketpos-e448a",
   storageBucket: "supermarketpos-e448a.firebasestorage.app",
