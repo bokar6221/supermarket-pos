@@ -13,6 +13,8 @@ on:
       - "accounts.js"
       - "tests/**"
       - ".github/workflows/build-android-apk.yml"
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
