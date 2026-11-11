@@ -819,7 +819,7 @@
           }
           if(replaceAll)STORE_NAMES.forEach(name=>tx.objectStore(name).clear());
           changes.forEach(change=>{
-            const store=tx.objectStore(change.store),key=change.store==="settings"?String(change.recordId):String(change.recordId);
+            const store=tx.objectStore(change.store),key=String(change.recordId);
             if(change.deleted){store.delete(key);return;}
             const row={...change.data};
             if(change.store==="products"){
@@ -829,6 +829,29 @@
             }
             store.put(row);
           });
+          const currentRole=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession()?.role:"owner";
+          if(currentRole!=="cashier"){
+            const incomingSales=changes
+              .filter(change=>change.store==="invoices"&&!change.deleted)
+              .map(change=>change.data)
+              .filter(invoice=>invoice&&invoice.id&&Number(invoice.total)>0&&["cash","electronic"].includes(invoice.paymentMethod));
+            if(incomingSales.length){
+              const cashStore=tx.objectStore("cashEntries"),cashReq=cashStore.getAll();
+              cashReq.onsuccess=()=>{
+                const existing=new Set((cashReq.result||[]).filter(entry=>entry.category==="sale").map(entry=>String(entry.referenceId||"")));
+                for(const invoice of incomingSales){
+                  const referenceId=String(invoice.id);
+                  if(existing.has(referenceId))continue;
+                  cashStore.put({
+                    id:"cloud-sale-"+referenceId,type:"income",category:"sale",amount:Number(invoice.total),
+                    method:invoice.paymentMethod,referenceId,note:"مبيعات "+referenceId,
+                    createdAt:invoice.createdAt||new Date().toISOString()
+                  });
+                  existing.add(referenceId);
+                }
+              };
+            }
+          }
           recalcProductsReq();
         };
         const pReq=productsStore.getAll(),mReq=movementsStore.getAll();
