@@ -247,20 +247,53 @@
   <div class="inner-tab-panel" data-subpanel-group="reports" data-subpanel="balances"><div class="panel"><h2>المخزون والأرصدة</h2><div class="stock-summary-grid"><article class="stock-stat"><span>قيمة المخزون بالتكلفة</span><strong id="reportStockValue">0.00 ج.م</strong></article><article class="stock-stat"><span>مديونية العملاء</span><strong id="reportCustomerDebt">0.00 ج.م</strong></article><article class="stock-stat"><span>مستحقات الموردين</span><strong id="reportSupplierDebt">0.00 ج.م</strong></article><article class="stock-stat"><span>إجمالي المنصرف من الخزينة هذا الشهر</span><strong id="reportMonthExpenses">0.00 ج.م</strong></article></div><p class="hint">المنصرف من الخزينة يشمل المشتريات وسداد الموردين والمرتجعات والمصروفات. تقارير الربحية التشغيلية تستبعد مدفوعات شراء البضاعة حتى لا تحتسب مرتين.</p><p class="hint">هذه تقارير تشغيلية تقديرية محلية، وليست قوائم مالية أو إقرارًا ضريبيًا معتمدًا.</p></div></div>
 </section>
 <section class="view" id="view-settings">
-  <div class="panel">
-    <h2>بيانات المحل والفاتورة</h2>
-    <p class="hint">تظهر البيانات التالية في الفواتير المطبوعة والمُرسلة. تحفظ محليًا على هذا الجهاز.</p>
-    <form id="shopSettingsForm">
-      <label>اسم المحل<input id="shopName" required maxlength="70" placeholder="اسم المحل"></label>
-      <div class="form-grid">
-        <label>رقم هاتف المحل<input id="shopPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
-        <label>عرض ورق الفاتورة<select id="paperWidth"><option value="58">58 مم</option><option value="80" selected>80 مم</option><option value="A4">A4</option></select></label>
+  <div class="inner-tabs" data-subtab-group="settings">
+    <button type="button" class="inner-tab active" data-subtab="profile">بيانات المحل</button>
+    <button type="button" class="inner-tab" data-subtab="cloud">المزامنة السحابية</button>
+  </div>
+  <div class="inner-tab-panel active" data-subpanel-group="settings" data-subpanel="profile">
+    <div class="panel">
+      <h2>بيانات المحل والفاتورة</h2>
+      <p class="hint">تظهر البيانات التالية في الفواتير المطبوعة والمُرسلة. تحفظ محليًا وتنتقل إلى أجهزتك المرتبطة عند المزامنة.</p>
+      <form id="shopSettingsForm">
+        <label>اسم المحل<input id="shopName" required maxlength="70" placeholder="اسم المحل"></label>
+        <div class="form-grid">
+          <label>رقم هاتف المحل<input id="shopPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
+          <label>عرض ورق الفاتورة<select id="paperWidth"><option value="58">58 مم</option><option value="80" selected>80 مم</option><option value="A4">A4</option></select></label>
+        </div>
+        <label>العنوان<input id="shopAddress" maxlength="140" placeholder="عنوان المحل"></label>
+        <label>عبارة أسفل الفاتورة<input id="receiptFooter" maxlength="120" value="شكراً لزيارتكم" placeholder="شكراً لزيارتكم"></label>
+        <button class="primary" type="submit">حفظ بيانات المحل</button>
+        <p class="hint" id="settingsMessage" role="status"></p>
+      </form>
+    </div>
+  </div>
+  <div class="inner-tab-panel" data-subpanel-group="settings" data-subpanel="cloud">
+    <div class="panel">
+      <h2>المزامنة السحابية</h2>
+      <p class="hint">اربط المحل بحساب سحابي خاص به. تظل المبيعات محفوظة على الهاتف حتى عند انقطاع الإنترنت، ثم تُرسل التغييرات عند عودة الاتصال.</p>
+      <div id="cloudAuthPanel">
+        <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
+        <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
+        <label>اسم المحل عند إنشاء حساب جديد<input id="cloudShopName" maxlength="70" placeholder="اسم المحل"></label>
+        <div class="actions">
+          <button class="primary" id="cloudRegister" type="button">إنشاء حساب ومحل جديد</button>
+          <button class="secondary" id="cloudLogin" type="button">تسجيل الدخول وربط الجهاز</button>
+        </div>
+        <button class="secondary" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
       </div>
-      <label>العنوان<input id="shopAddress" maxlength="140" placeholder="عنوان المحل"></label>
-      <label>عبارة أسفل الفاتورة<input id="receiptFooter" maxlength="120" value="شكراً لزيارتكم" placeholder="شكراً لزيارتكم"></label>
-      <button class="primary" type="submit">حفظ بيانات المحل</button>
-      <p class="hint" id="settingsMessage" role="status"></p>
-    </form>
+      <div id="cloudConnectedPanel" hidden>
+        <p>الحساب: <strong id="cloudAccountEmail"></strong></p>
+        <p>المحل المرتبط: <strong id="cloudConnectedShop"></strong></p>
+        <div class="actions">
+          <button class="primary" id="cloudSyncNow" type="button">مزامنة الآن</button>
+          <button class="secondary" id="cloudSignOut" type="button">تسجيل الخروج</button>
+        </div>
+      </div>
+      <p class="hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
+      <p class="hint">للتجربة الأولى، استخدم حساب صاحب المحل نفسه على أجهزته. حسابات الموظفين والصلاحيات المنفصلة ستضاف في مرحلة لاحقة. لا تشارك كلمة مرور الحساب مع الموظفين.</p>
+      <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password في Firebase، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
+    </div>
   </div>
 </section>
 <section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
@@ -292,5 +325,5 @@
   <span class="mobile-invoice-action">عرض الفاتورة ←</span>
 </button>
 <footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>
-<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script>
+<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script><script type="module" src="firebase-sync.js"></script>
 </body></html>
