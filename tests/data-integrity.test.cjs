@@ -1,7 +1,5 @@
 "use strict";
 const assert=require("node:assert/strict");
-const {webcrypto}=require("node:crypto");
-global.crypto=webcrypto;
 global.window=global;
 if(!global.indexedDB)throw new Error("fake-indexeddb must be loaded with --require fake-indexeddb/auto");
 require("../db.js");
