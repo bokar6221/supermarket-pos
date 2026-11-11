@@ -2,7 +2,7 @@
    The embedded key is public. The signing key is provisioned to the project manager separately. */
 (()=>{
 "use strict";
-const PUBLIC_KEY_DER_B64="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEt6WTzZy+6oYYqFizwKEq/fMuVFQkNCheGpGV5mdxjdxPwVYdWJ6+7VgsoUwza8Qpw+utNN3lc9C98sQ2StaDwQ==";
+const PUBLIC_KEY_DER_B64="MFkwEwYHKoZIzj0DAQcDQgAEz2qz5cIgqE/ZljxEjxcbCNJRty1X8++QPa9L7Ltpu1r2HZrbhCTYnJ+xH9nkL5GMXrNY0CvCNDCX4c/brsuKYQ==";
 const MANAGED_KEY="supermarket-pos-managed-shop-v1";
 const SESSION_KEY="supermarket-pos-member-session-v1";
 const LICENSE_PREFIX="supermarket-pos-signed-license-v1:";
