@@ -10,7 +10,7 @@ const unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
 const localKey=d=>{const x=new Date(d);return Number.isNaN(x.getTime())?"":x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");};
 const localToday=()=>localKey(new Date());
 const localMonth=()=>localToday().slice(0,7);
-const digits=p=>{let value=String(p||"").replace(/\D/g,"");if(value.startsWith("0020"))value="0"+value.slice(4);else if(value.startsWith("20")&&value.length===12)value="0"+value.slice(2);return value;};
+const digits=p=>{let value=String(p||"").replace(/[٠-٩]/g,d=>String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[۰-۹]/g,d=>String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/\D/g,"");if(value.startsWith("0020"))value="0"+value.slice(4);else if(value.startsWith("20")&&value.length===12)value="0"+value.slice(2);return value;};
 let activeReturn=null;
 
 function customerMatches(invoice,customer){
@@ -149,7 +149,9 @@ async function openReturn(invoiceId){
     const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");
     name.textContent=item.name;meta.textContent="المباع: "+item.quantity+" "+unit(item.unit)+" · المرتجع سابقًا: "+qtyReturned+" · المتبقي: "+remaining;
     info.append(name,meta);
-    const input=document.createElement("input");input.type="number";input.min="0";input.max=String(remaining);input.step=item.unit==="piece"?"1":"0.001";input.value="0";input.dataset.itemIndex=String(index);input.dataset.price=String(item.unitPrice||0);input.dataset.ratio=String(ratio);input.setAttribute("aria-label","كمية مرتجع "+item.name);input.oninput=updateReturnTotal;
+    const input=document.createElement("input");input.type="number";input.min="0";input.max=String(remaining);input.step=item.unit==="piece"?"1":"0.001";input.value="0";input.dataset.itemIndex=String(index);
+    input.dataset.price=String(item.total!==undefined&&Number(item.quantity)>0?Number(item.total)/Number(item.quantity):Number(item.unitPrice||0));
+    input.dataset.ratio=String(item.total!==undefined?1:ratio);input.setAttribute("aria-label","كمية مرتجع "+item.name);input.oninput=updateReturnTotal;
     const label=document.createElement("label");label.textContent="كمية المرتجع";label.append(input);
     row.append(info,label);root.append(row);
   });
@@ -274,7 +276,9 @@ function periodProfitSnapshot(invoices,returns,cashEntries,dateFilter){
     const factor=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
     (invoice.items||[]).forEach(item=>{
       const quantity=Number(item.stockQuantity??item.quantity)||0;
-      const lineRevenue=quantity*Number(item.unitPrice||0)*factor;
+      const savedLineTotal=Number(item.total);
+      const lineRevenue=item.total!==undefined&&item.total!==null&&Number.isFinite(savedLineTotal)
+        ?savedLineTotal:quantity*Number(item.unitPrice||0)*factor;
       totalLineRevenue+=lineRevenue;
       if(item.costKnown===true||(item.cost!==undefined&&item.cost!==null&&Number.isFinite(Number(item.cost))&&Number(item.cost)>0)){
         salesCost+=Number(item.cost||0)*quantity;
