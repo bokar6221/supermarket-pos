@@ -55,7 +55,7 @@ function permittedSyncStores(){
     "products","invoices","movements","suppliers","purchases","supplierPayments",
     "stocktakes","customers","customerPayments","returns","cashEntries","shifts"
   ];
-  if(role==="cashier")return ["products","invoices","movements","customers","cashEntries"];
+  if(role==="cashier")return ["products","invoices","movements","customers"];
   return [];
 }
 const $ = id => document.getElementById(id);
