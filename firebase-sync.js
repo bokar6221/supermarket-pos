@@ -792,7 +792,7 @@ async function acceptEmployeeInvite(user,code){
 async function createEmployeeInvite(email,role){
  if(!activeUser||!activeShopId||!activeMember||activeMember.role!=="owner")throw new Error("هذه العملية متاحة لصاحب المحل فقط.");
  const cleanEmail=String(email||"").trim().toLowerCase();
- if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(cleanEmail))throw new Error("اكتب بريدًا إلكترونيًا صحيحًا.");
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail))throw new Error("اكتب بريدًا إلكترونيًا صحيحًا.");
  if(!["manager","cashier","accountant"].includes(role))throw new Error("اختر دورًا وظيفيًا صحيحًا.");
  const code=randomId().replace(/[^a-zA-Z0-9]/g,"").slice(0,22),batch=writeBatch(cloudDb);
  batch.set(employeeInviteRef(code),{code,shopId:activeShopId,shopName:activeShopName,email:cleanEmail,role,active:true,createdBy:activeUser.uid,createdAt:serverTimestamp()});
@@ -832,7 +832,7 @@ function addCalendarMonths(date,months){
 }
 let platformKeyPromise=null;
 async function importLicenseSigningKey(pem){
- const base64=String(pem||"").replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\\s/g,"");
+ const base64=String(pem||"").replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g,"");
  if(!base64)throw new Error("ملف مفتاح التوقيع الخاص فارغ أو ليس بصيغة PKCS#8 PEM.");
  const raw=Uint8Array.from(atob(base64),char=>char.charCodeAt(0));
  platformKeyPromise=crypto.subtle.importKey("pkcs8",raw,{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);await platformKeyPromise;licensePrivateKeyPem=pem;
