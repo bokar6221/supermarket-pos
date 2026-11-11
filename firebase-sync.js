@@ -724,7 +724,7 @@ const ROLE_VIEWS={
  owner:["sale","products","inventory","purchases","invoices","customers","cash","reports","backup","settings","employees"],
  manager:["sale","products","inventory","purchases","invoices","customers","cash","reports","backup"],
  cashier:["sale","invoices"],
- accountant:["sale","purchases","inventory","invoices","customers","cash","reports"]
+ accountant:["sale","purchases","invoices","customers","cash","reports"]
 };
 const LICENSE_CACHE_PREFIX="supermarket-pos-signed-license-v1:";
 const MANAGED_SHOP_KEY="supermarket-pos-managed-shop-v1";
