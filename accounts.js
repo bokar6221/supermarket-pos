@@ -138,10 +138,12 @@ async function openReturn(invoiceId){
   const [invoices,returns]=await Promise.all([POSDatabase.getInvoices(),POSDatabase.getReturns()]);
   const invoice=invoices.find(x=>x.id===invoiceId);if(!invoice)return alert("الفاتورة غير موجودة.");
   const returned=returns.filter(x=>x.invoiceId===invoiceId),root=$("salesReturnLines");root.replaceChildren();
-  const ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
+  const discountedLineTotals=POSDatabase.calculateDiscountedLineTotals(invoice);
   let available=0;
   (invoice.items||[]).forEach((item,index)=>{
-    const qtyReturned=returned.reduce((s,r)=>s+(r.items||[]).filter(x=>Number(x.itemIndex)===index).reduce((n,x)=>n+Number(x.quantity||0),0),0);
+    const priorLines=returned.flatMap(r=>(r.items||[]).filter(x=>Number(x.itemIndex)===index));
+    const qtyReturned=priorLines.reduce((s,x)=>s+Number(x.quantity||0),0);
+    const refundedAmount=priorLines.reduce((s,x)=>s+(x.amount!==undefined&&x.amount!==null?Number(x.amount)||0:0),0);
     const remaining=Math.max(0,Number(item.quantity||0)-qtyReturned);
     if(remaining<=0.000001)return;
     available++;
@@ -150,8 +152,11 @@ async function openReturn(invoiceId){
     name.textContent=item.name;meta.textContent="المباع: "+item.quantity+" "+unit(item.unit)+" · المرتجع سابقًا: "+qtyReturned+" · المتبقي: "+remaining;
     info.append(name,meta);
     const input=document.createElement("input");input.type="number";input.min="0";input.max=String(remaining);input.step=item.unit==="piece"?"1":"0.001";input.value="0";input.dataset.itemIndex=String(index);
-    input.dataset.price=String(item.total!==undefined&&Number(item.quantity)>0?Number(item.total)/Number(item.quantity):Number(item.unitPrice||0));
-    input.dataset.ratio=String(ratio);input.setAttribute("aria-label","كمية مرتجع "+item.name);input.oninput=updateReturnTotal;
+    input.dataset.netLineTotal=String(discountedLineTotals[index]||0);
+    input.dataset.soldQuantity=String(Number(item.quantity)||0);
+    input.dataset.alreadyQuantity=String(qtyReturned);
+    input.dataset.refundedAmount=String(refundedAmount);
+    input.setAttribute("aria-label","كمية مرتجع "+item.name);input.oninput=updateReturnTotal;
     const label=document.createElement("label");label.textContent="كمية المرتجع";label.append(input);
     row.append(info,label);root.append(row);
   });
@@ -165,8 +170,17 @@ async function openReturn(invoiceId){
 }
 function updateReturnTotal(){
   const inputs=[...$("salesReturnLines").querySelectorAll("input[data-item-index]")];
-  const total=inputs.reduce((sum,input)=>sum+Math.max(0,Number(input.value)||0)*Number(input.dataset.price||0)*Number(input.dataset.ratio||1),0);
-  $("salesReturnTotal").textContent=money(Math.round(total*100)/100);
+  const total=inputs.reduce((sum,input)=>{
+    const selected=Math.max(0,Number(input.value)||0);
+    if(selected<=0)return sum;
+    const soldQuantity=Number(input.dataset.soldQuantity||0);
+    if(soldQuantity<=0)return sum;
+    const cumulativeQuantity=Math.min(soldQuantity,Number(input.dataset.alreadyQuantity||0)+selected);
+    const cumulativeRefund=Math.round((Number(input.dataset.netLineTotal||0)*cumulativeQuantity/soldQuantity+1e-9)*100)/100;
+    const lineRefund=Math.max(0,Math.round((cumulativeRefund-Number(input.dataset.refundedAmount||0)+1e-9)*100)/100);
+    return sum+lineRefund;
+  },0);
+  $("salesReturnTotal").textContent=money(Math.round((total+1e-9)*100)/100);
 }
 function closeReturn(){$("salesReturnModal").hidden=true;activeReturn=null;}
 $("closeSalesReturn").onclick=closeReturn;

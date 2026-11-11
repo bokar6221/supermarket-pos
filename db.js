@@ -597,6 +597,40 @@
     }finally{db.close();}
   }
 
+  function calculateDiscountedLineTotals(invoice){
+    const items=Array.isArray(invoice&&invoice.items)?invoice.items:[];
+    if(!items.length)return [];
+    const gross=items.map(item=>{
+      const saved=item&&item.total;
+      const amount=saved!==undefined&&saved!==null&&Number.isFinite(Number(saved))
+        ?Number(saved):Number(item&&item.quantity||0)*Number(item&&item.unitPrice||0);
+      return Math.max(0,Number.isFinite(amount)?amount:0);
+    });
+    const grossTotal=gross.reduce((sum,value)=>sum+value,0);
+    const invoiceTotal=Number(invoice&&invoice.total);
+    const subtotal=Number(invoice&&invoice.subtotal);
+    const discount=Number(invoice&&invoice.discount||0);
+    const netTotal=Number.isFinite(invoiceTotal)?invoiceTotal:
+      Math.max(0,(Number.isFinite(subtotal)?subtotal:grossTotal)-discount);
+    const targetCents=Math.max(0,Math.round((netTotal+1e-9)*100));
+    if(grossTotal<=0){
+      const fallback=items.map(()=>0);
+      fallback[fallback.length-1]=targetCents/100;
+      return fallback;
+    }
+    const rawCents=gross.map(value=>value/grossTotal*targetCents);
+    const allocated=rawCents.map(value=>Math.floor(value+1e-9));
+    let remainder=targetCents-allocated.reduce((sum,value)=>sum+value,0);
+    const order=rawCents.map((value,index)=>({index,fraction:value-Math.floor(value+1e-9)}))
+      .sort((a,b)=>b.fraction-a.fraction||a.index-b.index);
+    for(let i=0;remainder>0;i=(i+1)%order.length,remainder--)allocated[order[i].index]++;
+    for(let i=0;remainder<0;i=(i+1)%order.length){
+      const target=order[order.length-1-i%order.length].index;
+      if(allocated[target]>0){allocated[target]--;remainder++;}
+    }
+    return allocated.map(value=>value/100);
+  }
+
   async function saveReturn(record){
     if(!record||!record.invoiceId||!Array.isArray(record.items)||!record.items.length)throw new Error("بيانات المرتجع غير مكتملة.");
     const db=await openDB();
@@ -613,20 +647,26 @@
           const existingReq=rs.getAll();
           existingReq.onsuccess=()=>{
             const prior=existingReq.result.filter(x=>x.invoiceId===record.invoiceId);
+            const discountedLineTotals=calculateDiscountedLineTotals(invoice);
             let amount=0;const lines=[],seenIndexes=new Set(),returnedInRequest=new Map();
             for(const line of record.items){
               const index=Number(line.itemIndex),sold=(invoice.items||[])[index];
               if(!Number.isInteger(index)||index<0||!sold||seenIndexes.has(index)){failed=true;try{tx.abort();}catch(e){}return;}
               seenIndexes.add(index);
-              const returned=prior.reduce((sum,r)=>sum+(r.items||[]).filter(x=>Number(x.itemIndex)===index).reduce((n,x)=>n+Number(x.quantity||0),0),0);
+              const priorLines=prior.flatMap(r=>(r.items||[]).filter(x=>Number(x.itemIndex)===index));
+              const returned=priorLines.reduce((sum,x)=>sum+Number(x.quantity||0),0);
+              const priorRefundedAmount=priorLines.reduce((sum,x)=>sum+
+                (x.amount!==undefined&&x.amount!==null&&Number.isFinite(Number(x.amount))?Number(x.amount):0),0);
               const qty=Number(line.quantity),alreadyRequested=returnedInRequest.get(index)||0;
-              const remaining=Number(sold.quantity||0)-returned-alreadyRequested;
+              const soldQuantity=Number(sold.quantity||0);
+              const remaining=soldQuantity-returned-alreadyRequested;
               if(!Number.isFinite(qty)||qty<=0||qty>remaining+0.000001||(sold.unit==="piece"&&!Number.isInteger(qty))){failed=true;try{tx.abort();}catch(e){}return;}
               returnedInRequest.set(index,alreadyRequested+qty);
-              const ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
-              const unitAmount=Number.isFinite(Number(sold.total))&&Number(sold.quantity)>0
-                ?(Number(sold.total)/Number(sold.quantity))*ratio:Number(sold.unitPrice||0)*ratio;
-              const lineAmount=Math.round(qty*unitAmount*100)/100;amount+=lineAmount;
+              const cumulativeQuantity=Math.min(soldQuantity,returned+alreadyRequested+qty);
+              const netLineTotal=Number(discountedLineTotals[index]||0);
+              const cumulativeRefund=Math.round((netLineTotal*cumulativeQuantity/Math.max(soldQuantity,0.000001)+1e-9)*100)/100;
+              const lineAmount=Math.max(0,Math.round((cumulativeRefund-priorRefundedAmount+1e-9)*100)/100);
+              amount+=lineAmount;
               lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),
                 cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,
                 costKnown:sold.costKnown===true||(sold.cost!==undefined&&sold.cost!==null&&Number(sold.cost)>0),amount:lineAmount});
@@ -867,7 +907,7 @@
   window.POSDatabase={
     getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,setProductActive,saveInvoice,
     getMovements,getSuppliers,getPurchases,getSupplierPayments,getStocktakes,
-    getCustomers,getCustomerPayments,getReturns,getCashEntries,getShifts,
+    getCustomers,getCustomerPayments,getReturns,getCashEntries,getShifts,calculateDiscountedLineTotals,
     saveCustomer,saveCustomerPayment,saveReturn,saveCashEntry,saveShift,
     saveSupplier,saveSupplierPayment,savePurchase,saveStockAdjustment,saveStocktake,
     backupData,restoreData,getSettings,saveSettings,applyCloudRecords

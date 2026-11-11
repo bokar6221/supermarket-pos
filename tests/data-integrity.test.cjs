@@ -91,6 +91,19 @@ async function run(){
   await db.applyCloudRecords([remoteChange],false);
   generated=(await db.getCashEntries()).filter(x=>x.referenceId===remoteSale.id&&x.category==="sale");
   assert.equal(generated.length,1,"Repeated invoice sync must not duplicate the cash ledger entry");
+
+  const roundingInvoice={
+    id:"invoice-rounding",createdAt:new Date().toISOString(),
+    items:[{productId:"piece-1",name:"منتج اختبار",unit:"piece",quantity:2,stockQuantity:2,unitPrice:50,total:100,cost:20,costKnown:true}],
+    subtotal:100,discount:0.01,total:99.99,paymentMethod:"cash",currency:"EGP",status:"saved"
+  };
+  assert.deepEqual(db.calculateDiscountedLineTotals(roundingInvoice),[99.99],"Line allocations must reconcile exactly to the discounted invoice total");
+  await db.saveInvoice(roundingInvoice);
+  await db.saveReturn({id:"rounding-return-1",invoiceId:roundingInvoice.id,refundMethod:"cash",items:[{itemIndex:0,quantity:1}]});
+  await db.saveReturn({id:"rounding-return-2",invoiceId:roundingInvoice.id,refundMethod:"cash",items:[{itemIndex:0,quantity:1}]});
+  const roundingReturns=(await db.getReturns()).filter(x=>x.invoiceId===roundingInvoice.id);
+  assert.deepEqual(roundingReturns.map(x=>x.items[0].amount),[50,49.99],"The final partial return must absorb the rounding remainder");
+  assert.equal(roundingReturns.reduce((sum,x)=>sum+x.amount,0),99.99,"No return sequence may refund more than the paid invoice total");
   console.log("PASS: discounted returns, partial-return limits, stock restoration, integer piece movements, product archive, invoice preservation, cash reconciliation and role-scoped cashier sales.");
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});

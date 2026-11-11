@@ -665,6 +665,9 @@ body.license-locked{overflow:hidden}
 }
 .subtabs-host[hidden]{display:none}
 .subtabs-host .inner-tabs{
+  position:relative;
+  top:auto;
+  z-index:auto;
   margin:0;
   display:flex;
   flex-wrap:nowrap;
