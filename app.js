@@ -855,3 +855,4 @@ window.addEventListener("online",()=>$("connectionState").textContent="متصل"
 if(!window.AndroidScanner&&"serviceWorker"in navigator&&location.protocol!=="file:")addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 (async()=>{try{await load();renderCart();}catch(e){alert("تعذر فتح قاعدة البيانات: "+e.message);}})();
 })();
+/* POS integrity release 1.6.0 */
