@@ -58,6 +58,7 @@ assert.match(firebase, /async function createEmployeeInvite/, "Owner employee in
 assert.match(firebase, /async function handleEmployeeRegister/, "Employees must be able to register with an invitation");
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
 assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
+assert.match(firebase, /if\(role==="cashier"\)return \["products","invoices","movements","customers"\]/, "Cashiers must not download the full cash ledger");
 assert.match(firebase, /where\("store","in",stores\)/, "Cloud queries must filter the stores permitted for the current role");
 assert.match(firebase, /async function writeLicense/, "Project administrator must be able to issue and suspend licenses");
 assert.match(rules, /match \/platformAdmins\//, "Platform administrator collection must be protected");
