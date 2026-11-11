@@ -317,6 +317,7 @@
             const p=req.result;
             if(!p){failure="يوجد صنف غير موجود ضمن هذه الفاتورة.";try{tx.abort();}catch(e){}return;}
             if(p.active===false){failure="هذا الصنف مؤرشف ولا يمكن بيعه قبل إعادة تفعيله.";try{tx.abort();}catch(e){}return;}
+            if(p.unit==="piece"&&!Number.isInteger(quantity)){failure="كمية القطعة يجب أن تكون عددًا صحيحًا.";try{tx.abort();}catch(e){}return;}
             if(!p.trackStock)return;
             const next=Number(p.stock||0)-quantity;
             if(!Number.isFinite(next)||next< -0.000001){failure="الكمية المتاحة لا تكفي لإتمام الفاتورة.";try{tx.abort();}catch(e){}return;}
@@ -416,6 +417,7 @@
             const p=req.result;
             if(!p){try{tx.abort();}catch(e){}return;}
             const qty=Number(item.quantity),unitCost=Number(item.unitCost);
+            if(p.unit==="piece"&&!Number.isInteger(qty)){try{tx.abort();}catch(e){}return;}
             const oldQty=p.trackStock?Number(p.stock||0):0;
             const oldCost=Number(p.cost||0);
             const nextQty=oldQty+qty;
@@ -488,8 +490,10 @@
           req.onsuccess=()=>{
             const p=req.result;
             if(!p){failed=true;try{tx.abort();}catch(e){}return;}
+            const counted=Number(item.countedQty);
+            if(p.unit==="piece"&&!Number.isInteger(counted)){failed=true;try{tx.abort();}catch(e){}return;}
             const before=p.trackStock?Number(p.stock||0):0;
-            const counted=Number(item.countedQty),difference=counted-before;
+            const difference=counted-before;
             item.systemQtyAtCommit=before;
             item.difference=difference;
             p.trackStock=true;p.stock=counted;p.updatedAt=clean.createdAt;products.put(p);
