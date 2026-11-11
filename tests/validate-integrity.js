@@ -43,7 +43,7 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.8.0'/, "Android version must match this release");
+assert.match(gradle, /versionName '1.8.1'/, "Android version must match this release");
 
 assert.match(firebase, /projectId: "supermarketpos-e448a"/, "Firebase project ID must match the registered web app");
 assert.match(firebase, /firebasejs\/13\.2\.0/, "Firebase SDK version must be pinned");
