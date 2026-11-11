@@ -7,17 +7,26 @@ let activeProductCategory="الكل";
 let purchaseDraft=[];
 let stocktakeDraft=null;
 const money=n=>Number(n||0).toLocaleString("ar-EG",{minimumFractionDigits:2,maximumFractionDigits:2})+" ج.م",uid=()=>crypto.randomUUID?crypto.randomUUID():"id-"+Date.now()+"-"+Math.random(),unit=u=>({piece:"قطعة",kg:"كيلو",gram:"جرام"})[u]||"وحدة";
-function view(n){setInvoiceOpen(false);document.body.classList.toggle("sales-view",n==="sale");document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));if(n==="products"){renderProducts();renderCatalog();}if(n==="inventory")renderInventory();if(n==="purchases")renderPurchases();if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();if(n==="settings")renderSettings();}
+const subtabBars = new Map([...document.querySelectorAll(".inner-tabs[data-subtab-group]")].map(bar => [bar.closest(".view")?.id.replace(/^view-/, ""), bar]));
+function mountSubtabs(viewName){
+  const host=$("subtabsHost");
+  if(!host)return;
+  host.replaceChildren();
+  const bar=subtabBars.get(viewName);
+  if(bar){host.append(bar);host.hidden=false;}
+  else{host.hidden=true;}
+}
+function view(n){setInvoiceOpen(false);document.body.classList.toggle("sales-view",n==="sale");document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+n));document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.view===n));mountSubtabs(n);if(n==="products"){renderProducts();renderCatalog();}if(n==="inventory")renderInventory();if(n==="purchases")renderPurchases();if(n==="invoices")renderInvoices();if(n==="sale")renderQuick();if(n==="settings")renderSettings();}
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>view(b.dataset.view));
 function activateSubtab(group,value){
   const tabs=document.querySelector('[data-subtab-group="'+group+'"]');
   if(!tabs)return;
   tabs.querySelectorAll("[data-subtab]").forEach(button=>button.classList.toggle("active",button.dataset.subtab===value));
-  const scope=tabs.parentElement;
-  scope.querySelectorAll('[data-subpanel-group="'+group+'"]').forEach(panel=>{
+  document.querySelectorAll('[data-subpanel-group="'+group+'"]').forEach(panel=>{
     panel.classList.toggle("active",panel.dataset.subpanel===value);
   });
 }
+mountSubtabs("sale");
 document.addEventListener("click",event=>{
   const button=event.target.closest("[data-subtab]");
   if(!button)return;

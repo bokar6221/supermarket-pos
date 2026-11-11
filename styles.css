@@ -653,3 +653,70 @@ body.license-locked{overflow:hidden}
   .inner-tab{font-size:14px;padding-inline:12px}
   .employee-invite-code{align-items:flex-start;flex-direction:column}
 }
+
+
+/* Sub-navigation sits directly below the main navigation for every section. */
+.subtabs-host{
+  position:relative;
+  z-index:19;
+  max-width:1050px;
+  margin:5px auto 0;
+  padding:0 16px;
+}
+.subtabs-host[hidden]{display:none}
+.subtabs-host .inner-tabs{
+  margin:0;
+  display:flex;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  overflow-y:hidden;
+  gap:10px;
+  padding:9px;
+  border:1px solid #d5e2da;
+  border-radius:14px;
+  background:linear-gradient(120deg,#f8fbf9,#e8f1eb);
+  box-shadow:0 4px 13px #173f3517;
+  scrollbar-width:thin;
+}
+.subtabs-host .inner-tab{
+  flex:0 0 auto;
+  min-width:max-content;
+  min-height:56px;
+  padding:11px 18px;
+  font-size:17px;
+  font-weight:900;
+  border-width:2px;
+  border-radius:12px;
+}
+.subtabs-host .inner-tab.active{
+  background:#173f35;
+  border-color:#173f35;
+  color:#fff;
+}
+@media(max-width:640px){
+  .subtabs-host{
+    position:sticky;
+    top:60px;
+    z-index:29;
+    max-width:none;
+    margin:0;
+    padding:5px 8px 0;
+    background:#f3f6f4;
+  }
+  .subtabs-host .inner-tabs{
+    gap:8px;
+    padding:7px;
+    border-radius:12px;
+    background:#edf4ef;
+  }
+  .subtabs-host .inner-tab{
+    min-height:54px;
+    padding:9px 16px;
+    font-size:16px;
+    letter-spacing:.1px;
+  }
+}
+@media(max-width:380px){
+  .subtabs-host{padding-inline:6px}
+  .subtabs-host .inner-tab{min-height:52px;padding-inline:13px;font-size:15px}
+}

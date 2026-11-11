@@ -10,6 +10,7 @@
 <nav class="tabs" aria-label="أقسام التطبيق">
 <button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="inventory">المخزون والجرد</button><button class="tab" data-view="purchases">المشتريات والموردون</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="customers">العملاء والحسابات</button><button class="tab" data-view="cash">الخزينة والورديات</button><button class="tab" data-view="reports">التقارير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button><button class="tab" id="employeesTab" data-view="employees" hidden>الموظفون والصلاحيات</button><button class="tab" id="platformTab" data-view="platform" hidden>إدارة التراخيص</button>
 </nav>
+<div id="subtabsHost" class="subtabs-host" hidden aria-label="التبويبات الفرعية"></div>
 <div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه كاميرا الموبايل إلى باركود المنتج. عند سماع الرنة ارفع الباركود لمسح الصنف التالي.</p><button class="secondary" id="closeScanner">إغلاق المسح</button></div>
 <main class="layout">
 <section class="view active" id="view-sale">

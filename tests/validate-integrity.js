@@ -51,6 +51,9 @@ assert.match(firebase, /applyCloudRecords/, "Cloud sync must use the guarded loc
 assert.match(db, /async function applyCloudRecords/, "Local database must safely apply cloud changes");
 assert.match(rules, /function isMember\(shopId\)/, "Firestore rules must enforce shop membership");
 assert.match(rules, /allow get, list: if canReadStore\(shopId, resource\.data\.store\)/, "Cloud record reads must be restricted by employee role");
+assert.match(html, /id="subtabsHost" class="subtabs-host"/, "Nested tab bar must be mounted directly below the main navigation");
+assert.match(app, /function mountSubtabs\(viewName\)/, "Each main section must mount its own nested navigation");
+assert.match(app, /document\.querySelectorAll\('\[data-subpanel-group=/, "Nested panels must remain connected after moving their tab bar");
 assert.match(manifest, /android\.permission\.INTERNET/, "Android must have network permission");
 assert.match(accessGate, /subtle\.verify/, "Offline licenses must be verified using the embedded public key");
 assert.match(accessGate, /expiresAt/, "License expiry must be enforced locally");
