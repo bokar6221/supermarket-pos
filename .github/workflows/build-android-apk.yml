@@ -12,6 +12,7 @@ on:
       - "catalog.js"
       - "accounts.js"
       - "firebase-sync.js"
+      - "access-gate.js"
       - "sw.js"
       - "firestore.rules"
       - "tests/**"
@@ -54,15 +55,21 @@ jobs:
           node --check db.js
           node --check catalog.js
           node --check accounts.js
+          node --check access-gate.js
           node --input-type=module --check < firebase-sync.js
 
+      - name: Install browser database test dependency
+        run: npm install --no-save fake-indexeddb@6
+
       - name: Validate POS data integrity and UI references
-        run: node tests/validate-integrity.js
+        run: |
+          node tests/validate-integrity.js
+          node --require fake-indexeddb/auto tests/data-integrity.test.cjs
 
       - name: Sync web app into Android assets
         run: |
           mkdir -p android-app/app/src/main/assets/www
-          cp index.html app.js db.js styles.css catalog.js accounts.js firebase-sync.js icon.svg manifest.json android-app/app/src/main/assets/www/
+          cp index.html app.js db.js styles.css catalog.js accounts.js access-gate.js firebase-sync.js icon.svg manifest.json android-app/app/src/main/assets/www/
 
       - name: Build APK
         working-directory: android-app
