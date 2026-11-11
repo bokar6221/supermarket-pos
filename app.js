@@ -742,6 +742,11 @@ async function handleScanned(code,format){
   }
   // Exact full barcode match only. Never guess a product from a shortened prefix.
   const p=await POSDatabase.getProductByBarcode(code);
+  if(p&&p.active===false){
+    beep(false);
+    $("scannerMessage").textContent="هذا الصنف مؤرشف ولا يمكن بيعه. أعد تفعيله من إدارة المنتجات أولًا.";
+    return;
+  }
   if(p){
     if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));
     $("scannerMessage").textContent="✓ تمت إضافة "+p.name+" — أبعد العبوة عن الكاميرا حتى تختفي القراءة، ثم امسح الصنف التالي.";
