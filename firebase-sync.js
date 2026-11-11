@@ -285,6 +285,7 @@ async function restoreFullShop(shopId) {
   writeState(state);
   startRealtimeListener(shopId);
   await refreshLocalViews();
+  scheduleSync();
   return state;
 }
 async function initialUpload(shopId) {
@@ -550,6 +551,7 @@ async function applyRealtimeDocuments(snapshots, shopId) {
     await refreshLocalViews();
   }
   writeState(state);
+  if(changes.length)scheduleSync();
   if (conflictAdded) {
     setStatus("وصل تحديث على سجل تم تعديله محليًا أيضًا. أوقفنا استبداله تلقائيًا لحماية البيانات؛ يلزم حل التعارض.", "warning");
   } else if (changes.length) {
