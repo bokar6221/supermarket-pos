@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function shopPath(shopId) {
+      return /databases/$(database)/documents/shops/$(shopId);
+    }
+
+    function memberPath(shopId, uid) {
+      return /databases/$(database)/documents/shops/$(shopId)/members/$(uid);
+    }
+
+    function isMember(shopId) {
+      return signedIn()
+        && exists(memberPath(shopId, request.auth.uid))
+        && get(memberPath(shopId, request.auth.uid)).data.active == true;
+    }
+
+    function isOwner(shopId) {
+      return isMember(shopId)
+        && get(memberPath(shopId, request.auth.uid)).data.role == 'owner';
+    }
+
+    function validRecord() {
+      return request.resource.data.keys().hasAll([
+          'store', 'recordId', 'data', 'deleted', 'deviceId', 'clientUpdatedAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'store', 'recordId', 'data', 'deleted', 'deviceId', 'clientUpdatedAt', 'updatedAt'
+        ])
+        && request.resource.data.store in [
+          'products', 'invoices', 'movements', 'suppliers', 'purchases',
+          'supplierPayments', 'stocktakes', 'customers', 'customerPayments',
+          'returns', 'cashEntries', 'shifts', 'settings'
+        ]
+        && request.resource.data.recordId is string
+        && request.resource.data.deleted is bool
+        && request.resource.data.deviceId is string
+        && request.resource.data.clientUpdatedAt is int
+        && request.resource.data.updatedAt == request.time
+        && (
+          (request.resource.data.deleted == true && request.resource.data.data == null)
+          || (request.resource.data.deleted == false && request.resource.data.data is map)
+        );
+    }
+
+    match /users/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'activeShopId', 'email', 'displayName', 'updatedAt'
+        ])
+        && request.resource.data.activeShopId is string;
+      allow delete: if false;
+    }
+
+    match /shops/{shopId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.currency == 'EGP'
+        && request.resource.data.schemaVersion == 1
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'name', 'currency', 'schemaVersion', 'createdAt'
+        ]);
+
+      allow get: if isMember(shopId);
+      allow list: if false;
+      allow update: if isOwner(shopId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'name', 'currency', 'schemaVersion', 'createdAt'
+        ]);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get: if signedIn()
+          && (request.auth.uid == uid || isOwner(shopId));
+        allow list: if isOwner(shopId);
+
+        // Initial owner membership is created atomically with the parent shop.
+        allow create: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.role == 'owner'
+          && request.resource.data.active == true
+          && getAfter(shopPath(shopId)).data.ownerUid == request.auth.uid;
+
+        // Staff invitation and role-management rules will be added with the employee module.
+        allow update, delete: if false;
+      }
+
+      match /records/{recordId} {
+        allow get, list: if isMember(shopId);
+        allow create, update: if isMember(shopId) && validRecord();
+        // Deletes are represented by tombstone records so devices can converge safely.
+        allow delete: if false;
+      }
+    }
+  }
+}
