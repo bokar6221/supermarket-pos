@@ -1053,9 +1053,12 @@ onAuthStateChanged(auth, async user => {
     showSignedIn(user, activeShopName);applyRoleAccess();
     startMemberListener(shopId,user.uid);
     const licensed=await checkShopLicense(shopId);if(licensed)startLicenseListener(shopId);if(!licensed)return;
-    if(!state||state.shopId!==shopId||identityChanged){
-      const localSnapshot=await window.POSDatabase.backupData();
-      if(backupHasBusinessData(localSnapshot)){
+    const localSnapshot=await window.POSDatabase.backupData();
+    const localDataExists=backupHasBusinessData(localSnapshot);
+    const stateHasRecords=!!(state&&Object.keys(state.records||{}).length);
+    const localDataWasCleared=!localDataExists&&stateHasRecords;
+    if(!state||state.shopId!==shopId||identityChanged||localDataWasCleared){
+      if(localDataExists&&(identityChanged||!state||state.shopId!==shopId)){
         const accepted=window.confirm("هذا الجهاز يحتوي بيانات لحساب أو محل سابق. سيتم استبدالها بالبيانات المسموح بها للحساب الحالي. صدّر نسخة احتياطية أولًا إن كنت تحتاجها. هل تريد المتابعة؟");
         if(!accepted){setStatus("تم إلغاء تبديل الحساب. لن يبقى الحساب الجديد متصلًا ببيانات الجهاز السابقة.","warning");await signOut(auth);return;}
       }
