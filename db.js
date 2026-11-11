@@ -719,12 +719,84 @@
     }finally{db.close();}
   }
 
+  async function applyCloudRecords(changes,replaceAll){
+    if(!Array.isArray(changes))throw new Error("بيانات المزامنة غير صحيحة.");
+    const allowed=new Set(STORE_NAMES);
+    for(const change of changes){
+      if(!change||!allowed.has(change.store)||change.recordId===undefined||change.recordId===null)throw new Error("سجل سحابي غير صالح.");
+      if(!change.deleted&&(!change.data||typeof change.data!=="object"))throw new Error("بيانات سجل سحابي غير مكتملة.");
+    }
+    const db=await openDB();
+    try{
+      return await new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE_NAMES,"readwrite");
+        const productsStore=tx.objectStore("products"),movementsStore=tx.objectStore("movements");
+        let oldProducts=null,oldMovements=null,newProducts=null,newMovements=null;
+        let failure="";
+        const finishRecalculation=()=>{
+          if(!newProducts||!newMovements)return;
+          const totals=new Map();
+          newMovements.forEach(movement=>{
+            const id=String(movement.productId||"");
+            if(id)totals.set(id,Number(totals.get(id)||0)+Number(movement.quantity||0));
+          });
+          newProducts.forEach(product=>{
+            if(!product.trackStock)return;
+            const base=Number(product.cloudStockBase!==undefined?product.cloudStockBase:product.stock||0);
+            product.stock=Math.max(0,Math.round((base+Number(totals.get(String(product.id))||0))*1000)/1000);
+            productsStore.put(product);
+          });
+        };
+        const recalcProductsReq=()=>{
+          const pReq=productsStore.getAll(),mReq=movementsStore.getAll();
+          pReq.onsuccess=()=>{newProducts=pReq.result||[];finishRecalculation();};
+          mReq.onsuccess=()=>{newMovements=mReq.result||[];finishRecalculation();};
+        };
+        const applyChanges=()=>{
+          if(oldProducts===null||oldMovements===null)return;
+          if(!replaceAll){
+            const oldTotals=new Map();
+            oldMovements.forEach(movement=>{
+              const id=String(movement.productId||"");
+              if(id)oldTotals.set(id,Number(oldTotals.get(id)||0)+Number(movement.quantity||0));
+            });
+            oldProducts.forEach(product=>{
+              if(product&&product.trackStock&&product.cloudStockBase===undefined){
+                product.cloudStockBase=Math.round((Number(product.stock||0)-Number(oldTotals.get(String(product.id))||0))*1000)/1000;
+                productsStore.put(product);
+              }
+            });
+          }
+          if(replaceAll)STORE_NAMES.forEach(name=>tx.objectStore(name).clear());
+          changes.forEach(change=>{
+            const store=tx.objectStore(change.store),key=change.store==="settings"?String(change.recordId):String(change.recordId);
+            if(change.deleted){store.delete(key);return;}
+            const row={...change.data};
+            if(change.store==="products"){
+              const base=Number(row.cloudStockBase!==undefined?row.cloudStockBase:row.stock||0);
+              row.cloudStockBase=Math.round(base*1000)/1000;
+              row.stock=row.trackStock?row.cloudStockBase:null;
+            }
+            store.put(row);
+          });
+          recalcProductsReq();
+        };
+        const pReq=productsStore.getAll(),mReq=movementsStore.getAll();
+        pReq.onsuccess=()=>{oldProducts=pReq.result||[];applyChanges();};
+        mReq.onsuccess=()=>{oldMovements=mReq.result||[];applyChanges();};
+        tx.oncomplete=()=>resolve(true);
+        tx.onerror=()=>reject(tx.error||new Error("تعذر تطبيق التغييرات السحابية."));
+        tx.onabort=()=>reject(new Error(failure||tx.error&&tx.error.message||"أُلغيت عملية تطبيق البيانات السحابية."));
+      });
+    }finally{db.close();}
+  }
+
   window.POSDatabase={
     getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,saveInvoice,
     getMovements,getSuppliers,getPurchases,getSupplierPayments,getStocktakes,
     getCustomers,getCustomerPayments,getReturns,getCashEntries,getShifts,
     saveCustomer,saveCustomerPayment,saveReturn,saveCashEntry,saveShift,
     saveSupplier,saveSupplierPayment,savePurchase,saveStockAdjustment,saveStocktake,
-    backupData,restoreData,getSettings,saveSettings
+    backupData,restoreData,getSettings,saveSettings,applyCloudRecords
   };
 })();
