@@ -333,7 +333,7 @@
             createdAt:invoice.createdAt||new Date().toISOString()});
         }
         tx.oncomplete=()=>resolve(true);
-        tx.onerror=()=>reject(tx.error);
+        tx.onerror=()=>reject(tx.error||new Error(failure||"تعذر حفظ الفاتورة. لم يتم تغيير الأرصدة."));
         tx.onabort=()=>reject(new Error(failure||"تعذر حفظ الفاتورة. لم يتم تغيير الأرصدة."));
       });
     }finally{db.close();}
