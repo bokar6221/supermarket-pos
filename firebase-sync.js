@@ -38,7 +38,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const cloudDb = getFirestore(app);
 const PAGE_SIZE = 250;
-const BATCH_SIZE = 400;
 const SYNC_STORES = [
   "products", "invoices", "movements", "suppliers", "purchases",
   "supplierPayments", "stocktakes", "customers", "customerPayments",
@@ -267,21 +266,32 @@ async function restoreFullShop(shopId) {
 async function initialUpload(shopId) {
   const local = await buildLocalRecords();
   const entries = Array.from(local.values());
-  for (let offset = 0; offset < entries.length; offset += BATCH_SIZE) {
-    const batch = writeBatch(cloudDb);
-    entries.slice(offset, offset + BATCH_SIZE).forEach(entry => {
-      batch.set(doc(recordsRef(shopId), entry.key), {
-        store: entry.store,
-        recordId: entry.recordId,
-        data: entry.data,
-        deleted: false,
-        deviceId: deviceId(),
-        clientUpdatedAt: Date.now(),
-        updatedAt: serverTimestamp()
-      });
-    });
-    await batch.commit();
+  let batch = writeBatch(cloudDb);
+  let batchCount = 0;
+  let batchBytes = 0;
+  for (const entry of entries) {
+    const writeData = {
+      store: entry.store,
+      recordId: entry.recordId,
+      data: entry.data,
+      deleted: false,
+      deviceId: deviceId(),
+      clientUpdatedAt: Date.now(),
+      updatedAt: serverTimestamp()
+    };
+    const size = new TextEncoder().encode(JSON.stringify(writeData)).length;
+    if (size > 850000) throw new Error("يوجد سجل كبير جدًا لا يمكن رفعه إلى Firestore.");
+    if (batchCount >= 300 || batchBytes + size > 7 * 1024 * 1024) {
+      await batch.commit();
+      batch = writeBatch(cloudDb);
+      batchCount = 0;
+      batchBytes = 0;
+    }
+    batch.set(doc(recordsRef(shopId), entry.key), writeData);
+    batchCount++;
+    batchBytes += size;
   }
+  if (batchCount) await batch.commit();
   const snapshots = await allCloudDocuments(shopId);
   const state = makeEmptyState(shopId);
   for (const snapshot of snapshots) {
@@ -336,6 +346,18 @@ async function connectExistingShop(user, shopId) {
   activeShopName = String(shop.data().name || "المحل");
   showSignedIn(user, activeShopName);
   const oldState = readState();
+  if (oldState && oldState.shopId === shopId) {
+    const currentSnapshot = await window.POSDatabase.backupData();
+    if (!backupHasBusinessData(currentSnapshot) && Object.keys(oldState.records || {}).length > 0) {
+      setStatus("لم نعثر على بيانات محلية محفوظة لهذا الجهاز. جارٍ استعادة نسخة المحل من السحابة...", "info");
+      await restoreFullShop(shopId);
+      setStatus("تمت استعادة بيانات المحل على هذا الجهاز.", "success");
+    } else {
+      setStatus("الحساب متصل. جارٍ فحص التغييرات...", "info");
+      await syncNow();
+    }
+    return;
+  }
   if (!oldState || oldState.shopId !== shopId) {
     const localSnapshot = await window.POSDatabase.backupData();
     if (backupHasBusinessData(localSnapshot)) {
@@ -560,12 +582,32 @@ function bindUI() {
   if ($("cloudLogin")) $("cloudLogin").addEventListener("click", () => clickAction(handleLogin));
   if ($("cloudCreateShop")) $("cloudCreateShop").addEventListener("click", () => clickAction(handleCreateShop));
   if ($("cloudSyncNow")) $("cloudSyncNow").addEventListener("click", () => clickAction(async () => {
-    if (!activeShopId && activeUser) {
+    if (!activeUser) throw new Error("سجّل الدخول أولًا.");
+    const state = readState();
+    if (!activeShopId) {
       const profile = await getDoc(userRef(activeUser.uid));
-      if (profile.exists() && profile.data().activeShopId) {
-        await connectExistingShop(activeUser, String(profile.data().activeShopId));
+      if (profile.exists() && profile.data().activeShopId) activeShopId = String(profile.data().activeShopId);
+    }
+    if (!activeShopId) {
+      await createShopForUser(activeUser, $("cloudShopName").value.trim());
+      return;
+    }
+    if (!state || state.shopId !== activeShopId) {
+      const member = await getDoc(memberRef(activeShopId, activeUser.uid));
+      const firstPage = await getDocs(query(recordsRef(activeShopId), limit(1)));
+      if (firstPage.empty && member.exists() && member.data().role === "owner") {
+        const localSnapshot = await window.POSDatabase.backupData();
+        if (backupHasBusinessData(localSnapshot) &&
+            !window.confirm("المحل السحابي لا يحتوي سجلات حتى الآن. هل تريد رفع بيانات هذا الجهاز لتكون بداية المحل؟")) return;
+        const newState = await initialUpload(activeShopId);
+        const shop = await getDoc(shopRef(activeShopId));
+        activeShopName = shop.exists() ? String(shop.data().name || "المحل") : "المحل";
+        showSignedIn(activeUser, activeShopName);
+        setStatus("تم رفع البيانات الأولية وربط هذا الجهاز بالمحل.", "success");
         return;
       }
+      await connectExistingShop(activeUser, activeShopId);
+      return;
     }
     await syncNow();
   }));
