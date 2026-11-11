@@ -168,7 +168,7 @@
     finally{db.close();}
   }
   async function saveProduct(product){
-    const clean={...product,minStock:Math.max(0,Number(product.minStock)||0)};
+    const clean={...product,active:product.active!==false,minStock:Math.max(0,Number(product.minStock)||0)};
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
@@ -211,7 +211,7 @@
     try{
       return await new Promise((resolve,reject)=>{
         const tx=db.transaction("products","readwrite"),store=tx.objectStore("products");
-        for(const product of products)store.put({...product,minStock:Math.max(0,Number(product.minStock)||0)});
+        for(const product of products)store.put({...product,active:product.active!==false,minStock:Math.max(0,Number(product.minStock)||0)});
         tx.oncomplete=()=>resolve(products.length);
         tx.onerror=()=>reject(tx.error);
         tx.onabort=()=>reject(tx.error);
@@ -221,21 +221,66 @@
   async function deleteProduct(id){
     const db=await openDB();
     try{
-      await new Promise((resolve,reject)=>{
+      return await new Promise((resolve,reject)=>{
+        const tx=db.transaction(["products","movements","invoices","purchases","returns"],"readwrite");
+        const ps=tx.objectStore("products"),req=ps.get(id);
+        let failure="",result={deleted:false,archived:false};
+        req.onsuccess=()=>{
+          const product=req.result;
+          if(!product){result={deleted:true,archived:false};return;}
+          const movementReq=tx.objectStore("movements").getAll();
+          const invoiceReq=tx.objectStore("invoices").getAll();
+          const purchaseReq=tx.objectStore("purchases").getAll();
+          const returnReq=tx.objectStore("returns").getAll();
+          let ready=0,movements,invoices,purchases,returns;
+          const finish=()=>{
+            if(++ready!==4)return;
+            const referenced=(movements||[]).some(x=>x.productId===id)
+              ||(invoices||[]).some(x=>(x.items||[]).some(item=>item.productId===id))
+              ||(purchases||[]).some(x=>(x.items||[]).some(item=>item.productId===id))
+              ||(returns||[]).some(x=>(x.items||[]).some(item=>item.productId===id));
+            const hasStock=product.trackStock&&Number(product.stock||0)>0.000001;
+            if(referenced||hasStock){
+              product.active=false;
+              product.archivedAt=new Date().toISOString();
+              product.updatedAt=product.archivedAt;
+              ps.put(product);
+              result={deleted:false,archived:true};
+            }else{
+              ps.delete(id);
+              result={deleted:true,archived:false};
+            }
+          };
+          movementReq.onsuccess=()=>{movements=movementReq.result;finish();};
+          invoiceReq.onsuccess=()=>{invoices=invoiceReq.result;finish();};
+          purchaseReq.onsuccess=()=>{purchases=purchaseReq.result;finish();};
+          returnReq.onsuccess=()=>{returns=returnReq.result;finish();};
+        };
+        req.onerror=()=>{failure="تعذر قراءة الصنف.";try{tx.abort();}catch(e){}};
+        tx.oncomplete=()=>resolve(result);
+        tx.onerror=()=>reject(tx.error);
+        tx.onabort=()=>reject(new Error(failure||"تعذر حذف أو أرشفة الصنف."));
+      });
+    }finally{db.close();}
+  }
+  async function setProductActive(id,active){
+    const db=await openDB();
+    try{
+      return await new Promise((resolve,reject)=>{
         const tx=db.transaction("products","readwrite"),store=tx.objectStore("products"),req=store.get(id);
         let failure="";
         req.onsuccess=()=>{
           const product=req.result;
-          if(product&&product.trackStock&&Number(product.stock||0)>0.000001){
-            failure="لا يمكن حذف صنف له رصيد بالمخزون. صفّر رصيده بتسوية موثقة أولًا.";
-            try{tx.abort();}catch(e){}
-            return;
-          }
-          store.delete(id);
+          if(!product){failure="الصنف غير موجود.";try{tx.abort();}catch(e){}return;}
+          product.active=!!active;
+          product.updatedAt=new Date().toISOString();
+          if(active)delete product.archivedAt;
+          else product.archivedAt=product.updatedAt;
+          store.put(product);
         };
         tx.oncomplete=()=>resolve(true);
         tx.onerror=()=>reject(tx.error);
-        tx.onabort=()=>reject(new Error(failure||"تعذر حذف المنتج."));
+        tx.onabort=()=>reject(new Error(failure||"تعذر تحديث حالة الصنف."));
       });
     }finally{db.close();}
   }
@@ -271,6 +316,7 @@
             if(failure)return;
             const p=req.result;
             if(!p){failure="يوجد صنف غير موجود ضمن هذه الفاتورة.";try{tx.abort();}catch(e){}return;}
+            if(p.active===false){failure="هذا الصنف مؤرشف ولا يمكن بيعه قبل إعادة تفعيله.";try{tx.abort();}catch(e){}return;}
             if(!p.trackStock)return;
             const next=Number(p.stock||0)-quantity;
             if(!Number.isFinite(next)||next< -0.000001){failure="الكمية المتاحة لا تكفي لإتمام الفاتورة.";try{tx.abort();}catch(e){}return;}
@@ -350,7 +396,7 @@
     for(const item of purchase.items){
       if(!item.productId||ids.has(item.productId))throw new Error("لا تكرر الصنف في نفس فاتورة الشراء.");
       ids.add(item.productId);
-      if(!(Number(item.quantity)>0)||!(Number(item.unitCost)>=0))throw new Error("راجع كمية وتكلفة كل صنف.");
+      if(!(Number(item.quantity)>0)||!(Number(item.unitCost)>=0)||(item.unit==="piece"&&!Number.isInteger(Number(item.quantity))))throw new Error("راجع كمية وتكلفة كل صنف؛ كمية القطعة يجب أن تكون عددًا صحيحًا.");
     }
     const clean={...purchase,total,paidAmount:paid,balance:Math.max(0,total-paid),createdAt:purchase.createdAt||new Date().toISOString()};
     const db=await openDB();
@@ -409,7 +455,7 @@
           const p=req.result;
           if(!p){try{tx.abort();}catch(e){}return;}
           const current=p.trackStock?Number(p.stock||0):0,next=current+delta;
-          if(next< -0.000001){try{tx.abort();}catch(e){}return;}
+          if((p.unit==="piece"&&!Number.isInteger(delta))||next< -0.000001){try{tx.abort();}catch(e){}return;}
           p.trackStock=true;p.stock=Math.max(0,next);p.updatedAt=new Date().toISOString();store.put(p);
           tx.objectStore("movements").add({
             id:crypto.randomUUID(),productId:p.id,productName:p.name,type:"adjustment",
@@ -427,7 +473,7 @@
     if(!stocktake||!Array.isArray(stocktake.items)||!stocktake.items.length)throw new Error("لا توجد أصناف في الجرد.");
     const ids=new Set();
     for(const item of stocktake.items){
-      if(!item.productId||ids.has(item.productId)||!Number.isFinite(Number(item.countedQty))||Number(item.countedQty)<0)throw new Error("راجع الكميات المسجلة في الجرد.");
+      if(!item.productId||ids.has(item.productId)||!Number.isFinite(Number(item.countedQty))||Number(item.countedQty)<0||(item.unit==="piece"&&!Number.isInteger(Number(item.countedQty))))throw new Error("راجع الكميات المسجلة في الجرد؛ كمية القطعة يجب أن تكون عددًا صحيحًا.");
       ids.add(item.productId);
     }
     const clean={...stocktake,status:"completed",createdAt:stocktake.createdAt||new Date().toISOString()};
@@ -575,7 +621,7 @@
               returnedInRequest.set(index,alreadyRequested+qty);
               const ratio=Number(invoice.subtotal||0)>0?Number(invoice.total||0)/Number(invoice.subtotal):1;
               const unitAmount=Number.isFinite(Number(sold.total))&&Number(sold.quantity)>0
-                ?Number(sold.total)/Number(sold.quantity):Number(sold.unitPrice||0)*ratio;
+                ?(Number(sold.total)/Number(sold.quantity))*ratio:Number(sold.unitPrice||0)*ratio;
               const lineAmount=Math.round(qty*unitAmount*100)/100;amount+=lineAmount;
               lines.push({itemIndex:index,productId:sold.productId||null,name:sold.name,unit:sold.unit,quantity:qty,unitPrice:Number(sold.unitPrice||0),
                 cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,
@@ -792,7 +838,7 @@
   }
 
   window.POSDatabase={
-    getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,saveInvoice,
+    getProducts,getInvoices,getProductByBarcode,saveProduct,saveProducts,deleteProduct,setProductActive,saveInvoice,
     getMovements,getSuppliers,getPurchases,getSupplierPayments,getStocktakes,
     getCustomers,getCustomerPayments,getReturns,getCashEntries,getShifts,
     saveCustomer,saveCustomerPayment,saveReturn,saveCashEntry,saveShift,
