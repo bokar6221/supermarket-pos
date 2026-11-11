@@ -15,6 +15,7 @@ on:
       - "access-gate.js"
       - "sw.js"
       - "firestore.rules"
+      - "firestore.indexes.json"
       - "tests/**"
       - ".github/workflows/build-android-apk.yml"
   pull_request:
