@@ -134,6 +134,15 @@ async function load(){
   $("shopTitle").textContent=shopSettings.shopName||"كاشير المحل";
   renderQuick();renderProducts();renderCatalog();
 }
+window.POSRefreshAfterCloudSync=async()=>{
+  await load();
+  await renderInvoices();
+  if(window.POSAccounts){
+    await window.POSAccounts.renderCustomers();
+    await window.POSAccounts.renderCash();
+    await window.POSAccounts.renderReports();
+  }
+};
 function renderProducts(){
   const root=$("productList"),categories=$("productCategories");
   const q=$("productSearch").value.trim().toLocaleLowerCase("ar");
