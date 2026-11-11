@@ -47,6 +47,17 @@ const SYNC_STORES = [
 ];
 const STATE_KEY = "supermarket-pos-cloud-sync-v1";
 const DEVICE_KEY = "supermarket-pos-device-id-v1";
+function permittedSyncStores(){
+  const role=activeMember&&activeMember.role;
+  if(role==="owner")return SYNC_STORES.slice();
+  if(role==="manager")return SYNC_STORES.filter(store=>store!=="settings");
+  if(role==="accountant")return [
+    "products","invoices","movements","suppliers","purchases","supplierPayments",
+    "stocktakes","customers","customerPayments","returns","cashEntries","shifts"
+  ];
+  if(role==="cashier")return ["products","invoices","movements","customers","cashEntries"];
+  return [];
+}
 const $ = id => document.getElementById(id);
 let activeUser = null;
 let activeShopId = "";
@@ -183,7 +194,7 @@ async function buildLocalRecords() {
     if (id) movementTotals.set(id, Number(movementTotals.get(id) || 0) + Number(movement.quantity || 0));
   });
   const map = new Map();
-  for (const store of SYNC_STORES) {
+  for (const store of permittedSyncStores()) {
     const rows = Array.isArray(data[store]) ? data[store] : [];
     for (const row of rows) {
       if (!row || typeof row !== "object") continue;
@@ -226,9 +237,11 @@ function cursorFromDocument(snapshot) {
 }
 async function allCloudDocuments(shopId) {
   const output = [];
+  const stores=permittedSyncStores();
+  if(!stores.length)return output;
   let last = null;
   while (true) {
-    const base = [recordsRef(shopId), orderBy("updatedAt"), orderBy(documentId())];
+    const base = [recordsRef(shopId), where("store","in",stores), orderBy("updatedAt"), orderBy(documentId())];
     const constraints = last ? [...base.slice(1), startAfter(last)] : base.slice(1);
     const page = await getDocs(query(base[0], ...constraints, limit(PAGE_SIZE)));
     output.push(...page.docs);
@@ -251,7 +264,7 @@ async function restoreFullShop(shopId) {
   const records = {};
   for (const snapshot of snapshots) {
     const value = snapshot.data();
-    if (!SYNC_STORES.includes(value.store) || typeof value.recordId !== "string") {
+    if (!permittedSyncStores().includes(value.store) || typeof value.recordId !== "string") {
       throw new Error("وجدنا سجلًا سحابيًا غير متوافق. أوقفنا الاستعادة لحماية البيانات.");
     }
     const hash = await cloudHash(value);
@@ -356,6 +369,7 @@ async function createShopForUser(user, shopName) {
   return state;
 }
 async function connectExistingShop(user, shopId) {
+  const previousGateSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
   const member = await getDoc(memberRef(shopId, user.uid));
   if (!member.exists() || member.data().active !== true) throw new Error("هذا الحساب ليس عضوًا نشطًا في المحل المحدد.");
   const shop = await getDoc(shopRef(shopId));
@@ -375,6 +389,17 @@ async function connectExistingShop(user, shopId) {
   const oldState = readState();
   if (oldState && oldState.shopId === shopId) {
     const currentSnapshot = await window.POSDatabase.backupData();
+    const identityChanged=!previousGateSession||previousGateSession.uid!==user.uid||previousGateSession.role!==activeMember.role;
+    if(identityChanged){
+      if(backupHasBusinessData(currentSnapshot)){
+        const accepted=window.confirm("هذا الجهاز مرتبط بحساب أو دور مختلف. ستتم إعادة تحميل البيانات المسموح بها لهذا الدور من السحابة. صدّر نسخة احتياطية أولًا إن كنت تحتاجها. هل تريد المتابعة؟");
+        if(!accepted){setStatus("لم يتم تغيير بيانات الجهاز أو ربط الحساب.", "warning");return;}
+      }
+      setStatus("جارٍ إعادة تحميل بيانات الدور الحالي وحذف البيانات غير المسموح بها من هذا الجهاز...", "info");
+      await restoreFullShop(shopId);
+      setStatus("تم ربط الحساب وتنزيل البيانات المسموح بها لهذا الدور.", "success");
+      return;
+    }
     if (!backupHasBusinessData(currentSnapshot) && Object.keys(oldState.records || {}).length > 0) {
       setStatus("لم نعثر على بيانات محلية محفوظة لهذا الجهاز. جارٍ استعادة نسخة المحل من السحابة...", "info");
       await restoreFullShop(shopId);
@@ -403,7 +428,9 @@ async function connectExistingShop(user, shopId) {
   await syncNow();
 }
 async function pullIncremental(state) {
-  const base = [recordsRef(state.shopId), orderBy("updatedAt"), orderBy(documentId())];
+  const stores=permittedSyncStores();
+  if(!stores.length)throw new Error("لا توجد صلاحيات مزامنة لهذا الدور.");
+  const base = [recordsRef(state.shopId), where("store","in",stores), orderBy("updatedAt"), orderBy(documentId())];
   let pages = 0;
   let applied = 0;
   while (true) {
@@ -418,7 +445,7 @@ async function pullIncremental(state) {
     const changes = [];
     for (const snapshot of page.docs) {
       const remote = snapshot.data();
-      if (!SYNC_STORES.includes(remote.store) || typeof remote.recordId !== "string") continue;
+      if (!permittedSyncStores().includes(remote.store) || typeof remote.recordId !== "string") continue;
       const key = snapshot.id;
       const remoteHash = await cloudHash(remote);
       const baseline = state.records[key] || null;
@@ -464,7 +491,9 @@ function startRealtimeListener(shopId) {
     stopRecordsListener();
     stopRecordsListener = null;
   }
-  const cloudQuery = query(recordsRef(shopId), orderBy("updatedAt"), orderBy(documentId()));
+  const stores=permittedSyncStores();
+  if(!stores.length){setStatus("لا توجد مجموعات بيانات مسموح بمزامنتها لهذا الدور.","warning");return;}
+  const cloudQuery = query(recordsRef(shopId), where("store","in",stores), orderBy("updatedAt"), orderBy(documentId()));
   stopRecordsListener = onSnapshot(cloudQuery, snapshot => {
     const changed = snapshot.docChanges().map(change => change.doc);
     if (!changed.length) return;
@@ -758,12 +787,19 @@ async function checkShopLicense(shopId){
 }
 function startMemberListener(shopId,uid){
  if(stopMemberListener){stopMemberListener();stopMemberListener=null;}
- stopMemberListener=onSnapshot(memberRef(shopId,uid),snapshot=>{
+ stopMemberListener=onSnapshot(memberRef(shopId,uid),async snapshot=>{
   if(!snapshot.exists()||snapshot.data().active!==true){
    activeMember=null;if(window.POSGate){window.POSGate.setSession(null);window.POSGate.lock("تم إيقاف حساب الموظف من صاحب المحل. تواصل معه لإعادة التفعيل.");}
    showSignedIn(null,"");setStatus("تم إيقاف عضوية هذا الحساب.","error");signOut(auth).catch(()=>{});return;
   }
+  const previousRole=activeMember&&activeMember.role;
   activeMember=snapshot.data();setGateSession();
+  if(previousRole&&previousRole!==activeMember.role){
+   if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+   setStatus("تغير دور الحساب. جارٍ إعادة تحميل مجموعات البيانات المسموح بها...","warning");
+   await restoreFullShop(shopId);
+   setStatus("تم تطبيق الدور الجديد وتحديث بيانات هذا الجهاز.","success");
+  }
  },error=>setStatus("تعذر تحديث صلاحيات الموظف: "+firebaseError(error),"warning"));
 }
 function startLicenseListener(shopId){
