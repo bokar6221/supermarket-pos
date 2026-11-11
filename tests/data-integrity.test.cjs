@@ -81,6 +81,16 @@ async function run(){
   const cash=(await db.getCashEntries());
   assert.equal(cash.filter(x=>x.category==="sale").reduce((s,x)=>s+x.amount,0),90,"Cash ledger must record discounted sale total");
   assert.equal(cash.filter(x=>x.category==="sales_return").reduce((s,x)=>s+x.amount,0),90,"Cash ledger must record the discounted return amount");
-  console.log("PASS: discounted returns, partial-return limits, stock restoration, integer piece movements, product archive, invoice preservation and cash reconciliation.");
+
+  const remoteSale={id:"cloud-cash-sale",createdAt:new Date().toISOString(),items:[{name:"بيع من جهاز كاشير",unit:"piece",quantity:1,unitPrice:25,total:25}],subtotal:25,discount:0,total:25,paymentMethod:"cash"};
+  const remoteChange={store:"invoices",recordId:remoteSale.id,deleted:false,data:remoteSale};
+  await db.applyCloudRecords([remoteChange],false);
+  let generated=(await db.getCashEntries()).filter(x=>x.referenceId===remoteSale.id&&x.category==="sale");
+  assert.equal(generated.length,1,"Owner-side sync must rebuild a cash ledger entry from a cashier invoice");
+  assert.equal(generated[0].amount,25,"Rebuilt cash ledger entry must use the actual invoice total");
+  await db.applyCloudRecords([remoteChange],false);
+  generated=(await db.getCashEntries()).filter(x=>x.referenceId===remoteSale.id&&x.category==="sale");
+  assert.equal(generated.length,1,"Repeated invoice sync must not duplicate the cash ledger entry");
+  console.log("PASS: discounted returns, partial-return limits, stock restoration, integer piece movements, product archive, invoice preservation, cash reconciliation and role-scoped cashier sales.");
 }
 run().catch(error=>{console.error(error);process.exitCode=1;});
