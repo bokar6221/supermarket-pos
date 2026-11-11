@@ -981,13 +981,14 @@ onAuthStateChanged(auth, async user => {
     activeShopName = "";
     activeMember = null;
     isPlatformAdmin = false;
-    if(window.POSGate)window.POSGate.setSession(null);
+    if(window.POSGate){window.POSGate.setPlatformAdmin(false);window.POSGate.setSession(null);}
     showSignedIn(null, "");
     return;
   }
   const state = readState();
   try {
     isPlatformAdmin=await verifyPlatformAdmin(user);
+    if(window.POSGate)window.POSGate.setPlatformAdmin(isPlatformAdmin);
     if(isPlatformAdmin){
       showSignedIn(user,"إدارة المنصة");
       if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
