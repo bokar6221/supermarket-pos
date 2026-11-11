@@ -13,7 +13,7 @@ const ROLE_METHODS={
   cashier:["saveInvoice"],
   accountant:["saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
 };
-let session=null,license=null,licenseReady=false,initialized=false;
+let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false;
 let publicKeyPromise=null;
 const $=id=>document.getElementById(id);
 function bytesFromBase64(value){
@@ -107,6 +107,7 @@ function roleCan(method){
   return allowed.includes("*")||allowed.includes(method);
 }
 function assertMutation(method){
+  if(platformAdminSession)throw new Error("حساب مدير المشروع مخصص لإدارة التراخيص ولا يستخدم لتشغيل محل.");
   const managedShop=localStorage.getItem(MANAGED_KEY);
   if(!managedShop)return true;
   if(!session||!session.uid||!session.active||session.shopId!==managedShop)
@@ -128,6 +129,11 @@ function setSession(value){
     localStorage.removeItem(SESSION_KEY);
     if(localStorage.getItem(MANAGED_KEY))showLock("تم تسجيل الخروج","سجّل الدخول بحساب الموظف المصرح لهذا المحل.");
   }
+}
+function setPlatformAdmin(enabled){
+  platformAdminSession=!!enabled;
+  if(platformAdminSession)hideLock();
+  else if(localStorage.getItem(MANAGED_KEY))showLock("يلزم التحقق من الحساب","سجّل الدخول بحساب المحل المصرح.");
 }
 function lock(reason){
   licenseReady=false;
@@ -165,7 +171,7 @@ function installMutationGuards(){
   window.POSDatabase.__localRoleGuarded=true;
 }
 window.POSGate={
-  setSession,applyLicense,verifyDocument,licenseCheck,assertMutation,roleCan,lock,
+  setSession,setPlatformAdmin,applyLicense,verifyDocument,licenseCheck,assertMutation,roleCan,lock,
   getSession:()=>session,getLicense:()=>license,
   isManaged:()=>!!localStorage.getItem(MANAGED_KEY),
   isLicensed:()=>licenseReady,
