@@ -39,6 +39,29 @@ service cloud.firestore {
         && get(memberPath(shopId, request.auth.uid)).data.role == 'owner';
     }
 
+    function canReadStore(shopId, store) {
+      return isPlatformAdmin()
+        || (
+          isMember(shopId)
+          && get(memberPath(shopId, request.auth.uid)).data.role in ['owner', 'manager']
+          && (get(memberPath(shopId, request.auth.uid)).data.role == 'owner' || store != 'settings')
+        )
+        || (
+          isMember(shopId)
+          && get(memberPath(shopId, request.auth.uid)).data.role == 'accountant'
+          && store in [
+            'products', 'invoices', 'movements', 'suppliers', 'purchases',
+            'supplierPayments', 'stocktakes', 'customers', 'customerPayments',
+            'returns', 'cashEntries', 'shifts'
+          ]
+        )
+        || (
+          isMember(shopId)
+          && get(memberPath(shopId, request.auth.uid)).data.role == 'cashier'
+          && store in ['products', 'invoices', 'movements', 'customers', 'cashEntries']
+        );
+    }
+
     function canWriteStore(shopId, store) {
       return isOwner(shopId)
         || (
@@ -170,7 +193,7 @@ service cloud.firestore {
       }
 
       match /records/{recordId} {
-        allow get, list: if isMember(shopId) || isPlatformAdmin();
+        allow get, list: if canReadStore(shopId, resource.data.store);
         allow create, update: if validRecord()
           && (isPlatformAdmin() || canWriteStore(shopId, request.resource.data.store));
         // Deletes are represented by tombstone records so devices can converge safely.
