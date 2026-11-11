@@ -11,6 +11,7 @@ const db = read("db.js");
 const gradle = read("android-app/app/build.gradle");
 const firebase = read("firebase-sync.js");
 const rules = read("firestore.rules");
+const indexes = read("firestore.indexes.json");
 const manifest = read("android-app/app/src/main/AndroidManifest.xml");
 const accessGate = read("access-gate.js");
 
@@ -56,6 +57,8 @@ assert.match(accessGate, /expiresAt/, "License expiry must be enforced locally")
 assert.match(firebase, /async function createEmployeeInvite/, "Owner employee invitations must be implemented");
 assert.match(firebase, /async function handleEmployeeRegister/, "Employees must be able to register with an invitation");
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
+assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
+assert.match(firebase, /where\("store","in",stores\)/, "Cloud queries must filter the stores permitted for the current role");
 assert.match(firebase, /async function writeLicense/, "Project administrator must be able to issue and suspend licenses");
 assert.match(rules, /match \/platformAdmins\//, "Platform administrator collection must be protected");
 assert.match(rules, /match \/licenses\//, "License records must be protected by Firestore rules");
