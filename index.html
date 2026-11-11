@@ -8,7 +8,7 @@
 <body class="sales-view">
 <header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1></div><span class="offline-tag" id="connectionState">محلي</span></header>
 <nav class="tabs" aria-label="أقسام التطبيق">
-<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="inventory">المخزون والجرد</button><button class="tab" data-view="purchases">المشتريات والموردون</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="customers">العملاء والحسابات</button><button class="tab" data-view="cash">الخزينة والورديات</button><button class="tab" data-view="reports">التقارير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button>
+<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="inventory">المخزون والجرد</button><button class="tab" data-view="purchases">المشتريات والموردون</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="customers">العملاء والحسابات</button><button class="tab" data-view="cash">الخزينة والورديات</button><button class="tab" data-view="reports">التقارير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button><button class="tab" id="employeesTab" data-view="employees" hidden>الموظفون والصلاحيات</button><button class="tab" id="platformTab" data-view="platform" hidden>إدارة التراخيص</button>
 </nav>
 <div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه كاميرا الموبايل إلى باركود المنتج. عند سماع الرنة ارفع الباركود لمسح الصنف التالي.</p><button class="secondary" id="closeScanner">إغلاق المسح</button></div>
 <main class="layout">
@@ -275,7 +275,7 @@
       <div id="cloudAuthPanel">
         <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
         <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
-        <label>اسم المحل عند إنشاء حساب جديد<input id="cloudShopName" maxlength="70" placeholder="اسم المحل"></label>
+        <label>اسم المحل عند إنشاء حساب جديد<input id="cloudShopName" maxlength="70" placeholder="اسم المحل"></label><label>كود دعوة الموظف (للموظف فقط)<input id="cloudInviteCode" autocomplete="off" maxlength="80" placeholder="أدخل كود الدعوة الذي أرسله صاحب المحل"></label><button class="secondary" id="cloudEmployeeRegister" type="button">إنشاء حساب موظف وقبول الدعوة</button>
         <div class="actions">
           <button class="primary" id="cloudRegister" type="button">إنشاء حساب ومحل جديد</button>
           <button class="secondary" id="cloudLogin" type="button">تسجيل الدخول وربط الجهاز</button>
@@ -283,7 +283,7 @@
         <button class="secondary" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
       </div>
       <div id="cloudConnectedPanel" hidden>
-        <p>الحساب: <strong id="cloudAccountEmail"></strong></p>
+        <p>الحساب: <strong id="cloudAccountEmail"></strong></p><p>الصلاحية: <strong id="cloudAccountRole">جارٍ التحقق</strong></p><p>رقم الحساب (UID): <code id="cloudAccountUid"></code></p>
         <p>المحل المرتبط: <strong id="cloudConnectedShop"></strong></p>
         <div class="actions">
           <button class="primary" id="cloudSyncNow" type="button">مزامنة الآن</button>
@@ -294,6 +294,39 @@
       <p class="hint">للتجربة الأولى، استخدم حساب صاحب المحل نفسه على أجهزته. حسابات الموظفين والصلاحيات المنفصلة ستضاف في مرحلة لاحقة. لا تشارك كلمة مرور الحساب مع الموظفين.</p>
       <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password في Firebase، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
     </div>
+  </div>
+</section>
+<section class="view" id="view-employees">
+  <div class="panel">
+    <div class="section-heading"><div><h2>الموظفون وصلاحياتهم</h2><p>أنشئ دعوة لكل موظف ببريده الإلكتروني، ثم اختر دوره. الموظف ينشئ كلمة مروره بنفسه.</p></div></div>
+    <div id="employeeOwnerPanel">
+      <form id="employeeInviteForm">
+        <div class="form-grid">
+          <label>البريد الإلكتروني للموظف<input id="employeeInviteEmail" type="email" maxlength="160" required placeholder="employee@example.com"></label>
+          <label>الدور الوظيفي<select id="employeeInviteRole"><option value="cashier">كاشير</option><option value="accountant">محاسب</option><option value="manager">مدير</option></select></label>
+        </div>
+        <button class="primary" type="submit">إنشاء دعوة موظف</button>
+        <p class="hint" id="employeeInviteMessage" role="status"></p>
+        <div id="employeeInviteCodeBox" class="employee-invite-code" hidden><span>كود الدعوة الخاص بالموظف</span><strong id="employeeInviteCode"></strong><button type="button" class="secondary" id="copyEmployeeInvite">نسخ الكود</button></div>
+      </form>
+      <div class="panel employee-list-panel"><h3>الموظفون المسجلون</h3><p class="hint">إيقاف الموظف يمنع دخوله ومزامنة بيانات المحل بعد وصول التحديث إليه.</p><div id="employeeMembers"><p class="empty">جارٍ تحميل الموظفين...</p></div></div>
+      <div class="panel employee-list-panel"><h3>الدعوات المعلقة</h3><div id="employeeInvites"><p class="empty">لا توجد دعوات.</p></div></div>
+    </div>
+    <p class="hint" id="employeeAccessMessage" role="status"></p>
+  </div>
+</section>
+<section class="view" id="view-platform">
+  <div class="panel">
+    <div class="section-heading"><div><h2>إدارة تراخيص البرنامج</h2><p>لوحة مدير المشروع. لا تظهر إلا للحساب الموجود في قائمة مديري المنصة.</p></div></div>
+    <div class="platform-security-note"><strong>حماية التوقيع</strong><p>مفتاح التوقيع الخاص لا يُحفظ في التطبيق أو GitHub. ارفع ملف المفتاح عند إصدار الترخيص فقط، ثم أغلق الصفحة. التوقيع يربط الترخيص بالمحل والمدة وحالة التشغيل.</p><p>الإيقاف المركزي يصل فور عودة اتصال الجهاز. عند انقطاع الإنترنت لا يمكن وصول أمر جديد عن بُعد؛ لكن انتهاء الترخيص المحفوظ يظل مفروضًا محليًا.</p></div>
+    <p>حساب مدير المشروع: <strong id="platformAdminEmail"></strong></p>
+    <p>UID: <code id="platformAdminUid"></code></p>
+    <label>ملف مفتاح التوقيع الخاص (PEM)<input id="licensePrivateKeyFile" type="file" accept=".pem,.key,text/plain"></label>
+    <p class="hint" id="licenseKeyStatus" role="status">لم يتم تحميل مفتاح التوقيع في هذه الجلسة.</p>
+    <div class="quick-head"><h3>المحلات المسجلة</h3><input id="platformShopSearch" placeholder="بحث باسم المحل أو رقم UID"></div>
+    <button type="button" class="secondary" id="refreshPlatformShops">تحديث قائمة المحلات</button>
+    <div id="platformShopList"><p class="empty">جارٍ تحميل المحلات...</p></div>
+    <p class="hint" id="platformMessage" role="status"></p>
   </div>
 </section>
 <section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
@@ -324,6 +357,13 @@
   <span class="mobile-invoice-total"><small>الإجمالي</small><strong id="mobileGrandTotal">0.00 ج.م</strong></span>
   <span class="mobile-invoice-action">عرض الفاتورة ←</span>
 </button>
+<div class="license-lock-screen" id="licenseLockScreen" hidden role="alertdialog" aria-modal="true" aria-labelledby="licenseLockTitle">
+  <div class="license-lock-card">
+    <div class="license-lock-icon">!</div><h2 id="licenseLockTitle">البرنامج غير مفعل</h2>
+    <p id="licenseLockMessage">يتم التحقق من الترخيص...</p>
+    <p class="hint">عند التجديد أو إعادة التفعيل، اتصل بإدارة البرنامج ثم أعد فتح التطبيق مع اتصال الإنترنت.</p>
+  </div>
+</div>
 <footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>
-<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script><script type="module" src="firebase-sync.js"></script>
+<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script><script src="access-gate.js"></script><script type="module" src="firebase-sync.js"></script>
 </body></html>
