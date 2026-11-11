@@ -231,9 +231,7 @@ async function allCloudDocuments(shopId) {
 }
 function backupHasBusinessData(snapshot) {
   const data = snapshot && snapshot.data || {};
-  return ["products", "invoices", "suppliers", "purchases", "customers", "returns"].some(name =>
-    Array.isArray(data[name]) && data[name].length > 0
-  );
+  return SYNC_STORES.some(name => Array.isArray(data[name]) && data[name].length > 0);
 }
 async function refreshLocalViews() {
   if (typeof window.POSRefreshAfterCloudSync === "function") {
@@ -352,6 +350,7 @@ async function connectExistingShop(user, shopId) {
   activeShopId = shopId;
   activeShopName = String(shop.data().name || "المحل");
   showSignedIn(user, activeShopName);
+  startRealtimeListener(shopId);
   const oldState = readState();
   if (oldState && oldState.shopId === shopId) {
     const currentSnapshot = await window.POSDatabase.backupData();
@@ -677,6 +676,7 @@ function bindUI() {
         if (backupHasBusinessData(localSnapshot) &&
             !window.confirm("المحل السحابي لا يحتوي سجلات حتى الآن. هل تريد رفع بيانات هذا الجهاز لتكون بداية المحل؟")) return;
         const newState = await initialUpload(activeShopId);
+        startRealtimeListener(activeShopId);
         const shop = await getDoc(shopRef(activeShopId));
         activeShopName = shop.exists() ? String(shop.data().name || "المحل") : "المحل";
         showSignedIn(activeUser, activeShopName);
