@@ -12,6 +12,7 @@ on:
       - "catalog.js"
       - "accounts.js"
       - "firebase-sync.js"
+      - "sw.js"
       - "firestore.rules"
       - "tests/**"
       - ".github/workflows/build-android-apk.yml"
