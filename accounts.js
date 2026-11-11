@@ -151,7 +151,7 @@ async function openReturn(invoiceId){
     info.append(name,meta);
     const input=document.createElement("input");input.type="number";input.min="0";input.max=String(remaining);input.step=item.unit==="piece"?"1":"0.001";input.value="0";input.dataset.itemIndex=String(index);
     input.dataset.price=String(item.total!==undefined&&Number(item.quantity)>0?Number(item.total)/Number(item.quantity):Number(item.unitPrice||0));
-    input.dataset.ratio=String(item.total!==undefined?1:ratio);input.setAttribute("aria-label","كمية مرتجع "+item.name);input.oninput=updateReturnTotal;
+    input.dataset.ratio=String(ratio);input.setAttribute("aria-label","كمية مرتجع "+item.name);input.oninput=updateReturnTotal;
     const label=document.createElement("label");label.textContent="كمية المرتجع";label.append(input);
     row.append(info,label);root.append(row);
   });
