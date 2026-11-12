@@ -272,7 +272,7 @@
   <div class="inner-tab-panel" data-subpanel-group="settings" data-subpanel="cloud">
     <div class="panel">
       <h2>المزامنة السحابية</h2>
-      <p class="hint">اربط المحل بحساب سحابي خاص به. تظل المبيعات محفوظة على الهاتف حتى عند انقطاع الإنترنت، ثم تُرسل التغييرات عند عودة الاتصال.</p>
+      <p class="hint">البيع محلي على الجهاز، بينما الاتصال السحابي اختياري ويخضع لسياسة مدير المنصة. يمكن منع الأوفلاين أو إيقاف المزامنة لكل محل من لوحة إدارة التراخيص.</p>
       <div id="cloudAuthPanel">
         <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
         <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
@@ -319,7 +319,7 @@
 <section class="view" id="view-platform">
   <div class="panel">
     <div class="section-heading"><div><h2>إدارة تراخيص البرنامج</h2><p>لوحة مدير المشروع. لا تظهر إلا للحساب الموجود في قائمة مديري المنصة.</p></div></div>
-    <div class="platform-security-note"><strong>حماية التوقيع</strong><p>مفتاح التوقيع الخاص لا يُحفظ في التطبيق أو GitHub. ارفع ملف المفتاح عند إصدار الترخيص فقط، ثم أغلق الصفحة. التوقيع يربط الترخيص بالمحل والمدة وحالة التشغيل.</p><p>الإيقاف المركزي يصل فور عودة اتصال الجهاز. عند انقطاع الإنترنت لا يمكن وصول أمر جديد عن بُعد؛ لكن انتهاء الترخيص المحفوظ يظل مفروضًا محليًا.</p></div>
+    <div class="platform-security-note"><strong>التحكم في وضع التشغيل لكل محل</strong><p>من قائمة كل محل يمكنك تشغيل/إيقاف البيع دون إنترنت، وكذلك تشغيل/إيقاف المزامنة السحابية. إعدادات السياسة تدخل ضمن الترخيص الموقّع ولا يمكن تعديلها من جهاز العميل.</p><p>إذا أوقفت الأوفلاين، يجب أن يتحقق الجهاز من الترخيص أونلاين قبل عمليات البيع. وإذا أوقفت المزامنة، تبقى البيانات محلية ولا تُرفع أو تُنزّل. الجهاز المنفصل تمامًا لا يستقبل أي تغيير إداري جديد إلا عند عودة الاتصال.</p></div>
     <p>حساب مدير المشروع: <strong id="platformAdminEmail"></strong></p>
     <p>UID: <code id="platformAdminUid"></code></p>
     <label>ملف مفتاح التوقيع الخاص (PEM)<input id="licensePrivateKeyFile" type="file" accept=".pem,.key,text/plain"></label>
