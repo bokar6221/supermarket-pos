@@ -689,18 +689,42 @@ async function handleLogin() {
   const password = $("cloudPassword").value;
   if (!email || !password) throw new Error("اكتب البريد الإلكتروني وكلمة المرور.");
   const credential = await signInWithEmailAndPassword(auth, email, password);
-  activeUser = credential.user;
-  const profile = await getDoc(userRef(credential.user.uid));
-  const profileData = profile.exists() ? profile.data() : {};
-  if (profileData.activeShopId) {
-    await connectExistingShop(credential.user, String(profileData.activeShopId));
+  const user = credential.user;
+  activeUser = user;
+
+  // Resolve platform-admin access before reading any shop profile or license.
+  // This prevents the login button handler from racing the auth-state listener
+  // and accidentally routing a platform administrator into shop registration.
+  isPlatformAdmin = await verifyPlatformAdmin(user);
+  if (window.POSGate) window.POSGate.setPlatformAdmin(isPlatformAdmin);
+  if (isPlatformAdmin) {
+    if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
+    stopGovernanceListeners();
+    activeShopId = "";
+    activeShopName = "";
+    activeMember = null;
+    showSignedIn(user, "إدارة المنصة");
+    if ($("cloudAuthPanel")) $("cloudAuthPanel").hidden = true;
+    if ($("cloudConnectedPanel")) $("cloudConnectedPanel").hidden = false;
+    if ($("cloudCreateShop")) $("cloudCreateShop").hidden = true;
+    if ($("cloudSyncNow")) $("cloudSyncNow").hidden = true;
+    applyRoleAccess();
+    setStatus("تم التحقق من صلاحية مدير المنصة. إدارة المحلات والتراخيص متاحة دون ترخيص تشغيل على هذا الجهاز.", "success");
+    await loadPlatformShops();
     return;
   }
-  const inviteCode=$("cloudInviteCode")?.value.trim();
-  if(inviteCode){await acceptEmployeeInvite(credential.user,inviteCode);return;}
-  showSignedIn(credential.user,"");
-  if($("cloudCreateShop"))$("cloudCreateShop").hidden=false;
-  setStatus("الحساب غير مرتبط بمحل. لم ننشئ محلًا تلقائيًا ولم نغيّر بيانات الجهاز. اضغط «إنشاء محل لهذا الحساب» فقط عند رغبتك في إنشاء محل جديد.","warning");
+
+  const profile = await getDoc(userRef(user.uid));
+  const profileData = profile.exists() ? profile.data() : {};
+  if (profileData.activeShopId) {
+    await connectExistingShop(user, String(profileData.activeShopId));
+    return;
+  }
+  const inviteCode = $("cloudInviteCode")?.value.trim();
+  if (inviteCode) { await acceptEmployeeInvite(user, inviteCode); return; }
+  showSignedIn(user, "");
+  if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;
+  setStatus("الحساب غير مرتبط بمحل. لم ننشئ محلًا تلقائيًا ولم نغيّر بيانات الجهاز. اضغط «إنشاء محل لهذا الحساب» فقط عند رغبتك في إنشاء محل جديد.", "warning");
 }
 async function handleEmployeeRegister(){
   const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value,code=$("cloudInviteCode").value.trim();
