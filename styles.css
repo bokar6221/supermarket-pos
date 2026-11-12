@@ -594,6 +594,9 @@ body{
 .inner-tab-panel{scroll-margin-top:120px}
 .employee-list-panel{margin-top:14px;padding:14px}
 .employee-list-panel h3{margin:0 0 8px;font-size:16px}
+.platform-policy{display:flex;flex-direction:column;gap:7px;min-width:190px;padding:8px 10px;border:1px solid #dbe5de;border-radius:10px;background:#f7faf8}
+.platform-policy label{display:flex;align-items:center;gap:8px;font-size:12px;color:#244337}
+.platform-policy input{width:18px;height:18px;margin:0;accent-color:#176b50}
 .employee-row,.platform-shop-row{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:12px 0;border-bottom:1px solid #e8eeea;min-width:0
