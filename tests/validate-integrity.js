@@ -43,7 +43,8 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.8.1'/, "Android version must match this release");
+assert.match(gradle, /versionName '1.9.0'/, "Android version must match this release");
+assert.match(gradle, /versionCode 12/, "Android version code must be incremented for this release");
 
 assert.match(firebase, /projectId: "supermarketpos-e448a"/, "Firebase project ID must match the registered web app");
 assert.match(firebase, /firebasejs\/13\.2\.0/, "Firebase SDK version must be pinned");
@@ -57,8 +58,14 @@ assert.match(app, /document\.querySelectorAll\('\[data-subpanel-group=/, "Nested
 assert.match(manifest, /android\.permission\.INTERNET/, "Android must have network permission");
 assert.match(accessGate, /subtle\.verify/, "Offline licenses must be verified using the embedded public key");
 assert.match(accessGate, /expiresAt/, "License expiry must be enforced locally");
-assert.match(accessGate, /const licenseStatus=licenseCheck\(license,managedShop\)/, "Every protected mutation must re-check license expiry");
-assert.match(accessGate, /setInterval\(recheckLocalLicenseExpiry,15000\)/, "An open app must lock when an offline license expires");
+assert.match(accessGate, /function canOperateLocally\(\)/, "Managed local operation must have a dedicated offline-policy check");
+assert.match(accessGate, /offlineAllowed/, "Signed license must control offline local operation");
+assert.match(accessGate, /cloudSyncEnabled/, "Signed license must control cloud sync separately");
+assert.match(accessGate, /function assertMutation\(method\)/, "Local writes must still pass through the role and policy guard");
+assert.match(accessGate, /setInterval\(recheckLocalLicenseExpiry,15000\)/, "An open app must re-check offline license expiry and policy");
+assert.match(firebase, /async function saveShopPolicy\(/, "Platform admin must be able to save signed per-shop offline and cloud policies");
+assert.match(firebase, /isCloudSyncEnabled\(\)/, "Cloud sync must respect the platform admin policy");
+assert.match(firebase, /لم ننشئ محلًا تلقائيًا/, "Login must not silently create an unintended second shop");
 assert.match(firebase, /async function createEmployeeInvite/, "Owner employee invitations must be implemented");
 assert.match(firebase, /async function handleEmployeeRegister/, "Employees must be able to register with an invitation");
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
