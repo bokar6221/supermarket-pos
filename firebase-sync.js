@@ -792,8 +792,17 @@ function memberCollection(shopId){return collection(cloudDb,"shops",shopId,"memb
 function stopGovernanceListeners(){if(stopMemberListener){stopMemberListener();stopMemberListener=null;}if(stopLicenseListener){stopLicenseListener();stopLicenseListener=null;}}
 async function verifyPlatformAdmin(user){
  if(!user)return false;
- try{const snapshot=await getDoc(platformAdminRef(user.uid));return snapshot.exists()&&snapshot.data().active===true;}
- catch(error){console.warn("Platform admin check unavailable",error);return false;}
+ try{
+  const snapshot=await getDoc(platformAdminRef(user.uid));
+  return snapshot.exists()&&snapshot.data().active===true;
+ }catch(error){
+  console.error("Platform admin check failed",{
+   uid:user.uid,projectId:firebaseConfig.projectId,
+   code:error&&error.code||"unknown",message:error&&error.message||String(error)
+  });
+  const detail=error&&error.code?error.code:(error&&error.message||"خطأ غير معروف");
+  throw new Error("PLATFORM_ADMIN_CHECK_FAILED: تعذر قراءة صلاحية مدير المنصة من Firebase ("+detail+"). لا تنشئ محلًا بهذا الحساب؛ راجع قواعد Firestore واتصال المشروع.");
+ }
 }
 function setGateSession(){
  if(window.POSGate){
@@ -1184,6 +1193,14 @@ onAuthStateChanged(auth, async user => {
       if (navigator.onLine) setTimeout(() => syncNow(false), 2500);
     }
   } catch (error) {
+    if(error&&String(error.message||"").includes("PLATFORM_ADMIN_CHECK_FAILED")){
+      showSignedIn(user,"");
+      if($("cloudCreateShop"))$("cloudCreateShop").hidden=true;
+      if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=false;
+      if(window.POSGate)window.POSGate.setPlatformAdmin(false);
+      setStatus(error.message,"error");
+      return;
+    }
     showSignedIn(user, "");
     if(window.POSGate&&window.POSGate.canOperateLocally()){
       const saved=window.POSGate.getSession();
