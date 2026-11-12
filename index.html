@@ -322,7 +322,7 @@
     <div class="platform-security-note"><strong>التحكم في وضع التشغيل لكل محل</strong><p>من قائمة كل محل يمكنك تشغيل/إيقاف البيع دون إنترنت، وكذلك تشغيل/إيقاف المزامنة السحابية. إعدادات السياسة تدخل ضمن الترخيص الموقّع ولا يمكن تعديلها من جهاز العميل.</p><p>إذا أوقفت الأوفلاين، يجب أن يتحقق الجهاز من الترخيص أونلاين قبل عمليات البيع. وإذا أوقفت المزامنة، تبقى البيانات محلية ولا تُرفع أو تُنزّل. الجهاز المنفصل تمامًا لا يستقبل أي تغيير إداري جديد إلا عند عودة الاتصال.</p></div>
     <p>حساب مدير المشروع: <strong id="platformAdminEmail"></strong></p>
     <p>UID: <code id="platformAdminUid"></code></p>
-    <label>ملف مفتاح التوقيع الخاص (PEM)<input id="licensePrivateKeyFile" type="file" accept=".pem,.key,text/plain"></label>
+    <label>ملف مفتاح التوقيع الخاص (PEM)<input id="licensePrivateKeyFile" type="file" accept="*/*"></label>
     <p class="hint" id="licenseKeyStatus" role="status">لم يتم تحميل مفتاح التوقيع في هذه الجلسة.</p>
     <div class="quick-head"><h3>المحلات المسجلة</h3><input id="platformShopSearch" placeholder="بحث باسم المحل أو رقم UID"></div>
     <button type="button" class="secondary" id="refreshPlatformShops">تحديث قائمة المحلات</button>
@@ -362,7 +362,8 @@
   <div class="license-lock-card">
     <div class="license-lock-icon">!</div><h2 id="licenseLockTitle">البرنامج غير مفعل</h2>
     <p id="licenseLockMessage">يتم التحقق من الترخيص...</p>
-    <p class="hint">عند التجديد أو إعادة التفعيل، اتصل بإدارة البرنامج ثم أعد فتح التطبيق مع اتصال الإنترنت.</p>
+    <p class="hint">لتفعيل البرنامج، سجّل الدخول بحساب المحل أو أنشئ حسابًا جديدًا واتصل بالإنترنت للتحقق من الترخيص.</p>
+    <button class="primary full" id="licenseActivationButton" type="button">الانتقال إلى شاشة التفعيل وتسجيل الدخول</button>
   </div>
 </div>
 <footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>

@@ -366,7 +366,7 @@ async function createShopForUser(user, shopName) {
   startRealtimeListener(newShop.id);
   startMemberListener(newShop.id,user.uid);
   const licensed=await checkShopLicense(newShop.id);
-  if(licensed)startLicenseListener(newShop.id);
+  startLicenseListener(newShop.id);
   setStatus(licensed?"تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.":"تم إنشاء المحل؛ ينتظر إصدار الترخيص من مدير المشروع.","warning");
   return state;
 }
@@ -385,7 +385,7 @@ async function connectExistingShop(user, shopId) {
   applyRoleAccess();
   startMemberListener(shopId,user.uid);
   const licensed=await checkShopLicense(shopId);
-  if(licensed)startLicenseListener(shopId);
+  startLicenseListener(shopId);
   if(!licensed){setStatus("الحساب متصل لكن الترخيص أو سياسة التشغيل لا تسمح باستخدام هذا الجهاز.","error");return;}
   if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
     setStatus("تم التحقق من الحساب. المزامنة السحابية موقوفة إداريًا؛ سيظل البيع محليًا وفق سياسة الأوفلاين.","warning");
@@ -820,7 +820,7 @@ async function checkShopLicense(shopId){
    if(!snapshot.exists()){
     localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
     if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص صادر لهذا المحل. تواصل مع مدير المشروع لإصدار ترخيص.");
-    setStatus("لا يوجد ترخيص ساري لهذا المحل. التشغيل المحلي المستقل يظل متاحًا قبل ربط المحل.","error");return false;
+    setStatus("لا يوجد ترخيص صادر لهذا المحل. يظل البرنامج مقفولًا حتى تصدر إدارة المنصة ترخيصًا صالحًا.","error");return false;
    }
    licenseDocument=snapshot.data();
   }catch(error){console.warn("Online license check failed; trying signed cached license",error);}
@@ -1170,7 +1170,7 @@ onAuthStateChanged(auth, async user => {
     setGateSession();
     showSignedIn(user, activeShopName);applyRoleAccess();
     startMemberListener(shopId,user.uid);
-    const licensed=await checkShopLicense(shopId);if(licensed)startLicenseListener(shopId);if(!licensed)return;
+    const licensed=await checkShopLicense(shopId);startLicenseListener(shopId);if(!licensed)return;
     if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
       setStatus("الحساب والترخيص تم التحقق منهما. المزامنة السحابية موقوفة من مدير المشروع؛ لن يتم تنزيل أو رفع بيانات.","warning");
       return;

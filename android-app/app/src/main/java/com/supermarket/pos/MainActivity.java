@@ -178,12 +178,13 @@ public class MainActivity extends AppCompatActivity {
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                 filePathCallback = callback;
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/json");
+                intent.setType("*/*");
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 try {
                     startActivityForResult(
-                            Intent.createChooser(intent, "اختار ملف النسخة الاحتياطية"),
+                            Intent.createChooser(intent, "اختار الملف المطلوب"),
                             FILE_CHOOSER_REQUEST
                     );
                 } catch (Exception e) {

@@ -726,3 +726,13 @@ body.license-locked{overflow:hidden}
   .subtabs-host{padding-inline:6px}
   .subtabs-host .inner-tab{min-height:52px;padding-inline:13px;font-size:15px}
 }
+
+/* Unlicensed installs can reach only the cloud account and activation controls. */
+body.license-activation-only .tabs,
+body.license-activation-only footer{display:none!important}
+body.license-activation-only .view:not(#view-settings){display:none!important}
+body.license-activation-only #view-settings{display:block!important}
+body.license-activation-only #view-settings>.inner-tabs{display:none!important}
+body.license-activation-only #view-settings .inner-tab-panel:not([data-subpanel="cloud"]){display:none!important}
+body.license-activation-only #view-settings .inner-tab-panel[data-subpanel="cloud"]{display:block!important}
+body.license-activation-only #view-settings .inner-tab-panel[data-subpanel="cloud"]>.panel{display:block!important}

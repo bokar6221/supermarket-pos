@@ -55,7 +55,17 @@ function showLock(title,message){
 }
 function hideLock(){
   const node=$("licenseLockScreen");if(node)node.hidden=true;
+  document.body.classList.remove("license-locked","license-activation-only");
+}
+function openActivation(){
+  const settingsTab=document.querySelector('.tabs [data-view="settings"]');
+  if(settingsTab)settingsTab.click();
+  const cloudTab=document.querySelector('#view-settings [data-subtab="cloud"]');
+  if(cloudTab)cloudTab.click();
+  document.body.classList.add("license-activation-only");
+  const node=$("licenseLockScreen");if(node)node.hidden=true;
   document.body.classList.remove("license-locked");
+  const email=$("cloudEmail");if(email)email.focus();
 }
 function licenseCheck(doc,shopId){
   if(!doc||!doc.payload)return {ok:false,reason:"لا يوجد ترخيص لهذا المحل."};
@@ -68,15 +78,15 @@ function licenseCheck(doc,shopId){
   if(now>=end)return {ok:false,reason:"انتهت مدة الترخيص. يرجى التواصل مع إدارة البرنامج للتجديد."};
   return {ok:true,expiresAt:p.expiresAt,offlineAllowed:p.offlineAllowed!==false,cloudSyncEnabled:p.cloudSyncEnabled!==false};
 }
-function isManaged(){return !!localStorage.getItem(MANAGED_KEY);}
+function isManaged(){return true;}
 function currentLicenseCheck(){
   const shopId=localStorage.getItem(MANAGED_KEY);
-  return shopId?licenseCheck(license||cachedLicense(shopId),shopId):{ok:true,offlineAllowed:true,cloudSyncEnabled:false};
+  return shopId?licenseCheck(license||cachedLicense(shopId),shopId):{ok:false,reason:"يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام.",offlineAllowed:false,cloudSyncEnabled:false};
 }
 function canOperateLocally(){
-  if(!isManaged())return true;
+  if(platformAdminSession)return false;
   const shopId=localStorage.getItem(MANAGED_KEY);
-  if(!session||!session.uid||!session.active||session.shopId!==shopId)return false;
+  if(!shopId||!session||!session.uid||!session.active||session.shopId!==shopId)return false;
   const check=currentLicenseCheck();
   if(!check.ok||!licenseReady)return false;
   return check.offlineAllowed||(navigator.onLine&&licenseOnlineVerified);
@@ -100,15 +110,17 @@ async function applyLicense(doc,shopId,persist=true,verifiedOnline=persist){
   return true;
 }
 function roleCan(method){
-  if(!isManaged())return true;
-  if(!session||!session.active)return false;
+  if(platformAdminSession||!session||!session.active)return false;
   const allowed=ROLE_METHODS[String(session.role||"")]||[];
   return allowed.includes("*")||allowed.includes(method);
 }
 function assertMutation(method){
   if(platformAdminSession)throw new Error("حساب مدير المشروع مخصص لإدارة التراخيص ولا يستخدم لتشغيل محل.");
   const shopId=localStorage.getItem(MANAGED_KEY);
-  if(!shopId)return true;
+  if(!shopId){
+    if(method==="saveSettings")return true;
+    throw new Error("البرنامج غير مفعل. اتصل بالإنترنت وسجّل الدخول أو أنشئ حسابًا واربط المحل أولًا.");
+  }
   if(!session||!session.uid||!session.active||session.shopId!==shopId)
     throw new Error("لا توجد صلاحية محلية محفوظة لهذا الجهاز. اتصل بالإنترنت وسجّل الدخول بحساب المحل.");
   const check=currentLicenseCheck();
@@ -131,6 +143,7 @@ function setSession(value){
 function setPlatformAdmin(enabled){
   platformAdminSession=!!enabled;
   if(platformAdminSession)hideLock();
+  else if(!canOperateLocally())showLock("يلزم تفعيل البرنامج","سجّل الدخول بحساب المحل وتحقق من الترخيص قبل الاستخدام.");
 }
 function lock(reason){
   licenseReady=false;licenseOnlineVerified=false;
@@ -138,7 +151,8 @@ function lock(reason){
 }
 async function initialize(){
   if(initialized)return;initialized=true;
-  const shopId=localStorage.getItem(MANAGED_KEY);if(!shopId)return;
+  const shopId=localStorage.getItem(MANAGED_KEY);
+  if(!shopId){showLock("البرنامج غير مفعل","يجب تسجيل الدخول أو إنشاء حساب وربط المحل والتحقق من الترخيص قبل استخدام نقاط البيع.");return;}
   try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
   const doc=cachedLicense(shopId);
   if(!session||!session.uid||!session.active||session.shopId!==shopId){
@@ -178,6 +192,8 @@ window.POSGate={
   roleLabel:role=>ROLE_LABELS[role]||"غير محدد"
 };
 installMutationGuards();
+const activationButton=$("licenseActivationButton");
+if(activationButton)activationButton.addEventListener("click",openActivation);
 document.addEventListener("DOMContentLoaded",initialize);
 initialize();
 })();
