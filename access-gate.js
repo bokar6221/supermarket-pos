@@ -143,7 +143,7 @@ function setSession(value){
 function setPlatformAdmin(enabled){
   platformAdminSession=!!enabled;
   if(platformAdminSession)hideLock();
-  else if(!canOperateLocally())showLock("يلزم تفعيل البرنامج","سجّل الدخول بحساب المحل وتحقق من الترخيص قبل الاستخدام.");
+  else if(!document.body.classList.contains("license-activation-only")&&!canOperateLocally())showLock("يلزم تفعيل البرنامج","سجّل الدخول بحساب المحل وتحقق من الترخيص قبل الاستخدام.");
 }
 function lock(reason){
   licenseReady=false;licenseOnlineVerified=false;
