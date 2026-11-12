@@ -14,6 +14,7 @@ const rules = read("firestore.rules");
 const indexes = read("firestore.indexes.json");
 const manifest = read("android-app/app/src/main/AndroidManifest.xml");
 const accessGate = read("access-gate.js");
+const androidMainActivity = read("android-app/app/src/main/java/com/supermarket/pos/MainActivity.java");
 
 for (const file of ["app.js", "db.js", "accounts.js", "catalog.js", "sw.js", "access-gate.js"]) {
   const source = read(file);
@@ -43,8 +44,14 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.9.0'/, "Android version must match this release");
-assert.match(gradle, /versionCode 12/, "Android version code must be incremented for this release");
+assert.match(gradle, /versionName '1.9.1'/, "Android version must match this release");
+assert.match(gradle, /versionCode 13/, "Android version code must be incremented for this release");
+assert.match(accessGate, /function isManaged\(\)\{return true;\}/, "Every installation must pass the activation gate");
+assert.match(accessGate, /يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام/, "Unlinked installs must not receive an offline license");
+assert.match(html, /id="licenseActivationButton"/, "Locked installs must have a visible route to activation");
+assert.match(html, /accept="\*\/\*"/, "The PEM key picker must allow non-JSON files");
+assert.match(androidMainActivity, /intent\.setType\("\*\/\*"/, "Android native file picker must not force JSON MIME type");
+
 
 assert.match(firebase, /projectId: "supermarketpos-e448a"/, "Firebase project ID must match the registered web app");
 assert.match(firebase, /firebasejs\/13\.2\.0/, "Firebase SDK version must be pinned");
