@@ -386,7 +386,11 @@ async function connectExistingShop(user, shopId) {
   startMemberListener(shopId,user.uid);
   const licensed=await checkShopLicense(shopId);
   if(licensed)startLicenseListener(shopId);
-  if(!licensed){setStatus("الحساب متصل لكن الترخيص غير ساري؛ تم قفل الاستخدام.","error");return;}
+  if(!licensed){setStatus("الحساب متصل لكن الترخيص أو سياسة التشغيل لا تسمح باستخدام هذا الجهاز.","error");return;}
+  if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
+    setStatus("تم التحقق من الحساب. المزامنة السحابية موقوفة إداريًا؛ سيظل البيع محليًا وفق سياسة الأوفلاين.","warning");
+    return;
+  }
   startRealtimeListener(shopId);
   const oldState = readState();
   if (oldState && oldState.shopId === shopId) {
@@ -490,6 +494,11 @@ async function pullIncremental(state) {
   return applied;
 }
 function startRealtimeListener(shopId) {
+  if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
+    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+    setStatus("المزامنة السحابية موقوفة من مدير المشروع. البيانات المحلية لم تتغير.","warning");
+    return;
+  }
   if (stopRecordsListener) {
     stopRecordsListener();
     stopRecordsListener = null;
@@ -626,6 +635,10 @@ async function pushLocalChanges(state) {
 }
 async function syncNow(includePull) {
   if (syncBusy) return;
+  if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
+    setStatus("المزامنة السحابية موقوفة من مدير المشروع. البيع المحلي متاح حسب سياسة الأوفلاين.","warning");
+    return;
+  }
   if (!navigator.onLine) {
     setStatus("دون إنترنت. البيع محفوظ محليًا وستتم المزامنة عند عودة الاتصال.", "warning");
     return;
@@ -667,6 +680,7 @@ async function syncNow(includePull) {
 }
 function scheduleSync() {
   if (suppressSync || !activeUser || !activeShopId) return;
+  if(window.POSGate&&!window.POSGate.isCloudSyncEnabled())return;
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => syncNow(false), 1800);
 }
@@ -684,7 +698,9 @@ async function handleLogin() {
   }
   const inviteCode=$("cloudInviteCode")?.value.trim();
   if(inviteCode){await acceptEmployeeInvite(credential.user,inviteCode);return;}
-  await createShopForUser(credential.user, $("cloudShopName").value.trim());
+  showSignedIn(credential.user,"");
+  if($("cloudCreateShop"))$("cloudCreateShop").hidden=false;
+  setStatus("الحساب غير مرتبط بمحل. لم ننشئ محلًا تلقائيًا ولم نغيّر بيانات الجهاز. اضغط «إنشاء محل لهذا الحساب» فقط عند رغبتك في إنشاء محل جديد.","warning");
 }
 async function handleEmployeeRegister(){
   const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value,code=$("cloudInviteCode").value.trim();
@@ -771,22 +787,29 @@ async function checkShopLicense(shopId){
    if(!snapshot.exists()){
     localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
     if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص صادر لهذا المحل. تواصل مع مدير المشروع لإصدار ترخيص.");
-    setStatus("البرنامج غير مفعل لهذا المحل. يلزم إصدار ترخيص من مدير المشروع.","error");return false;
+    setStatus("لا يوجد ترخيص ساري لهذا المحل. التشغيل المحلي المستقل يظل متاحًا قبل ربط المحل.","error");return false;
    }
    licenseDocument=snapshot.data();
-  }catch(error){console.warn("Online license check failed; trying signed offline license",error);}
+  }catch(error){console.warn("Online license check failed; trying signed cached license",error);}
  }
  if(licenseDocument){
-  const valid=await window.POSGate.applyLicense(licenseDocument,shopId,true);
+  const valid=await window.POSGate.applyLicense(licenseDocument,shopId,true,true);
   if(!valid){setStatus("البرنامج متوقف: حالة الترخيص أو تاريخ صلاحيته لا يسمحان بالتشغيل.","error");return false;}
-  setStatus("الترخيص ساري حتى "+new Date(licenseDocument.payload.expiresAt).toLocaleDateString("ar-EG")+".","success");return true;
+  if(!window.POSGate.canOperateLocally()){
+   window.POSGate.lock("سياسة مدير المشروع لا تسمح بالعمل دون اتصال. تعذر التحقق من الخادم؛ اتصل بالإنترنت.");
+   setStatus("هذا المحل مضبوط على العمل أونلاين فقط.","error");return false;
+  }
+  setStatus("الترخيص ساري حتى "+new Date(licenseDocument.payload.expiresAt).toLocaleDateString("ar-EG")+".","success");
+  return true;
  }
  let cached=null;try{cached=JSON.parse(localStorage.getItem(LICENSE_CACHE_PREFIX+shopId)||"null");}catch(_){}
  if(cached&&window.POSGate){
-  const valid=await window.POSGate.applyLicense(cached,shopId,false);
-  if(valid){setStatus("يعمل التطبيق دون اتصال بترخيص محفوظ وموقّع. الإيقاف الإداري المركزي يظهر عند عودة الإنترنت.","warning");return true;}
+  const valid=await window.POSGate.applyLicense(cached,shopId,false,false);
+  if(valid&&window.POSGate.canOperateLocally()){
+   setStatus("يعمل التطبيق محليًا بترخيص محفوظ. سيصل أي إيقاف إداري عند عودة الاتصال.","warning");return true;
+  }
  }
- if(window.POSGate)window.POSGate.lock(onlineReadSucceeded?"لا يوجد ترخيص فعال لهذا المحل.":"لا يوجد ترخيص محلي صالح. اتصل بالإنترنت ثم تواصل مع إدارة البرنامج.");
+ if(window.POSGate)window.POSGate.lock(onlineReadSucceeded?"لا يوجد ترخيص فعال لهذا المحل.":"لا يوجد ترخيص محلي صالح أو أن مدير المشروع منع التشغيل دون اتصال.");
  return false;
 }
 function startMemberListener(shopId,uid){
@@ -800,18 +823,32 @@ function startMemberListener(shopId,uid){
   activeMember=snapshot.data();setGateSession();
   if(previousRole&&previousRole!==activeMember.role){
    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
-   setStatus("تغير دور الحساب. جارٍ إعادة تحميل مجموعات البيانات المسموح بها...","warning");
-   await restoreFullShop(shopId);
-   setStatus("تم تطبيق الدور الجديد وتحديث بيانات هذا الجهاز.","success");
+   if(window.POSGate&&window.POSGate.isCloudSyncEnabled()){
+    setStatus("تغير دور الحساب. جارٍ إعادة تحميل مجموعات البيانات المسموح بها...","warning");
+    await restoreFullShop(shopId);
+    setStatus("تم تطبيق الدور الجديد وتحديث بيانات هذا الجهاز.","success");
+   }else{
+    setStatus("تم تحديث الدور. المزامنة متوقفة؛ راجع صاحب المحل عند الحاجة لتحديث البيانات المحلية.","warning");
+   }
   }
  },error=>setStatus("تعذر تحديث صلاحيات الموظف: "+firebaseError(error),"warning"));
 }
 function startLicenseListener(shopId){
  if(stopLicenseListener){stopLicenseListener();stopLicenseListener=null;}
  stopLicenseListener=onSnapshot(licenseRef(shopId),async snapshot=>{
-  if(!snapshot.exists()){if(window.POSGate)window.POSGate.lock("تم سحب الترخيص أو لم يعد موجودًا. اتصل بمدير المشروع.");setStatus("الترخيص غير موجود؛ تم إيقاف الاستخدام.","error");return;}
-  const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true);
-  setStatus(valid?"تم تحديث حالة الترخيص المركزي بنجاح.":"أوقف مدير المشروع الترخيص أو انتهت مدته.",valid?"success":"error");
+  if(!snapshot.exists()){
+   if(window.POSGate)window.POSGate.lock("تم سحب الترخيص أو لم يعد موجودًا. اتصل بمدير المشروع.");
+   if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+   setStatus("الترخيص غير موجود؛ تم إيقاف الاستخدام.","error");return;
+  }
+  const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true,true);
+  if(!valid||!window.POSGate.isCloudSyncEnabled()){
+   if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+  }else{
+   startRealtimeListener(shopId);
+   if(activeUser&&navigator.onLine)setTimeout(()=>syncNow(false),800);
+  }
+  setStatus(valid?"تم تحديث الترخيص وسياسة الاتصال مركزيًا.":"أوقف مدير المشروع الترخيص أو انتهت مدته.",valid?"success":"error");
  },error=>setStatus("تعذر تحديث حالة الترخيص: "+firebaseError(error),"warning"));
 }
 async function acceptEmployeeInvite(user,code){
@@ -890,10 +927,21 @@ async function writeLicense(shop,months,status){
  if(status==="active"&&old&&old.status==="active"&&Date.parse(old.expiresAt)>now.getTime())start=new Date(old.expiresAt);
  let expires=status==="active"?addCalendarMonths(start,months):new Date(old&&old.expiresAt||nowIso);
  if(status==="active"&&expires.getTime()<=now.getTime())expires=addCalendarMonths(now,months);
- const payload={schema:1,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,planMonths:Number(months)||0,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:expires.toISOString(),issuerUid:activeUser.uid};
+ const payload={schema:1,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,planMonths:Number(months)||0,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:expires.toISOString(),offlineAllowed:old?old.offlineAllowed!==false:true,cloudSyncEnabled:old?old.cloudSyncEnabled!==false:true,issuerUid:activeUser.uid};
  const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
  batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
  setStatus(status==="active"?"تم إصدار/تجديد الترخيص بنجاح.":"تم تعليق الترخيص مركزيًا.","success");await loadPlatformShops();
+}
+async function saveShopPolicy(shop,offlineAllowed,cloudSyncEnabled){
+ if(!isPlatformAdmin)throw new Error("ليس لديك صلاحية مدير المشروع.");
+ if(!licensePrivateKeyPem)throw new Error("ارفع ملف مفتاح التوقيع الخاص أولًا.");
+ const snapshot=await getDoc(licenseRef(shop.id));
+ if(!snapshot.exists()||!snapshot.data().payload)throw new Error("فعّل ترخيص المحل أولًا قبل ضبط سياسة الاتصال.");
+ const payload={...snapshot.data().payload,offlineAllowed:!!offlineAllowed,cloudSyncEnabled:!!cloudSyncEnabled,policyUpdatedAt:new Date().toISOString(),issuerUid:activeUser.uid};
+ const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
+ batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
+ setStatus("تم حفظ سياسة الأوفلاين والأونلاين للمحل وإعادة توقيع الترخيص.","success");
+ await loadPlatformShops();
 }
 function formatLicenseState(value){
  if(!value)return "لا يوجد ترخيص";const p=value.payload||{};if(p.status==="suspended")return "موقوف";
@@ -913,17 +961,29 @@ function renderPlatformShops(){
  const rows=platformShops.filter(shop=>(String(shop.name||"")+" "+shop.id+" "+String(shop.ownerUid||"")).toLowerCase().includes(q));
  if(!rows.length){root.innerHTML='<p class="empty">لا توجد محلات مطابقة.</p>';return;}
  rows.forEach(shop=>{
-  const row=document.createElement("div");row.className="platform-shop-row";const main=document.createElement("div");main.className="platform-shop-main";
-  const name=document.createElement("strong");name.textContent=shop.name||"محل بدون اسم";const meta=document.createElement("small");meta.textContent="Shop ID: "+shop.id+" · "+formatLicenseState(shop.license);main.append(name,meta);
-  const actions=document.createElement("div");actions.className="platform-shop-actions";const duration=document.createElement("select");
+  const row=document.createElement("div");row.className="platform-shop-row";
+  const main=document.createElement("div");main.className="platform-shop-main";
+  const name=document.createElement("strong");name.textContent=shop.name||"محل بدون اسم";
+  const payload=shop.license&&shop.license.payload||null;
+  const meta=document.createElement("small");meta.textContent="Shop ID: "+shop.id+" · "+formatLicenseState(shop.license);main.append(name,meta);
+  const actions=document.createElement("div");actions.className="platform-shop-actions";
+  const policy=document.createElement("div");policy.className="platform-policy";
+  const offlineLabel=document.createElement("label"),offline=document.createElement("input");offline.type="checkbox";offline.checked=!payload||payload.offlineAllowed!==false;offline.disabled=!payload;
+  offlineLabel.append(offline,document.createTextNode(" السماح بالبيع أوفلاين"));
+  const cloudLabel=document.createElement("label"),cloud=document.createElement("input");cloud.type="checkbox";cloud.checked=!payload||payload.cloudSyncEnabled!==false;cloud.disabled=!payload;
+  cloudLabel.append(cloud,document.createTextNode(" تفعيل المزامنة أونلاين"));
+  policy.append(offlineLabel,cloudLabel);
+  const savePolicy=document.createElement("button");savePolicy.type="button";savePolicy.className="secondary";savePolicy.textContent="حفظ سياسة الاتصال";savePolicy.disabled=!payload;
+  savePolicy.onclick=async()=>{try{savePolicy.disabled=true;await saveShopPolicy(shop,offline.checked,cloud.checked);}catch(error){$("platformMessage").textContent="تعذر حفظ السياسة: "+firebaseError(error);}finally{savePolicy.disabled=false;}};
+  const duration=document.createElement("select");
   [[1,"شهر واحد"],[6,"6 شهور"],[12,"سنة كاملة"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=String(v);o.textContent=l;duration.append(o);});
-  const activate=document.createElement("button");activate.type="button";activate.className="primary";activate.textContent=shop.license&&shop.license.payload&&shop.license.payload.status==="active"?"تجديد/تمديد":"تفعيل";
+  const activate=document.createElement("button");activate.type="button";activate.className="primary";activate.textContent=payload&&payload.status==="active"?"تجديد/تمديد":"تفعيل";
   activate.onclick=async()=>{try{await writeLicense(shop,Number(duration.value),"active");}catch(error){$("platformMessage").textContent="تعذر إصدار الترخيص: "+firebaseError(error);}};
   const suspend=document.createElement("button");suspend.type="button";suspend.className="remove";suspend.textContent="إيقاف";suspend.disabled=!shop.license;
-  suspend.onclick=async()=>{if(!confirm("سيتم تعليق ترخيص "+(shop.name||shop.id)+" عند اتصال أجهزته بالإنترنت. هل تتابع؟"))return;try{await writeLicense(shop,Number(duration.value),"suspended");}catch(error){$("platformMessage").textContent="تعذر إيقاف الترخيص: "+firebaseError(error);}};
-  actions.append(duration,activate,suspend);row.append(main,actions);root.append(row);
+  suspend.onclick=async()=>{if(!confirm("سيتم تعليق ترخيص "+(shop.name||shop.id)+" عند اتصال أجهزته بالإنترنت. الجهاز المنفصل تمامًا لن يستقبل أمر الإيقاف حتى يعود الاتصال. هل تتابع؟"))return;try{await writeLicense(shop,Number(duration.value),"suspended");}catch(error){$("platformMessage").textContent="تعذر إيقاف الترخيص: "+firebaseError(error);}};
+  actions.append(policy,savePolicy,duration,activate,suspend);row.append(main,actions);root.append(row);
  });
- $("platformMessage").textContent="عدد المحلات: "+rows.length+" · مفاتيح التوقيع الخاصة غير محفوظة داخل التطبيق.";
+ $("platformMessage").textContent="عدد المحلات: "+rows.length+" · إعدادات الأوفلاين والمزامنة موقعة داخل الترخيص؛ المفتاح الخاص لا يُحفظ في التطبيق.";
 }
 function bindGovernanceUI(){
  if($("cloudEmployeeRegister"))$("cloudEmployeeRegister").addEventListener("click",()=>clickAction(handleEmployeeRegister));
@@ -955,8 +1015,7 @@ function bindUI() {
       if (profile.exists() && profile.data().activeShopId) activeShopId = String(profile.data().activeShopId);
     }
     if (!activeShopId) {
-      await createShopForUser(activeUser, $("cloudShopName").value.trim());
-      return;
+      throw new Error("الحساب غير مرتبط بمحل. استخدم زر «إنشاء محل لهذا الحساب» لإنشاء محل جديد صراحةً.");
     }
     if (!state || state.shopId !== activeShopId) {
       const member = await getDoc(memberRef(activeShopId, activeUser.uid));
@@ -982,10 +1041,12 @@ function bindUI() {
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
     stopGovernanceListeners();
     await signOut(auth);
-    activeShopId = "";
-    activeShopName = "";
-    showSignedIn(null, "");
-    setStatus("تم تسجيل الخروج. ستظل البيانات المحلية محفوظة على هذا الجهاز.", "info");
+    const saved=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
+    activeShopId=saved?saved.shopId:"";
+    activeMember=saved&&saved.active?saved:null;
+    activeShopName="";
+    showSignedIn(null,"");applyRoleAccess();
+    setStatus("تم فصل الحساب السحابي مع الاحتفاظ بصلاحية التشغيل المحلية وبيانات الجهاز. إيقاف الموظف إداريًا يصل إلى هذا الجهاز عند عودة الاتصال.","info");
   }));
 }
 function wrapLocalMutations() {
@@ -1017,12 +1078,23 @@ onAuthStateChanged(auth, async user => {
   if (!user) {
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
     stopGovernanceListeners();
-    activeShopId = "";
-    activeShopName = "";
-    activeMember = null;
     isPlatformAdmin = false;
-    if(window.POSGate){window.POSGate.setPlatformAdmin(false);window.POSGate.setSession(null);}
-    showSignedIn(null, "");
+    if(window.POSGate)window.POSGate.setPlatformAdmin(false);
+    const savedSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
+    activeMember=savedSession&&savedSession.active?savedSession:null;
+    activeShopId=activeMember?activeMember.shopId:"";
+    activeShopName="";
+    showSignedIn(null,"");
+    applyRoleAccess();
+    if(activeShopId&&window.POSDatabase){
+      try{const settings=await window.POSDatabase.getSettings();activeShopName=settings.shopName||"المحل";}catch(_){activeShopName="المحل";}
+      if($("shopTitle"))$("shopTitle").textContent=activeShopName;
+    }
+    if(window.POSGate&&window.POSGate.canOperateLocally()){
+      setStatus("وضع التشغيل المحلي مفعل. بيانات هذا الجهاز محفوظة، وسيتم الاتصال السحابي عند تسجيل الدخول إذا كانت المزامنة مسموحة.","warning");
+    }else if(window.POSGate&&window.POSGate.isManaged()){
+      setStatus("لا توجد جلسة تشغيل محلية صالحة لهذا المحل. اتصل بالإنترنت للتحقق من الحساب والسياسة.","error");
+    }
     return;
   }
   const state = readState();
@@ -1055,6 +1127,10 @@ onAuthStateChanged(auth, async user => {
     showSignedIn(user, activeShopName);applyRoleAccess();
     startMemberListener(shopId,user.uid);
     const licensed=await checkShopLicense(shopId);if(licensed)startLicenseListener(shopId);if(!licensed)return;
+    if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
+      setStatus("الحساب والترخيص تم التحقق منهما. المزامنة السحابية موقوفة من مدير المشروع؛ لن يتم تنزيل أو رفع بيانات.","warning");
+      return;
+    }
     const localSnapshot=await window.POSDatabase.backupData();
     const localDataExists=backupHasBusinessData(localSnapshot);
     const stateHasRecords=!!(state&&Object.keys(state.records||{}).length);
@@ -1073,10 +1149,17 @@ onAuthStateChanged(auth, async user => {
       if (navigator.onLine) setTimeout(() => syncNow(false), 2500);
     }
   } catch (error) {
-    if(window.POSGate&&window.POSGate.isManaged())window.POSGate.lock("تعذر التحقق من الحساب أو الترخيص. اتصل بالإنترنت ثم سجّل الدخول مرة أخرى.");
-    showSignedIn(user, "");setStatus(firebaseError(error), "error");
+    showSignedIn(user, "");
+    if(window.POSGate&&window.POSGate.canOperateLocally()){
+      const saved=window.POSGate.getSession();
+      if(saved){activeShopId=saved.shopId;activeMember=saved;applyRoleAccess();}
+      setStatus(firebaseError(error)+" سيستمر التشغيل المحلي وفق سياسة المحل.","warning");
+    }else{
+      if(window.POSGate&&window.POSGate.isManaged())window.POSGate.lock("تعذر التحقق من الحساب أو سياسة الترخيص. اتصل بالإنترنت.");
+      setStatus(firebaseError(error), "error");
+    }
   }
 });
 window.addEventListener("online", () => {
-  if (activeUser && activeShopId) setTimeout(() => syncNow(true), 1200);
+  if (activeUser && activeShopId && (!window.POSGate||window.POSGate.isCloudSyncEnabled())) setTimeout(() => syncNow(true), 1200);
 });
