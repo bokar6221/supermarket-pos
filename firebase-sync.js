@@ -1103,11 +1103,22 @@ onAuthStateChanged(auth, async user => {
     isPlatformAdmin=await verifyPlatformAdmin(user);
     if(window.POSGate)window.POSGate.setPlatformAdmin(isPlatformAdmin);
     if(isPlatformAdmin){
+      // Platform administrators are not shop members and must never enter
+      // the shop license / device activation flow.
+      if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+      stopGovernanceListeners();
+      activeShopId="";
+      activeShopName="";
+      activeMember=null;
       showSignedIn(user,"إدارة المنصة");
       if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
       if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=false;
+      if($("cloudCreateShop"))$("cloudCreateShop").hidden=true;
       if($("cloudSyncNow"))$("cloudSyncNow").hidden=true;
-      applyRoleAccess();loadPlatformShops();
+      applyRoleAccess();
+      setStatus("تم التحقق من صلاحية مدير المنصة. إدارة المحلات والتراخيص متاحة دون ترخيص تشغيل على هذا الجهاز.","success");
+      await loadPlatformShops();
+      return;
     }
     const profile = await getDoc(userRef(user.uid));
     const shopId = profile.exists() ? String(profile.data().activeShopId || "") : "";
