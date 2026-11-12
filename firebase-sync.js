@@ -331,7 +331,6 @@ async function createShopForUser(user, shopName) {
   const settings = await window.POSDatabase.getSettings();
   const name = String(shopName || settings.shopName || "").trim();
   if (!name) throw new Error("اكتب اسم المحل أولًا.");
-  await window.POSDatabase.saveSettings({ shopName: name });
   const newShop = doc(collection(cloudDb, "shops"));
   const batch = writeBatch(cloudDb);
   batch.set(newShop, {
@@ -875,6 +874,11 @@ function startLicenseListener(shopId){
    setStatus("الترخيص غير موجود؛ تم إيقاف الاستخدام.","error");return;
   }
   const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true,true);
+  if(valid&&activeMember&&activeMember.role==="owner"&&activeShopName&&window.POSDatabase){
+   const localSettings=await window.POSDatabase.getSettings();
+   if(String(localSettings.shopName||"")!==String(activeShopName))
+    await window.POSDatabase.saveSettings({shopName:activeShopName});
+  }
   if(!valid||!window.POSGate.isCloudSyncEnabled()){
    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
   }else{

@@ -118,7 +118,6 @@ function assertMutation(method){
   if(platformAdminSession)throw new Error("حساب مدير المشروع مخصص لإدارة التراخيص ولا يستخدم لتشغيل محل.");
   const shopId=localStorage.getItem(MANAGED_KEY);
   if(!shopId){
-    if(method==="saveSettings")return true;
     throw new Error("البرنامج غير مفعل. اتصل بالإنترنت وسجّل الدخول أو أنشئ حسابًا واربط المحل أولًا.");
   }
   if(!session||!session.uid||!session.active||session.shopId!==shopId)
