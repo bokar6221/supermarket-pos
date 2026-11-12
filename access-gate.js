@@ -14,6 +14,7 @@ const ROLE_METHODS={
   accountant:["saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
 };
 let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false,licenseOnlineVerified=false;
+try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
 let publicKeyPromise=null;
 const $=id=>document.getElementById(id);
 function bytesFromBase64(value){
