@@ -746,8 +746,8 @@ const LICENSE_CACHE_PREFIX="supermarket-pos-signed-license-v1:";
 const MANAGED_SHOP_KEY="supermarket-pos-managed-shop-v1";
 function roleLabel(role){return EMPLOYEE_ROLES[role]||"غير محدد";}
 function applyRoleAccess(){
- const role=activeMember&&activeMember.role||"",allowed=new Set(ROLE_VIEWS[role]||[]);
- document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:!allowed.has(name);});
+ const role=activeMember&&activeMember.role||"",standalone=!activeMember&&!isPlatformAdmin,allowed=new Set(ROLE_VIEWS[role]||[]);
+ document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:(!standalone&&!allowed.has(name));});
  if($("employeesTab"))$("employeesTab").hidden=role!=="owner";
  if($("platformTab"))$("platformTab").hidden=!isPlatformAdmin;
  if($("cloudAccountRole"))$("cloudAccountRole").textContent=activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط");
