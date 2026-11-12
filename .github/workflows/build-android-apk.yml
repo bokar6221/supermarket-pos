@@ -2,7 +2,7 @@ name: Build Android POS APK
 
 on:
   push:
-    branches: [main, "qayem-competitive-v1"]
+    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2"]
     paths:
       - "android-app/**"
       - "app.js"
@@ -83,7 +83,7 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -F "package: name='com.supermarket.pos'" /tmp/apk-badging.txt
-          grep -F "versionCode='11'" /tmp/apk-badging.txt
+          grep -F "versionCode='12'" /tmp/apk-badging.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
