@@ -1059,7 +1059,7 @@ async function unlinkShopDevice(shop,device){
   const sr=slot!==undefined&&slot!==null?deviceSlotRef(shop.id,String(slot)):null;
   const ss=sr?await tx.get(sr):null;
   tx.update(ref,{active:false,unlinkedAt:serverTimestamp(),unlinkedBy:activeUser.uid});
-  if(ss&&ss.exists()&&ss.data().deviceId===device.id)tx.update(sr,{active:false,unlinkedAt:serverTimestamp()});
+  if(ss&&ss.exists()&&ss.data().deviceId===device.id)tx.delete(sr);
  });
  setStatus("تم إلغاء ربط الجهاز. يمكن الآن ربط جهاز بديل.","success");await loadPlatformShops();
 }
