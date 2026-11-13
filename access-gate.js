@@ -207,6 +207,19 @@ window.POSGate={
   roleLabel:role=>ROLE_LABELS[role]||"غير محدد"
 };
 installMutationGuards();
+const localLicenseInput=$("localLicenseFile"),localLicenseButton=$("activateLocalLicense"),localLicenseStatus=$("localLicenseStatus");
+if(localLicenseButton)localLicenseButton.addEventListener("click",async()=>{
+  try{
+    const file=localLicenseInput&&localLicenseInput.files&&localLicenseInput.files[0];
+    if(!file)throw new Error("اختر ملف الترخيص المحلي أولًا.");
+    const parsed=JSON.parse(await file.text());
+    await importLocalLicense(parsed);
+    if(localLicenseStatus){localLicenseStatus.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";localLicenseStatus.dataset.state="success";}
+    if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
+    if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=true;
+    document.body.classList.remove("license-activation-only");
+  }catch(error){if(localLicenseStatus){localLicenseStatus.textContent="تعذر تفعيل الترخيص: "+String(error.message||error);localLicenseStatus.dataset.state="error";}}
+});
 const activationButton=$("licenseActivationButton");
 if(activationButton)activationButton.addEventListener("click",openActivation);
 document.addEventListener("DOMContentLoaded",initialize);
