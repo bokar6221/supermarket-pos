@@ -385,7 +385,7 @@ async function connectExistingShop(user, shopId) {
   startMemberListener(shopId,user.uid);
   const licensed=await checkShopLicense(shopId);
   startLicenseListener(shopId);
-  if(licensed&&window.POSGate&&window.POSGate.isCloudSyncEnabled())await registerCurrentDevice(shopId,user.uid);
+  if(licensed&&window.POSGate&&window.POSGate.isCloudLicense())await registerCurrentDevice(shopId,user.uid);
   if(!licensed){setStatus("الحساب متصل لكن الترخيص أو سياسة التشغيل لا تسمح باستخدام هذا الجهاز.","error");return;}
   if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
     setStatus("تم التحقق من الحساب. المزامنة السحابية موقوفة إداريًا؛ سيظل البيع محليًا وفق سياسة الأوفلاين.","warning");
@@ -1274,7 +1274,7 @@ onAuthStateChanged(auth, async user => {
     setGateSession();
     showSignedIn(user, activeShopName);applyRoleAccess();
     startMemberListener(shopId,user.uid);
-    const licensed=await checkShopLicense(shopId);startLicenseListener(shopId);if(!licensed)return;if(window.POSGate&&window.POSGate.isCloudSyncEnabled())await registerCurrentDevice(shopId,user.uid);
+    const licensed=await checkShopLicense(shopId);startLicenseListener(shopId);if(!licensed)return;if(window.POSGate&&window.POSGate.isCloudLicense())await registerCurrentDevice(shopId,user.uid);
     if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
       setStatus("الحساب والترخيص تم التحقق منهما. المزامنة السحابية موقوفة من مدير المشروع؛ لن يتم تنزيل أو رفع بيانات.","warning");
       return;
