@@ -226,12 +226,12 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud'
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.active == true;
-        allow update: if isPlatformAdmin()
-          || (isMember(shopId)
-            && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
-            && request.resource.data.uid == request.auth.uid
-            && request.resource.data.active == true);
-        allow delete: if false;
+        allow update: if isMember(shopId)
+          && resource.data.uid == request.auth.uid
+          && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.active == true;
+        allow delete: if isPlatformAdmin();
       }
 
       match /records/{recordId} {
