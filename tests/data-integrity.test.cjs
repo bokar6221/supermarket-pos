@@ -78,6 +78,34 @@ async function run(){
   await db.setProductActive("piece-1",true);
   assert.equal((await db.getProducts()).find(p=>p.id==="piece-1").active,true,"Owner reactivation must restore the item to checkout");
 
+  await db.saveProduct({
+    id:"purchase-product",name:"صنف مشتريات",barcode:"",category:"اختبار",unit:"piece",
+    price:30,cost:10,costKnown:true,trackStock:true,stock:4,minStock:1,active:true,
+    updatedAt:new Date().toISOString()
+  });
+  await assert.rejects(
+    db.savePurchase({id:"purchase-mismatch",items:[{productId:"purchase-product",unit:"piece",quantity:2,unitCost:10}],total:25,paidAmount:0,paymentMethod:"cash"}),
+    /إجمالي فاتورة الشراء لا يطابق/
+  );
+  await assert.rejects(
+    db.savePurchase({id:"purchase-infinite",items:[{productId:"purchase-product",unit:"piece",quantity:Infinity,unitCost:10}],total:30,paidAmount:0,paymentMethod:"cash"}),
+    /راجع كمية وتكلفة/
+  );
+  await assert.rejects(
+    db.savePurchase({id:"purchase-bad-method",items:[{productId:"purchase-product",unit:"piece",quantity:2,unitCost:15}],total:30,paidAmount:10,paymentMethod:"credit"}),
+    /طريقة الدفع/
+  );
+  assert.equal((await db.getProducts()).find(p=>p.id==="purchase-product").stock,4,"Rejected purchases must not change stock");
+  assert.equal((await db.getPurchases()).length,0,"Rejected purchases must not create purchase records");
+  await db.savePurchase({
+    id:"purchase-valid",items:[{productId:"purchase-product",name:"صنف مشتريات",unit:"piece",quantity:2,unitCost:15,total:30}],
+    total:30,paidAmount:10,paymentMethod:"cash",createdAt:new Date().toISOString()
+  });
+  const purchased=(await db.getProducts()).find(p=>p.id==="purchase-product");
+  assert.equal(purchased.stock,6,"Valid purchase must increase stock by purchased quantity");
+  assert.ok(Math.abs(purchased.cost-(70/6))<0.000001,"Purchase must recalculate weighted average cost");
+  assert.equal((await db.getCashEntries()).filter(x=>x.referenceId==="purchase-valid"&&x.category==="purchase").reduce((sum,x)=>sum+x.amount,0),10,"Paid purchase amount must be recorded in the cash ledger");
+
   const cash=(await db.getCashEntries());
   assert.equal(cash.filter(x=>x.category==="sale").reduce((s,x)=>s+x.amount,0),90,"Cash ledger must record discounted sale total");
   assert.equal(cash.filter(x=>x.category==="sales_return").reduce((s,x)=>s+x.amount,0),90,"Cash ledger must record the discounted return amount");
