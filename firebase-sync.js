@@ -770,14 +770,17 @@ const LICENSE_CACHE_PREFIX="supermarket-pos-signed-license-v1:";
 const MANAGED_SHOP_KEY="supermarket-pos-managed-shop-v1";
 function roleLabel(role){return EMPLOYEE_ROLES[role]||"غير محدد";}
 function applyRoleAccess(){
- const role=activeMember&&activeMember.role||"",standalone=!activeMember&&!isPlatformAdmin,allowed=new Set(ROLE_VIEWS[role]||[]);
+ const gateSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
+ const localMode=!!(gateSession&&gateSession.local);
+ const role=activeMember&&activeMember.role||(localMode?"owner":"");
+ const standalone=!activeMember&&!isPlatformAdmin&&!localMode,allowed=new Set(ROLE_VIEWS[role]||[]);
  document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:(!standalone&&!allowed.has(name));});
- if($("employeesTab"))$("employeesTab").hidden=role!=="owner"||!!(activeMember&&activeMember.local);
+ if($("employeesTab"))$("employeesTab").hidden=role!=="owner"||localMode;
  if($("platformTab"))$("platformTab").hidden=!isPlatformAdmin;
- if($("cloudAccountRole"))$("cloudAccountRole").textContent=activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط");
+ if($("cloudAccountRole"))$("cloudAccountRole").textContent=localMode?"صاحب المحل (محلي)":(activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط"));
  if($("cloudAccountUid"))$("cloudAccountUid").textContent=activeUser?activeUser.uid:"";
- if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner"||!!(activeMember&&activeMember.local);
- if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=activeMember&&activeMember.local
+ if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner"||localMode;
+ if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=localMode
   ?"الترخيص المحلي لا يدعم دعوات أو حسابات موظفين سحابية."
   :(role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.");
  if($("platformAdminEmail"))$("platformAdminEmail").textContent=activeUser&&activeUser.email||"";
@@ -787,6 +790,7 @@ function applyRoleAccess(){
  const first=document.querySelector('.tab[data-view="sale"]:not([hidden])')||document.querySelector('.tab:not([hidden])');
  if(first)first.click();
 }
+window.POSCloudRefreshAccessUI=applyRoleAccess;
 function platformAdminRef(uid){return doc(cloudDb,"platformAdmins",uid);}
 function employeeInviteRef(code){return doc(cloudDb,"employeeInvites",code);}
 function licenseRef(shopId){return doc(cloudDb,"licenses",shopId);}
