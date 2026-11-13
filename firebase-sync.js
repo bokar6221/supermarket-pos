@@ -1211,7 +1211,7 @@ function wrapLocalMutations() {
 bindUI();
 wrapLocalMutations();
 bindGovernanceUI();
-window.POSCloudPrepareLocalMode=async()=>{if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}stopGovernanceListeners();if(auth.currentUser)await signOut(auth);activeUser=null;activeShopId="";activeShopName="";activeMember=null;};
+window.POSCloudPrepareLocalMode=async()=>{if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}stopGovernanceListeners();if(window.POSGate)window.POSGate.setSession(null);if(auth.currentUser)await signOut(auth);activeUser=null;activeShopId="";activeShopName="";activeMember=null;applyRoleAccess();};
 onAuthStateChanged(auth, async user => {
   activeUser = user || null;
   if (!user) {
