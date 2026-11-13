@@ -273,6 +273,13 @@
     <div class="panel">
       <h2>المزامنة السحابية</h2>
       <p class="hint">البيع محلي على الجهاز، بينما الاتصال السحابي اختياري ويخضع لسياسة مدير المنصة. يمكن منع الأوفلاين أو إيقاف المزامنة لكل محل من لوحة إدارة التراخيص.</p>
+      <div class="panel" id="localLicensePanel">
+        <h3>تفعيل ترخيص محلي دون حساب سحابي</h3>
+        <p class="hint">هذا الوضع يعمل على هذا الجهاز فقط، ولا يحتاج تسجيل دخول Firebase أو دعوات موظفين أو مزامنة. استورد ملف الترخيص الذي أصدره مدير المنصة.</p>
+        <label>ملف الترخيص المحلي (JSON)<input id="localLicenseFile" type="file" accept=".json,application/json"></label>
+        <button class="primary" id="activateLocalLicense" type="button">استيراد وتفعيل الترخيص المحلي</button>
+        <p class="hint" id="localLicenseStatus" role="status"></p>
+      </div>
       <div id="cloudAuthPanel">
         <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
         <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
