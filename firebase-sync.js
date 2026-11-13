@@ -1015,8 +1015,7 @@ async function registerCurrentDevice(shopId,uid){
   if(!lic.exists()||lic.data().payload.status!=="active")throw new Error("الترخيص غير نشط.");
   const current=lic.data().payload;
   if(current.licenseType!=="cloud")throw new Error("نوع الترخيص لا يسمح بالربط السحابي.");
-  if(own.exists()&&own.data().active===false)throw new Error("تم إلغاء ربط هذا الجهاز من مدير المنصة. اطلب إعادة الربط.");
-  if(own.exists()){
+  if(own.exists()&&own.data().active===true){
    tx.update(ref,{lastSeenAt:serverTimestamp(),uid,active:true});
    return;
   }
@@ -1035,6 +1034,15 @@ async function registerCurrentDevice(shopId,uid){
    setStatus("تم إلغاء ربط هذا الجهاز؛ تم إيقاف المزامنة.","error");
   }
  });
+}
+async function downloadLocalLicense(shop){
+ if(!isPlatformAdmin)throw new Error("ليس لديك صلاحية مدير المنصة.");
+ const snapshot=await getDoc(licenseRef(shop.id));
+ if(!snapshot.exists()||!snapshot.data().payload||snapshot.data().payload.licenseType!=="local")throw new Error("لا يوجد ترخيص محلي صادر لهذا المحل.");
+ const blob=new Blob([JSON.stringify(snapshot.data(),null,2)],{type:"application/json"});
+ const url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download="local-license-"+shop.id+".json";document.body.append(a);a.click();a.remove();URL.revokeObjectURL(url);
+ setStatus("تم تجهيز ملف الترخيص المحلي. أرسله للعميل ليستورده على جهازه.","success");
 }
 async function loadShopDevices(shop){
  const snapshot=await getDocs(query(deviceCollectionRef(shop.id),orderBy("linkedAt","desc")));
@@ -1092,11 +1100,29 @@ function renderPlatformShops(){
   activate.onclick=async()=>{try{await writeLicense(shop,duration.value,"active",Number(deviceLimit.value),licenseType.value);}catch(error){$("platformMessage").textContent="تعذر إصدار الترخيص: "+firebaseError(error);}};
   const suspend=document.createElement("button");suspend.type="button";suspend.className="remove";suspend.textContent="إيقاف";suspend.disabled=!shop.license;
   suspend.onclick=async()=>{if(!confirm("سيتم تعليق ترخيص "+(shop.name||shop.id)+" عند اتصال أجهزته بالإنترنت. الجهاز المنفصل تمامًا لن يستقبل أمر الإيقاف حتى يعود الاتصال. هل تتابع؟"))return;try{await writeLicense(shop,duration.value,"suspended",Number(deviceLimit.value),licenseType.value);}catch(error){$("platformMessage").textContent="تعذر إيقاف الترخيص: "+firebaseError(error);}};
-  actions.append(policy,savePolicy,duration,deviceLimit,licenseType,activate,suspend);row.append(main,actions);root.append(row);
+  const exportLocal=document.createElement("button");exportLocal.type="button";exportLocal.className="secondary";exportLocal.textContent="تصدير الترخيص المحلي";exportLocal.hidden=!(payload&&payload.licenseType==="local");exportLocal.onclick=()=>downloadLocalLicense(shop).catch(e=>{$("platformMessage").textContent="تعذر تصدير الترخيص: "+firebaseError(e);});
+  actions.append(policy,savePolicy,duration,deviceLimit,licenseType,activate,suspend,exportLocal);row.append(main,actions);root.append(row);
   const devicePanel=document.createElement("div");devicePanel.className="platform-device-panel";devicePanel.textContent="جارٍ تحميل الأجهزة...";root.append(devicePanel);
   loadShopDevices(shop).then(devices=>{const table=document.createElement("table");table.className="platform-device-table";table.innerHTML="<thead><tr><th>الجهاز</th><th>المستخدم</th><th>النظام</th><th>الحالة</th><th>آخر اتصال</th><th>إجراء</th></tr></thead>";const body=document.createElement("tbody");devices.forEach(device=>{const tr=document.createElement("tr");const cells=[device.label||device.id,device.uid||"",device.platform||"",device.active?"مرتبط":"غير مرتبط",device.lastSeenAt&&device.lastSeenAt.toDate?device.lastSeenAt.toDate().toLocaleString("ar-EG"):"—"];cells.forEach(v=>{const td=document.createElement("td");td.textContent=String(v);tr.append(td);});const action=document.createElement("td");if(device.active){const b=document.createElement("button");b.type="button";b.className="remove";b.textContent="إلغاء الربط";b.onclick=async()=>{if(!confirm("إلغاء ربط هذا الجهاز؟"))return;try{b.disabled=true;await unlinkShopDevice(shop,device);}catch(e){$(\"platformMessage\").textContent="تعذر إلغاء الربط: "+firebaseError(e);b.disabled=false;}};action.append(b);}else action.textContent="—";tr.append(action);body.append(tr);});table.append(body);devicePanel.replaceChildren(table);const count=document.createElement("p");count.textContent="الأجهزة المرتبطة: "+devices.filter(d=>d.active).length+" / "+(payload&&payload.maxDevices||1);devicePanel.append(count);}).catch(e=>{devicePanel.textContent="تعذر تحميل الأجهزة: "+firebaseError(e);});
  });
  $("platformMessage").textContent="عدد المحلات: "+rows.length+" · إعدادات الأوفلاين والمزامنة موقعة داخل الترخيص؛ المفتاح الخاص لا يُحفظ في التطبيق.";
+}
+function bindLocalLicenseUI(){
+ const input=$("localLicenseFile"),button=$("activateLocalLicense"),status=$("localLicenseStatus");
+ if(!input||!button)return;
+ button.addEventListener("click",async()=>{
+  try{
+   const file=input.files&&input.files[0];if(!file)throw new Error("اختر ملف الترخيص المحلي أولًا.");
+   const parsed=JSON.parse(await file.text());
+   if(!window.POSGate||!window.POSGate.importLocalLicense)throw new Error("مكون التراخيص المحلي غير متاح في هذا الإصدار.");
+   await window.POSGate.importLocalLicense(parsed);
+   status.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";status.dataset.state="success";
+   setStatus("وضع التشغيل المحلي مفعل على هذا الجهاز دون ربط سحابي.","success");
+   showSignedIn(null,"");
+   if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
+   if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=true;
+  }catch(error){status.textContent="تعذر تفعيل الترخيص: "+firebaseError(error);status.dataset.state="error";}
+ });
 }
 function bindGovernanceUI(){
  if($("cloudEmployeeRegister"))$("cloudEmployeeRegister").addEventListener("click",()=>clickAction(handleEmployeeRegister));
@@ -1186,6 +1212,7 @@ function wrapLocalMutations() {
 bindUI();
 wrapLocalMutations();
 bindGovernanceUI();
+bindLocalLicenseUI();
 onAuthStateChanged(auth, async user => {
   activeUser = user || null;
   if (!user) {
