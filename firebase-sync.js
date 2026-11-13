@@ -977,6 +977,9 @@ async function writeLicense(shop,plan,status,maxDevices,licenseType){
  const spec=LICENSE_PLANS[plan];if(!spec)throw new Error("اختر مدة ترخيص صحيحة.");
  const cap=Math.max(1,Math.min(500,Math.floor(Number(maxDevices)||1)));
  const type=licenseType==="local"?"local":"cloud";
+ const activeDevicesSnapshot=await getDocs(query(deviceCollectionRef(shop.id),where("active","==",true)));
+ if(type==="local"&&activeDevicesSnapshot.size)throw new Error("ألغِ ربط الأجهزة السحابية أولًا قبل تحويل المحل إلى ترخيص محلي.");
+ if(type==="cloud"&&cap<activeDevicesSnapshot.size)throw new Error("لا يمكن خفض الحد إلى أقل من عدد الأجهزة المرتبطة حاليًا ("+activeDevicesSnapshot.size+"). ألغِ ربط الأجهزة الزائدة أولًا.");
  const now=new Date(),nowIso=now.toISOString(),oldSnapshot=await getDoc(licenseRef(shop.id)),old=oldSnapshot.exists()?oldSnapshot.data().payload:null;
  let start=new Date(now);
  if(status==="active"&&old&&old.status==="active"&&Date.parse(old.expiresAt)>now.getTime()&&old.plan===plan)start=new Date(old.expiresAt);
