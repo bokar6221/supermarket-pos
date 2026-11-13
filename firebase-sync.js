@@ -772,11 +772,12 @@ function roleLabel(role){return EMPLOYEE_ROLES[role]||"غير محدد";}
 function applyRoleAccess(){
  const role=activeMember&&activeMember.role||"",standalone=!activeMember&&!isPlatformAdmin,allowed=new Set(ROLE_VIEWS[role]||[]);
  document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:(!standalone&&!allowed.has(name));});
- if($("employeesTab"))$("employeesTab").hidden=role!=="owner";
+ if($("employeesTab"))$("employeesTab").hidden=role!=="owner"||!!(activeMember&&activeMember.local);
  if($("platformTab"))$("platformTab").hidden=!isPlatformAdmin;
  if($("cloudAccountRole"))$("cloudAccountRole").textContent=activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط");
  if($("cloudAccountUid"))$("cloudAccountUid").textContent=activeUser?activeUser.uid:"";
- if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner";
+ if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner"||!!(activeMember&&activeMember.local);
+ if(activeMember&&activeMember.local&&$("employeeAccessMessage"))$("employeeAccessMessage").textContent="الترخيص المحلي لا يدعم دعوات أو حسابات موظفين سحابية.";
  if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.";
  if($("platformAdminEmail"))$("platformAdminEmail").textContent=activeUser&&activeUser.email||"";
  if($("platformAdminUid"))$("platformAdminUid").textContent=activeUser&&activeUser.uid||"";
@@ -1210,6 +1211,7 @@ function wrapLocalMutations() {
 bindUI();
 wrapLocalMutations();
 bindGovernanceUI();
+window.POSCloudPrepareLocalMode=async()=>{if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}stopGovernanceListeners();if(auth.currentUser)await signOut(auth);activeUser=null;activeShopId="";activeShopName="";activeMember=null;};
 onAuthStateChanged(auth, async user => {
   activeUser = user || null;
   if (!user) {
