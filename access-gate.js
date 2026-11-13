@@ -31,11 +31,19 @@ function publicKey(){
   if(!publicKeyPromise)publicKeyPromise=crypto.subtle.importKey("spki",bytesFromBase64(PUBLIC_KEY_DER_B64),{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);
   return publicKeyPromise;
 }
+function supportsLicensePayload(payload){
+  if(!payload||![1,2].includes(payload.schema)||!payload.shopId||!["active","suspended"].includes(payload.status))return false;
+  if(payload.schema===2){
+    if(!["local","cloud"].includes(payload.licenseType))return false;
+    if(!Number.isInteger(payload.maxDevices)||payload.maxDevices<1||payload.maxDevices>500)return false;
+  }
+  return true;
+}
 async function verifyDocument(document){
   try{
     if(!document||!document.payload||typeof document.signature!=="string")return false;
     const payload=document.payload;
-    if(payload.schema!==1||!payload.shopId||!["active","suspended"].includes(payload.status))return false;
+    if(!supportsLicensePayload(payload))return false;
     return await crypto.subtle.verify(
       {name:"ECDSA",hash:"SHA-256"},await publicKey(),bytesFromBase64(document.signature),
       new TextEncoder().encode(stable(payload))
@@ -198,7 +206,7 @@ function installMutationGuards(){
   window.POSDatabase.__localRoleGuarded=true;
 }
 window.POSGate={
-  setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,licenseCheck,assertMutation,roleCan,lock,
+  setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,supportsLicensePayload,licenseCheck,assertMutation,roleCan,lock,
   getSession:()=>session,getLicense:()=>license,
   isManaged, isLicensed:()=>licenseReady&&currentLicenseCheck().ok,
   isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
