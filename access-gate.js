@@ -203,6 +203,7 @@ window.POSGate={
   isManaged, isLicensed:()=>licenseReady&&currentLicenseCheck().ok,
   isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
   isCloudSyncEnabled:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&c.cloudSyncEnabled);},
+  isCloudLicense:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&license&&license.payload&&license.payload.licenseType==="cloud");},
   canOperateLocally,
   roleLabel:role=>ROLE_LABELS[role]||"غير محدد"
 };
