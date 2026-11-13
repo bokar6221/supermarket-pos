@@ -988,7 +988,7 @@ async function writeLicense(shop,plan,status,maxDevices,licenseType,renew){
   else if(old&&old.status==="active"&&old.plan===plan&&renew!==true&&Date.parse(old.expiresAt)>now.getTime())expires=new Date(old.expiresAt);
   else expires=addLicensePlan(now,plan);
  }
- const payload={schema:2,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,plan,planLabel:spec.label,planMonths:spec.months||0,licenseType:type,maxDevices:cap,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:spec.lifetime&&status==="active"?"9999-12-31T23:59:59.999Z":expires.toISOString(),offlineAllowed:type==="local"?(old?old.offlineAllowed!==false:true):(old?old.offlineAllowed!==false:true),cloudSyncEnabled:type==="cloud"?(old?old.cloudSyncEnabled!==false:true):false,issuerUid:activeUser.uid};
+ const payload={schema:2,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,plan,planLabel:spec.label,planMonths:spec.months||0,licenseType:type,maxDevices:cap,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:spec.lifetime&&status==="active"?"9999-12-31T23:59:59.999Z":expires.toISOString(),offlineAllowed:type==="local"?true:(old?old.offlineAllowed!==false:true),cloudSyncEnabled:type==="cloud"?(old&&old.licenseType==="cloud"?old.cloudSyncEnabled!==false:true):false,issuerUid:activeUser.uid};
  const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
  batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
  setStatus(status==="active"?"تم تحديث الترخيص وإعداداته بنجاح.":"تم تعليق الترخيص مركزيًا.","success");await loadPlatformShops();
@@ -998,6 +998,7 @@ async function saveShopPolicy(shop,offlineAllowed,cloudSyncEnabled){
  if(!licensePrivateKeyPem)throw new Error("ارفع ملف مفتاح التوقيع الخاص أولًا.");
  const snapshot=await getDoc(licenseRef(shop.id));
  if(!snapshot.exists()||!snapshot.data().payload)throw new Error("فعّل ترخيص المحل أولًا قبل ضبط سياسة الاتصال.");
+ if(snapshot.data().payload.licenseType==="local")throw new Error("الترخيص المحلي يعمل دون اتصال ولا يقبل إعدادات المزامنة السحابية.");
  const payload={...snapshot.data().payload,offlineAllowed:!!offlineAllowed,cloudSyncEnabled:!!cloudSyncEnabled,policyUpdatedAt:new Date().toISOString(),issuerUid:activeUser.uid};
  const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
  batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
