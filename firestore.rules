@@ -225,12 +225,9 @@ service cloud.firestore {
           && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
           && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud'
           && request.resource.data.uid == request.auth.uid
-          && request.resource.data.active == true;
-        allow update: if isMember(shopId)
-          && resource.data.uid == request.auth.uid
-          && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.active == true;
+          && request.resource.data.active == true
+          && getAfter(/databases/$(database)/documents/shops/$(shopId)/devices/$(request.resource.data.deviceId)).data.slot == slotId;
+        allow update: if isPlatformAdmin();
         allow delete: if isPlatformAdmin();
       }
 
