@@ -224,6 +224,7 @@ if(localLicenseButton)localLicenseButton.addEventListener("click",async()=>{
     const parsed=JSON.parse(await file.text());
     if(typeof window.POSCloudPrepareLocalMode==="function")await window.POSCloudPrepareLocalMode();
     await importLocalLicense(parsed);
+    if(typeof window.POSCloudRefreshAccessUI==="function")window.POSCloudRefreshAccessUI();
     if($("shopTitle"))$("shopTitle").textContent=String(parsed.payload.shopName||"المحل");
     if(localLicenseStatus){localLicenseStatus.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";localLicenseStatus.dataset.state="success";}
     if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
