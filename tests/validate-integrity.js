@@ -44,7 +44,7 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.9.1'/, "Android version must match this release");
+assert.match(gradle, /versionName '1.10.0'/, "Android version must match this release");
 assert.match(gradle, /versionCode 14/, "Android version code must be incremented for this release");
 assert.match(accessGate, /function isManaged\(\)\{return true;\}/, "Every installation must pass the activation gate");
 assert.match(accessGate, /يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام/, "Unlinked installs must not receive an offline license");
