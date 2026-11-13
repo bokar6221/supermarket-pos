@@ -91,7 +91,7 @@ assert.match(firebase, /وصل المحل إلى الحد الأقصى للأج�
 assert.match(firebase, /unlinkShopDevice/, "Platform admin must be able to unlink a registered device");
 assert.match(firebase, /platform-device-table/, "Platform admin must see devices in a structured table");
 assert.match(firebase, /downloadLocalLicense/, "Platform admin must be able to export signed local licenses");
-assert.match(firebase, /bindLocalLicenseUI/, "A local license must be importable without cloud login");
+assert.match(accessGate, /localLicenseButton/, "Local license import must work independently of Firebase network modules");
 assert.match(accessGate, /importLocalLicense/, "Local license activation must verify the signature on-device");
 assert.match(accessGate, /licenseType==="local"/, "Local mode must initialize a local owner session without Firebase membership");
 assert.match(html, /id="localLicenseFile"/, "The local license import control must exist");
