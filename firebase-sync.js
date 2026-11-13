@@ -1117,23 +1117,6 @@ function renderPlatformShops(){
  });
  $("platformMessage").textContent="عدد المحلات: "+rows.length+" · إعدادات الأوفلاين والمزامنة موقعة داخل الترخيص؛ المفتاح الخاص لا يُحفظ في التطبيق.";
 }
-function bindLocalLicenseUI(){
- const input=$("localLicenseFile"),button=$("activateLocalLicense"),status=$("localLicenseStatus");
- if(!input||!button)return;
- button.addEventListener("click",async()=>{
-  try{
-   const file=input.files&&input.files[0];if(!file)throw new Error("اختر ملف الترخيص المحلي أولًا.");
-   const parsed=JSON.parse(await file.text());
-   if(!window.POSGate||!window.POSGate.importLocalLicense)throw new Error("مكون التراخيص المحلي غير متاح في هذا الإصدار.");
-   await window.POSGate.importLocalLicense(parsed);
-   status.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";status.dataset.state="success";
-   setStatus("وضع التشغيل المحلي مفعل على هذا الجهاز دون ربط سحابي.","success");
-   showSignedIn(null,"");
-   if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
-   if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=true;
-  }catch(error){status.textContent="تعذر تفعيل الترخيص: "+firebaseError(error);status.dataset.state="error";}
- });
-}
 function bindGovernanceUI(){
  if($("cloudEmployeeRegister"))$("cloudEmployeeRegister").addEventListener("click",()=>clickAction(handleEmployeeRegister));
  if($("employeeInviteForm"))$("employeeInviteForm").addEventListener("submit",async event=>{
@@ -1222,7 +1205,6 @@ function wrapLocalMutations() {
 bindUI();
 wrapLocalMutations();
 bindGovernanceUI();
-bindLocalLicenseUI();
 onAuthStateChanged(auth, async user => {
   activeUser = user || null;
   if (!user) {
