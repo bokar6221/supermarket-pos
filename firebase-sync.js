@@ -777,8 +777,9 @@ function applyRoleAccess(){
  if($("cloudAccountRole"))$("cloudAccountRole").textContent=activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط");
  if($("cloudAccountUid"))$("cloudAccountUid").textContent=activeUser?activeUser.uid:"";
  if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner"||!!(activeMember&&activeMember.local);
- if(activeMember&&activeMember.local&&$("employeeAccessMessage"))$("employeeAccessMessage").textContent="الترخيص المحلي لا يدعم دعوات أو حسابات موظفين سحابية.";
- if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.";
+ if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=activeMember&&activeMember.local
+  ?"الترخيص المحلي لا يدعم دعوات أو حسابات موظفين سحابية."
+  :(role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.");
  if($("platformAdminEmail"))$("platformAdminEmail").textContent=activeUser&&activeUser.email||"";
  if($("platformAdminUid"))$("platformAdminUid").textContent=activeUser&&activeUser.uid||"";
  const current=document.querySelector(".tab.active");
