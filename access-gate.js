@@ -214,6 +214,7 @@ if(localLicenseButton)localLicenseButton.addEventListener("click",async()=>{
     if(!file)throw new Error("اختر ملف الترخيص المحلي أولًا.");
     const parsed=JSON.parse(await file.text());
     await importLocalLicense(parsed);
+    if($("shopTitle"))$("shopTitle").textContent=String(parsed.payload.shopName||"المحل");
     if(localLicenseStatus){localLicenseStatus.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";localLicenseStatus.dataset.state="success";}
     if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
     if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=true;
