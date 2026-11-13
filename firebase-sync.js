@@ -972,7 +972,7 @@ function addLicensePlan(start,plan){
  if(spec.days)return new Date(start.getTime()+spec.days*86400000);
  return addCalendarMonths(start,spec.months);
 }
-async function writeLicense(shop,plan,status,maxDevices,licenseType){
+async function writeLicense(shop,plan,status,maxDevices,licenseType,renew){
  if(!isPlatformAdmin)throw new Error("ليس لديك صلاحية مدير المشروع.");
  if(!licensePrivateKeyPem)throw new Error("ارفع ملف مفتاح التوقيع الخاص أولًا.");
  const spec=LICENSE_PLANS[plan];if(!spec)throw new Error("اختر مدة ترخيص صحيحة.");
@@ -982,10 +982,12 @@ async function writeLicense(shop,plan,status,maxDevices,licenseType){
  if(type==="local"&&activeDevicesSnapshot.size)throw new Error("ألغِ ربط الأجهزة السحابية أولًا قبل تحويل المحل إلى ترخيص محلي.");
  if(type==="cloud"&&cap<activeDevicesSnapshot.size)throw new Error("لا يمكن خفض الحد إلى أقل من عدد الأجهزة المرتبطة حاليًا ("+activeDevicesSnapshot.size+"). ألغِ ربط الأجهزة الزائدة أولًا.");
  const now=new Date(),nowIso=now.toISOString(),oldSnapshot=await getDoc(licenseRef(shop.id)),old=oldSnapshot.exists()?oldSnapshot.data().payload:null;
- let start=new Date(now);
- if(status==="active"&&old&&old.status==="active"&&Date.parse(old.expiresAt)>now.getTime()&&old.plan===plan)start=new Date(old.expiresAt);
- let expires=status==="active"?addLicensePlan(start,plan):new Date(old&&old.expiresAt||nowIso);
- if(status==="active"&&expires.getTime()<=now.getTime())expires=addLicensePlan(now,plan);
+ let expires=new Date(old&&old.expiresAt||nowIso);
+ if(status==="active"){
+  if(old&&old.status==="active"&&old.plan===plan&&renew===true&&Date.parse(old.expiresAt)>now.getTime())expires=addLicensePlan(new Date(old.expiresAt),plan);
+  else if(old&&old.status==="active"&&old.plan===plan&&renew!==true&&Date.parse(old.expiresAt)>now.getTime())expires=new Date(old.expiresAt);
+  else expires=addLicensePlan(now,plan);
+ }
  const payload={schema:2,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,plan,planLabel:spec.label,planMonths:spec.months||0,licenseType:type,maxDevices:cap,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:spec.lifetime&&status==="active"?"9999-12-31T23:59:59.999Z":expires.toISOString(),offlineAllowed:type==="local"?(old?old.offlineAllowed!==false:true):(old?old.offlineAllowed!==false:true),cloudSyncEnabled:type==="cloud"?(old?old.cloudSyncEnabled!==false:true):false,issuerUid:activeUser.uid};
  const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
  batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
@@ -1107,11 +1109,13 @@ function renderPlatformShops(){
   const deviceLimit=document.createElement("input");deviceLimit.type="number";deviceLimit.min="1";deviceLimit.max="500";deviceLimit.step="1";deviceLimit.value=String(payload&&payload.maxDevices||1);deviceLimit.title="الحد الأقصى للأجهزة";deviceLimit.setAttribute("aria-label","الحد الأقصى للأجهزة");
   const licenseType=document.createElement("select");[["cloud","سحابي"],["local","محلي"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;licenseType.append(o);});licenseType.value=payload&&payload.licenseType||"cloud";
   const activate=document.createElement("button");activate.type="button";activate.className="primary";activate.textContent=payload&&payload.status==="active"?"تجديد/تمديد":"تفعيل";
-  activate.onclick=async()=>{try{await writeLicense(shop,duration.value,"active",Number(deviceLimit.value),licenseType.value);}catch(error){$("platformMessage").textContent="تعذر إصدار الترخيص: "+firebaseError(error);}};
+  if(payload&&payload.plan)duration.value=payload.plan;
+  activate.onclick=async()=>{try{await writeLicense(shop,duration.value,"active",Number(deviceLimit.value),licenseType.value,true);}catch(error){$("platformMessage").textContent="تعذر إصدار الترخيص: "+firebaseError(error);}};
+  const updateLicense=document.createElement("button");updateLicense.type="button";updateLicense.className="secondary";updateLicense.textContent="حفظ تعديل الترخيص";updateLicense.onclick=async()=>{try{await writeLicense(shop,duration.value,"active",Number(deviceLimit.value),licenseType.value,false);}catch(error){$("platformMessage").textContent="تعذر تعديل الترخيص: "+firebaseError(error);}};
   const suspend=document.createElement("button");suspend.type="button";suspend.className="remove";suspend.textContent="إيقاف";suspend.disabled=!shop.license;
   suspend.onclick=async()=>{if(!confirm("سيتم تعليق ترخيص "+(shop.name||shop.id)+" عند اتصال أجهزته بالإنترنت. الجهاز المنفصل تمامًا لن يستقبل أمر الإيقاف حتى يعود الاتصال. هل تتابع؟"))return;try{await writeLicense(shop,duration.value,"suspended",Number(deviceLimit.value),licenseType.value);}catch(error){$("platformMessage").textContent="تعذر إيقاف الترخيص: "+firebaseError(error);}};
   const exportLocal=document.createElement("button");exportLocal.type="button";exportLocal.className="secondary";exportLocal.textContent="تصدير الترخيص المحلي";exportLocal.hidden=!(payload&&payload.licenseType==="local");exportLocal.onclick=()=>downloadLocalLicense(shop).catch(e=>{$("platformMessage").textContent="تعذر تصدير الترخيص: "+firebaseError(e);});
-  actions.append(policy,savePolicy,duration,deviceLimit,licenseType,activate,suspend,exportLocal);row.append(main,actions);root.append(row);
+  actions.append(policy,savePolicy,duration,deviceLimit,licenseType,updateLicense,activate,suspend,exportLocal);row.append(main,actions);root.append(row);
   const devicePanel=document.createElement("div");devicePanel.className="platform-device-panel";devicePanel.textContent="جارٍ تحميل الأجهزة...";root.append(devicePanel);
   loadShopDevices(shop).then(devices=>{const table=document.createElement("table");table.className="platform-device-table";table.innerHTML="<thead><tr><th>الجهاز</th><th>المستخدم</th><th>النظام</th><th>الحالة</th><th>آخر اتصال</th><th>إجراء</th></tr></thead>";const body=document.createElement("tbody");devices.forEach(device=>{const tr=document.createElement("tr");const cells=[device.label||device.id,device.email||device.uid||"",device.platform||"",device.active?"مرتبط":"غير مرتبط",device.lastSeenAt&&device.lastSeenAt.toDate?device.lastSeenAt.toDate().toLocaleString("ar-EG"):"—"];cells.forEach(v=>{const td=document.createElement("td");td.textContent=String(v);tr.append(td);});const action=document.createElement("td");if(device.active){const b=document.createElement("button");b.type="button";b.className="remove";b.textContent="إلغاء الربط";b.onclick=async()=>{if(!confirm("إلغاء ربط هذا الجهاز؟"))return;try{b.disabled=true;await unlinkShopDevice(shop,device);}catch(e){$("platformMessage").textContent="تعذر إلغاء الربط: "+firebaseError(e);b.disabled=false;}};action.append(b);}else action.textContent="—";tr.append(action);body.append(tr);});table.append(body);devicePanel.replaceChildren(table);const count=document.createElement("p");count.textContent="الأجهزة المرتبطة: "+devices.filter(d=>d.active).length+" / "+(payload&&payload.maxDevices||1);devicePanel.append(count);}).catch(e=>{devicePanel.textContent="تعذر تحميل الأجهزة: "+firebaseError(e);});
  });
