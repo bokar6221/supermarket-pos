@@ -1045,8 +1045,10 @@ async function unlinkShopDevice(shop,device){
  const ref=deviceRef(shop.id,device.id),slot=device.slot;
  await runTransaction(cloudDb,async tx=>{
   const current=await tx.get(ref);if(!current.exists()||current.data().active!==true)return;
+  const sr=Number.isInteger(slot)?deviceSlotRef(shop.id,slot):null;
+  const ss=sr?await tx.get(sr):null;
   tx.update(ref,{active:false,unlinkedAt:serverTimestamp(),unlinkedBy:activeUser.uid});
-  if(Number.isInteger(slot)){const sr=deviceSlotRef(shop.id,slot),ss=await tx.get(sr);if(ss.exists()&&ss.data().deviceId===device.id)tx.update(sr,{active:false,unlinkedAt:serverTimestamp()});}
+  if(ss&&ss.exists()&&ss.data().deviceId===device.id)tx.update(sr,{active:false,unlinkedAt:serverTimestamp()});
  });
  setStatus("تم إلغاء ربط الجهاز. يمكن الآن ربط جهاز بديل.","success");await loadPlatformShops();
 }
