@@ -1050,7 +1050,13 @@ async function downloadLocalLicense(shop){
 }
 async function loadShopDevices(shop){
  const snapshot=await getDocs(query(deviceCollectionRef(shop.id),orderBy("linkedAt","desc")));
- return snapshot.docs.map(d=>({id:d.id,...d.data()}));
+ const devices=[];
+ for(const d of snapshot.docs){
+  const device={id:d.id,...d.data()};
+  if(device.uid){try{const member=await getDoc(memberRef(shop.id,device.uid));device.email=member.exists()?String(member.data().email||""):"";}catch(_){device.email="";}}
+  devices.push(device);
+ }
+ return devices;
 }
 async function unlinkShopDevice(shop,device){
  if(!isPlatformAdmin)throw new Error("ليس لديك صلاحية مدير المنصة.");
@@ -1107,7 +1113,7 @@ function renderPlatformShops(){
   const exportLocal=document.createElement("button");exportLocal.type="button";exportLocal.className="secondary";exportLocal.textContent="تصدير الترخيص المحلي";exportLocal.hidden=!(payload&&payload.licenseType==="local");exportLocal.onclick=()=>downloadLocalLicense(shop).catch(e=>{$("platformMessage").textContent="تعذر تصدير الترخيص: "+firebaseError(e);});
   actions.append(policy,savePolicy,duration,deviceLimit,licenseType,activate,suspend,exportLocal);row.append(main,actions);root.append(row);
   const devicePanel=document.createElement("div");devicePanel.className="platform-device-panel";devicePanel.textContent="جارٍ تحميل الأجهزة...";root.append(devicePanel);
-  loadShopDevices(shop).then(devices=>{const table=document.createElement("table");table.className="platform-device-table";table.innerHTML="<thead><tr><th>الجهاز</th><th>المستخدم</th><th>النظام</th><th>الحالة</th><th>آخر اتصال</th><th>إجراء</th></tr></thead>";const body=document.createElement("tbody");devices.forEach(device=>{const tr=document.createElement("tr");const cells=[device.label||device.id,device.uid||"",device.platform||"",device.active?"مرتبط":"غير مرتبط",device.lastSeenAt&&device.lastSeenAt.toDate?device.lastSeenAt.toDate().toLocaleString("ar-EG"):"—"];cells.forEach(v=>{const td=document.createElement("td");td.textContent=String(v);tr.append(td);});const action=document.createElement("td");if(device.active){const b=document.createElement("button");b.type="button";b.className="remove";b.textContent="إلغاء الربط";b.onclick=async()=>{if(!confirm("إلغاء ربط هذا الجهاز؟"))return;try{b.disabled=true;await unlinkShopDevice(shop,device);}catch(e){$("platformMessage").textContent="تعذر إلغاء الربط: "+firebaseError(e);b.disabled=false;}};action.append(b);}else action.textContent="—";tr.append(action);body.append(tr);});table.append(body);devicePanel.replaceChildren(table);const count=document.createElement("p");count.textContent="الأجهزة المرتبطة: "+devices.filter(d=>d.active).length+" / "+(payload&&payload.maxDevices||1);devicePanel.append(count);}).catch(e=>{devicePanel.textContent="تعذر تحميل الأجهزة: "+firebaseError(e);});
+  loadShopDevices(shop).then(devices=>{const table=document.createElement("table");table.className="platform-device-table";table.innerHTML="<thead><tr><th>الجهاز</th><th>المستخدم</th><th>النظام</th><th>الحالة</th><th>آخر اتصال</th><th>إجراء</th></tr></thead>";const body=document.createElement("tbody");devices.forEach(device=>{const tr=document.createElement("tr");const cells=[device.label||device.id,device.email||device.uid||"",device.platform||"",device.active?"مرتبط":"غير مرتبط",device.lastSeenAt&&device.lastSeenAt.toDate?device.lastSeenAt.toDate().toLocaleString("ar-EG"):"—"];cells.forEach(v=>{const td=document.createElement("td");td.textContent=String(v);tr.append(td);});const action=document.createElement("td");if(device.active){const b=document.createElement("button");b.type="button";b.className="remove";b.textContent="إلغاء الربط";b.onclick=async()=>{if(!confirm("إلغاء ربط هذا الجهاز؟"))return;try{b.disabled=true;await unlinkShopDevice(shop,device);}catch(e){$("platformMessage").textContent="تعذر إلغاء الربط: "+firebaseError(e);b.disabled=false;}};action.append(b);}else action.textContent="—";tr.append(action);body.append(tr);});table.append(body);devicePanel.replaceChildren(table);const count=document.createElement("p");count.textContent="الأجهزة المرتبطة: "+devices.filter(d=>d.active).length+" / "+(payload&&payload.maxDevices||1);devicePanel.append(count);}).catch(e=>{devicePanel.textContent="تعذر تحميل الأجهزة: "+firebaseError(e);});
  });
  $("platformMessage").textContent="عدد المحلات: "+rows.length+" · إعدادات الأوفلاين والمزامنة موقعة داخل الترخيص؛ المفتاح الخاص لا يُحفظ في التطبيق.";
 }
