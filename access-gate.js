@@ -67,6 +67,18 @@ function openActivation(){
   document.body.classList.remove("license-locked");
   const email=$("cloudEmail");if(email)email.focus();
 }
+async function importLocalLicense(doc){
+  if(!doc||!doc.payload||doc.payload.licenseType!=="local")throw new Error("هذا الملف ليس ترخيصًا محليًا.");
+  const shopId=String(doc.payload.shopId||"");
+  if(!shopId)throw new Error("ملف الترخيص لا يحتوي معرّف المحل.");
+  const valid=await verifyDocument(doc);
+  if(!valid)throw new Error("التوقيع الرقمي للترخيص غير صحيح.");
+  const ok=await applyLicense(doc,shopId,true,false);
+  if(!ok)throw new Error("الترخيص المحلي منتهي أو موقوف أو لم يبدأ بعد.");
+  setSession({uid:"local-"+shopId,shopId,role:"owner",active:true,local:true});
+  hideLock();
+  return true;
+}
 function licenseCheck(doc,shopId){
   if(!doc||!doc.payload)return {ok:false,reason:"لا يوجد ترخيص لهذا المحل."};
   const p=doc.payload,now=Date.now();
@@ -154,6 +166,10 @@ async function initialize(){
   if(!shopId){showLock("البرنامج غير مفعل","يجب تسجيل الدخول أو إنشاء حساب وربط المحل والتحقق من الترخيص قبل استخدام نقاط البيع.");return;}
   try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
   const doc=cachedLicense(shopId);
+  if(doc&&doc.payload&&doc.payload.licenseType==="local"&&(!session||!session.uid)){
+    session={uid:"local-"+shopId,shopId,role:"owner",active:true,local:true};
+    localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+  }
   if(!session||!session.uid||!session.active||session.shopId!==shopId){
     showLock("يلزم التحقق من الحساب","هذا الجهاز مرتبط بمحل. اتصل بالإنترنت وسجّل الدخول بحساب موظف نشط.");return;
   }
@@ -182,7 +198,7 @@ function installMutationGuards(){
   window.POSDatabase.__localRoleGuarded=true;
 }
 window.POSGate={
-  setSession,setPlatformAdmin,applyLicense,verifyDocument,licenseCheck,assertMutation,roleCan,lock,
+  setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,licenseCheck,assertMutation,roleCan,lock,
   getSession:()=>session,getLicense:()=>license,
   isManaged, isLicensed:()=>licenseReady&&currentLicenseCheck().ok,
   isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
