@@ -79,6 +79,9 @@ assert.match(firebase, /async function handleEmployeeRegister/, "Employees must 
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
 assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
 assert.match(firebase, /if\(role==="cashier"\)return \["products","invoices","movements","customers"\]/, "Cashiers must not download the full cash ledger");
+assert.match(rules, /role == 'cashier'\\s*&& store in \\['products', 'invoices', 'movements', 'customers'\\]/, "Cashiers must not write directly to the cash ledger");
+assert.doesNotMatch(rules, /role == 'cashier'\\s*&& store in \\[[^\\]]*'cashEntries'/, "Cashier role must not be granted direct cash ledger writes");
+assert.match(firebase, /activeMember&&activeMember\\.local[\\s\\S]*الترخيص المحلي لا يدعم دعوات أو حسابات موظفين سحابية/, "Local license must explain why cloud employee invitations are unavailable");
 assert.match(firebase, /where\("store","in",stores\)/, "Cloud queries must filter the stores permitted for the current role");
 assert.match(firebase, /async function writeLicense/, "Project administrator must be able to issue and suspend licenses");
 assert.match(firebase, /"7d".*7/, "Seven-day license plan must be available");
