@@ -198,6 +198,8 @@ service cloud.firestore {
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.deviceId == deviceId
           && request.resource.data.active == true
+          && request.resource.data.slot is int
+          && getAfter(/databases/$(database)/documents/shops/$(shopId)/deviceSlots/$(request.resource.data.slot)).data.deviceId == deviceId
           && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud';
         allow update: if isPlatformAdmin()
           || (isMember(shopId)
