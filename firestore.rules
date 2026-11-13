@@ -192,6 +192,83 @@ service cloud.firestore {
         allow delete: if isOwner(shopId) && resource.data.role != 'owner';
       }
 
+      match /devices/{deviceId} {
+        allow get, list: if isPlatformAdmin() || isMember(shopId);
+        allow create: if isMember(shopId)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.deviceId == deviceId
+          && request.resource.data.active == true
+          && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud';
+        allow update: if isPlatformAdmin()
+          || (isMember(shopId)
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.deviceId == resource.data.deviceId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt','active'])
+            && request.resource.data.active == true);
+        allow delete: if false;
+      }
+
+      match /deviceSlots/{slotId} {
+        allow get, list: if isPlatformAdmin() || isMember(shopId);
+        allow create, update: if isMember(shopId)
+          && slotId.matches('^[0-9]+
+        allow get, list: if canReadStore(shopId, resource.data.store);
+        allow create, update: if validRecord()
+          && (isPlatformAdmin() || canWriteStore(shopId, request.resource.data.store));
+        // Deletes are represented by tombstone records so devices can converge safely.
+        allow delete: if false;
+      }
+    }
+
+    match /employeeInvites/{code} {
+      allow get: if isPlatformAdmin()
+        || (signedIn() && isOwner(resource.data.shopId))
+        || (signedIn() && resource.data.email == request.auth.token.email);
+      allow list: if signedIn() && isOwner(resource.data.shopId);
+      allow create: if signedIn()
+        && isOwner(request.resource.data.shopId)
+        && request.resource.data.code == code
+        && request.resource.data.email is string
+        && request.resource.data.role in ['manager', 'cashier', 'accountant']
+        && request.resource.data.active == true
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'code', 'shopId', 'shopName', 'email', 'role', 'active', 'createdBy', 'createdAt'
+        ]);
+      allow update: if (
+          signedIn()
+          && isOwner(resource.data.shopId)
+          && request.resource.data.shopId == resource.data.shopId
+        )
+        || (
+          signedIn()
+          && resource.data.active == true
+          && resource.data.email == request.auth.token.email
+          && request.resource.data.active == false
+          && request.resource.data.acceptedByUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'active', 'acceptedByUid', 'acceptedAt'
+          ])
+        );
+      allow delete: if signedIn() && isOwner(resource.data.shopId);
+    }
+
+    match /licenses/{shopId} {
+      // Shop members can only read their own shop's signed license.
+      allow get: if isPlatformAdmin() || isMember(shopId);
+      allow list: if isPlatformAdmin();
+      allow create, update, delete: if isPlatformAdmin();
+    }
+  }
+})
+          && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
+          && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud'
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.active == true;
+        allow delete: if false;
+      }
+
       match /records/{recordId} {
         allow get, list: if canReadStore(shopId, resource.data.store);
         allow create, update: if validRecord()
