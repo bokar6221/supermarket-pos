@@ -1026,7 +1026,7 @@ async function registerCurrentDevice(shopId,uid){
   for(const slot of slots)slotSnapshots.push(await tx.get(slot));
   const free=slotSnapshots.findIndex(s=>!s.exists()||s.data().active!==true);
   if(free<0)throw new Error("وصل المحل إلى الحد الأقصى للأجهزة المسموح بها ("+cap+"). اطلب من مدير المنصة زيادة الحد أو إلغاء ربط جهاز قديم.");
-  const record={deviceId:id,uid,label:"جهاز "+id.slice(0,8),platform:/Android/i.test(navigator.userAgent)?"Android":"متصفح",userAgent:String(navigator.userAgent||"").slice(0,180),active:true,slot:free,linkedAt:serverTimestamp(),lastSeenAt:serverTimestamp()};
+  const record={deviceId:id,uid,label:"جهاز "+id.slice(0,8),platform:/Android/i.test(navigator.userAgent)?"Android":"متصفح",userAgent:String(navigator.userAgent||"").slice(0,180),active:true,slot:String(free),linkedAt:serverTimestamp(),lastSeenAt:serverTimestamp()};
   tx.set(ref,record);tx.set(slots[free],{deviceId:id,uid,active:true,updatedAt:serverTimestamp()});
  });
  if(stopOwnDeviceListener)stopOwnDeviceListener();
@@ -1056,7 +1056,7 @@ async function unlinkShopDevice(shop,device){
  const ref=deviceRef(shop.id,device.id),slot=device.slot;
  await runTransaction(cloudDb,async tx=>{
   const current=await tx.get(ref);if(!current.exists()||current.data().active!==true)return;
-  const sr=Number.isInteger(slot)?deviceSlotRef(shop.id,slot):null;
+  const sr=slot!==undefined&&slot!==null?deviceSlotRef(shop.id,String(slot)):null;
   const ss=sr?await tx.get(sr):null;
   tx.update(ref,{active:false,unlinkedAt:serverTimestamp(),unlinkedBy:activeUser.uid});
   if(ss&&ss.exists()&&ss.data().deviceId===device.id)tx.update(sr,{active:false,unlinkedAt:serverTimestamp()});
