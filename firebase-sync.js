@@ -823,6 +823,7 @@ async function checkShopLicense(shopId){
     setStatus("لا يوجد ترخيص صادر لهذا المحل. يظل البرنامج مقفولًا حتى تصدر إدارة المنصة ترخيصًا صالحًا.","error");return false;
    }
    licenseDocument=snapshot.data();
+   if(licenseDocument.payload&&licenseDocument.payload.licenseType==="local"){if(window.POSGate)window.POSGate.lock("هذا المحل مرخص محليًا. استخدم ملف الترخيص المحلي دون تسجيل الدخول السحابي.");setStatus("الترخيص محلي ولا يقبل ربط حسابات أو أجهزة سحابية.","error");return false;}
   }catch(error){console.warn("Online license check failed; trying signed cached license",error);}
  }
  if(licenseDocument){
@@ -1088,12 +1089,12 @@ function renderPlatformShops(){
   const meta=document.createElement("small");meta.textContent="Shop ID: "+shop.id+" · "+formatLicenseState(shop.license);main.append(name,meta);
   const actions=document.createElement("div");actions.className="platform-shop-actions";
   const policy=document.createElement("div");policy.className="platform-policy";
-  const offlineLabel=document.createElement("label"),offline=document.createElement("input");offline.type="checkbox";offline.checked=!payload||payload.offlineAllowed!==false;offline.disabled=!payload;
+  const offlineLabel=document.createElement("label"),offline=document.createElement("input");offline.type="checkbox";offline.checked=!payload||payload.offlineAllowed!==false;offline.disabled=!payload||payload.licenseType==="local";
   offlineLabel.append(offline,document.createTextNode(" السماح بالبيع أوفلاين"));
-  const cloudLabel=document.createElement("label"),cloud=document.createElement("input");cloud.type="checkbox";cloud.checked=!payload||payload.cloudSyncEnabled!==false;cloud.disabled=!payload;
+  const cloudLabel=document.createElement("label"),cloud=document.createElement("input");cloud.type="checkbox";cloud.checked=!payload||payload.cloudSyncEnabled!==false;cloud.disabled=!payload||payload.licenseType==="local";
   cloudLabel.append(cloud,document.createTextNode(" تفعيل المزامنة أونلاين"));
   policy.append(offlineLabel,cloudLabel);
-  const savePolicy=document.createElement("button");savePolicy.type="button";savePolicy.className="secondary";savePolicy.textContent="حفظ سياسة الاتصال";savePolicy.disabled=!payload;
+  const savePolicy=document.createElement("button");savePolicy.type="button";savePolicy.className="secondary";savePolicy.textContent="حفظ سياسة الاتصال";savePolicy.disabled=!payload||payload.licenseType==="local";
   savePolicy.onclick=async()=>{try{savePolicy.disabled=true;await saveShopPolicy(shop,offline.checked,cloud.checked);}catch(error){$("platformMessage").textContent="تعذر حفظ السياسة: "+firebaseError(error);}finally{savePolicy.disabled=false;}};
   const duration=document.createElement("select");
   [["7d","7 أيام"],["1m","شهر"],["3m","3 أشهر"],["6m","6 أشهر"],["1y","سنة"],["life","مدى الحياة"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;duration.append(o);});
