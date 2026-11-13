@@ -81,6 +81,24 @@ assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scope
 assert.match(firebase, /if\(role==="cashier"\)return \["products","invoices","movements","customers"\]/, "Cashiers must not download the full cash ledger");
 assert.match(firebase, /where\("store","in",stores\)/, "Cloud queries must filter the stores permitted for the current role");
 assert.match(firebase, /async function writeLicense/, "Project administrator must be able to issue and suspend licenses");
+assert.match(firebase, /"7d".*7/, "Seven-day license plan must be available");
+assert.match(firebase, /"3m".*3/, "Three-month license plan must be available");
+assert.match(firebase, /"life".*lifetime:true/, "Lifetime license plan must be available");
+assert.match(firebase, /maxDevices:cap/, "Each shop license must carry its device limit");
+assert.match(firebase, /licenseType:type/, "Each shop license must distinguish local and cloud modes");
+assert.match(firebase, /registerCurrentDevice/, "Cloud devices must be registered against the license limit");
+assert.match(firebase, /وصل المحل إلى الحد الأقصى للأجهزة المسموح بها/, "A new cloud device must be rejected after reaching the limit");
+assert.match(firebase, /unlinkShopDevice/, "Platform admin must be able to unlink a registered device");
+assert.match(firebase, /platform-device-table/, "Platform admin must see devices in a structured table");
+assert.match(firebase, /downloadLocalLicense/, "Platform admin must be able to export signed local licenses");
+assert.match(firebase, /bindLocalLicenseUI/, "A local license must be importable without cloud login");
+assert.match(accessGate, /importLocalLicense/, "Local license activation must verify the signature on-device");
+assert.match(accessGate, /licenseType==="local"/, "Local mode must initialize a local owner session without Firebase membership");
+assert.match(html, /id="localLicenseFile"/, "The local license import control must exist");
+assert.match(html, /id="activateLocalLicense"/, "The local license activation control must exist");
+assert.match(rules, /match \/devices\//, "Firestore must protect the registered cloud devices collection");
+assert.match(rules, /match \/deviceSlots\//, "Firestore must protect allocated device slots");
+
 assert.match(rules, /match \/platformAdmins\//, "Platform administrator collection must be protected");
 assert.match(rules, /match \/licenses\//, "License records must be protected by Firestore rules");
 assert.match(rules, /function canWriteStore/, "Firestore must enforce role-based data writes");
