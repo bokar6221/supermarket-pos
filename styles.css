@@ -736,3 +736,20 @@ body.license-activation-only #view-settings>.inner-tabs{display:none!important}
 body.license-activation-only #view-settings .inner-tab-panel:not([data-subpanel="cloud"]){display:none!important}
 body.license-activation-only #view-settings .inner-tab-panel[data-subpanel="cloud"]{display:block!important}
 body.license-activation-only #view-settings .inner-tab-panel[data-subpanel="cloud"]>.panel{display:block!important}
+
+
+/* Platform license and device management */
+.platform-shop-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px;padding:16px;margin:12px 0;border:1px solid var(--line,#dbe4df);border-radius:14px;background:var(--panel,#fff)}
+.platform-shop-main{min-width:190px;flex:1 1 220px;display:flex;flex-direction:column;gap:7px}
+.platform-shop-main small{overflow-wrap:anywhere;color:var(--muted,#64748b)}
+.platform-shop-actions{display:flex;flex:2 1 420px;flex-wrap:wrap;align-items:center;gap:8px}
+.platform-shop-actions select,.platform-shop-actions input[type=number]{min-width:110px;max-width:180px;padding:9px;border:1px solid var(--line,#cbd5e1);border-radius:9px;background:var(--surface,#fff);color:inherit}
+.platform-policy{display:flex;flex-wrap:wrap;gap:10px;width:100%}
+.platform-policy label{display:flex;align-items:center;gap:6px}
+.platform-device-panel{width:100%;overflow-x:auto;margin:0 0 18px;padding:10px 14px;border:1px solid var(--line,#dbe4df);border-radius:12px;background:var(--surface,#f8faf9)}
+.platform-device-table{width:100%;min-width:650px;border-collapse:collapse;font-size:13px}
+.platform-device-table th,.platform-device-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line,#dbe4df);white-space:nowrap}
+.platform-device-table th{font-weight:700;background:var(--soft,#edf4ef)}
+.platform-device-panel p{margin:10px 0 2px;font-weight:700}
+#localLicensePanel{margin-bottom:16px;border:1px solid var(--line,#dbe4df);border-radius:12px;padding:14px;background:var(--surface,#f8faf9)}
+#localLicensePanel h3{margin-top:0}
