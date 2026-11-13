@@ -214,6 +214,7 @@ if(localLicenseButton)localLicenseButton.addEventListener("click",async()=>{
     const file=localLicenseInput&&localLicenseInput.files&&localLicenseInput.files[0];
     if(!file)throw new Error("اختر ملف الترخيص المحلي أولًا.");
     const parsed=JSON.parse(await file.text());
+    if(typeof window.POSCloudPrepareLocalMode==="function")await window.POSCloudPrepareLocalMode();
     await importLocalLicense(parsed);
     if($("shopTitle"))$("shopTitle").textContent=String(parsed.payload.shopName||"المحل");
     if(localLicenseStatus){localLicenseStatus.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";localLicenseStatus.dataset.state="success";}
