@@ -94,6 +94,7 @@ assert.match(firebase, /downloadLocalLicense/, "Platform admin must be able to e
 assert.match(accessGate, /localLicenseButton/, "Local license import must work independently of Firebase network modules");
 assert.match(accessGate, /importLocalLicense/, "Local license activation must verify the signature on-device");
 assert.match(accessGate, /licenseType==="local"/, "Local mode must initialize a local owner session without Firebase membership");
+assert.match(accessGate, /isCloudLicense:/, "Cloud device registration must remain enforced when data sync is disabled");
 assert.match(html, /id="localLicenseFile"/, "The local license import control must exist");
 assert.match(html, /id="activateLocalLicense"/, "The local license activation control must exist");
 assert.match(rules, /match \/devices\//, "Firestore must protect the registered cloud devices collection");
