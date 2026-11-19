@@ -1091,7 +1091,7 @@ async function writeLicense(shop,plan,status,maxDevices,licenseType,renew){
   else if(old&&old.status==="active"&&old.plan===plan&&renew!==true&&Date.parse(old.expiresAt)>now.getTime())expires=new Date(old.expiresAt);
   else expires=addLicensePlan(now,plan);
  }
- const payload={schema:2,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,plan,planLabel:spec.label,planMonths:spec.months||0,licenseType:type,maxDevices:cap,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:spec.lifetime&&status==="active"?"9999-12-31T23:59:59.999Z":expires.toISOString(),offlineAllowed:type==="local"?true:(old?old.offlineAllowed!==false:true),cloudSyncEnabled:type==="cloud"?(old&&old.licenseType==="cloud"?old.cloudSyncEnabled!==false:true):false,issuerUid:activeUser.uid};
+ const payload={schema:2,shopId:shop.id,shopName:String(shop.name||"المحل"),ownerUid:String(shop.ownerUid||""),status,plan,planLabel:spec.label,planMonths:spec.months||0,licenseType:type,maxDevices:cap,issuedAt:nowIso,validFrom:status==="active"?nowIso:old&&old.validFrom||nowIso,expiresAt:spec.lifetime&&status==="active"?"9999-12-31T23:59:59.999Z":expires.toISOString(),offlineAllowed:type==="local"?true:(cap===1&&(!old||old.offlineAllowed!==false)),cloudSyncEnabled:type==="cloud"?(old&&old.licenseType==="cloud"?old.cloudSyncEnabled!==false:true):false,issuerUid:activeUser.uid};
  const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
  batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
  setStatus(status==="active"?"تم تحديث الترخيص وإعداداته بنجاح.":"تم تعليق الترخيص مركزيًا.","success");await loadPlatformShops();
@@ -1102,7 +1102,10 @@ async function saveShopPolicy(shop,offlineAllowed,cloudSyncEnabled){
  const snapshot=await getDoc(licenseRef(shop.id));
  if(!snapshot.exists()||!snapshot.data().payload)throw new Error("فعّل ترخيص المحل أولًا قبل ضبط سياسة الاتصال.");
  if(snapshot.data().payload.licenseType==="local")throw new Error("الترخيص المحلي يعمل دون اتصال ولا يقبل إعدادات المزامنة السحابية.");
- const payload={...snapshot.data().payload,offlineAllowed:!!offlineAllowed,cloudSyncEnabled:!!cloudSyncEnabled,policyUpdatedAt:new Date().toISOString(),issuerUid:activeUser.uid};
+ const current=snapshot.data().payload||{};
+ const maxDevices=Math.max(1,Math.floor(Number(current.maxDevices)||1));
+ if(offlineAllowed&&maxDevices>1)throw new Error("لضمان سلامة المخزون، البيع أوفلاين متاح لترخيص سحابي بجهاز واحد فقط. مع أكثر من جهاز يجب تشغيل الاتصال أو تنفيذ حصص مخزون مستقلة لكل جهاز.");
+ const payload={...current,offlineAllowed:!!offlineAllowed,cloudSyncEnabled:!!cloudSyncEnabled,policyUpdatedAt:new Date().toISOString(),issuerUid:activeUser.uid};
  const signature=await signLicensePayload(payload),batch=writeBatch(cloudDb);
  batch.set(licenseRef(shop.id),{payload,signature,updatedAt:serverTimestamp()});await batch.commit();
  setStatus("تم حفظ سياسة الأوفلاين والأونلاين للمحل وإعادة توقيع الترخيص.","success");
@@ -1214,11 +1217,13 @@ function renderPlatformShops(){
   const licenseType=document.createElement("select");[["cloud","سحابي"],["local","محلي"]].forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;licenseType.append(o);});licenseType.value=payload&&payload.licenseType||"cloud";
    const offlineRisk=document.createElement("p");offlineRisk.className="hint";
    const updateOfflineRisk=()=>{
-    const risky=offline.checked&&licenseType.value==="cloud"&&Number(deviceLimit.value)>1;
-    offlineRisk.textContent=risky
-     ?"تنبيه تشغيلي: السماح بالأوفلاين مع عدة أجهزة قد يؤدي إلى بيع متزامن من أرصدة قديمة ورصيد سالب بعد المزامنة. لا تسمح بأكثر من جهاز يبيع دون اتصال في الوقت نفسه، أو أوقف الأوفلاين."
+    const multiDeviceCloud=licenseType.value==="cloud"&&Number(deviceLimit.value)>1;
+    if(multiDeviceCloud)offline.checked=false;
+    offline.disabled=!payload||licenseType.value==="local"||multiDeviceCloud;
+    offlineRisk.textContent=multiDeviceCloud
+     ?"لضمان سلامة المخزون، لا يمكن تفعيل البيع أوفلاين مع أكثر من جهاز في الترخيص السحابي. يمكن تشغيل عدة أجهزة مع اتصال دائم، أو استخدام جهاز واحد بترخيص سحابي يسمح بالأوفلاين."
      :"";
-    offlineRisk.hidden=!risky;
+    offlineRisk.hidden=!multiDeviceCloud;
    };
    offline.addEventListener("change",updateOfflineRisk);
    deviceLimit.addEventListener("input",updateOfflineRisk);
