@@ -96,7 +96,11 @@ function licenseCheck(doc,shopId){
   if(!Number.isFinite(start)||!Number.isFinite(end))return {ok:false,reason:"بيانات مدة الترخيص غير صحيحة."};
   if(now<start)return {ok:false,reason:"لم يبدأ سريان الترخيص بعد."};
   if(now>=end)return {ok:false,reason:"انتهت مدة الترخيص. يرجى التواصل مع إدارة البرنامج للتجديد."};
-  return {ok:true,expiresAt:p.expiresAt,offlineAllowed:p.offlineAllowed!==false,cloudSyncEnabled:p.cloudSyncEnabled!==false};
+  const licenseType=p.licenseType==="local"?"local":"cloud";
+  const maxDevices=Math.max(1,Math.floor(Number(p.maxDevices)||1));
+  const offlineAllowed=licenseType==="local"||(maxDevices===1&&p.offlineAllowed!==false);
+  const cloudSyncEnabled=licenseType==="cloud"&&p.cloudSyncEnabled!==false;
+  return {ok:true,expiresAt:p.expiresAt,offlineAllowed,cloudSyncEnabled};
 }
 function isManaged(){return true;}
 function currentLicenseCheck(){

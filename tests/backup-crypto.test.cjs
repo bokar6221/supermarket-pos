@@ -1,6 +1,6 @@
 "use strict";
 const assert=require("node:assert/strict");
-globalThis.crypto=globalThis.crypto||require("node:crypto").webcrypto;
+if(!globalThis.crypto||!globalThis.crypto.subtle)Object.defineProperty(globalThis,"crypto",{value:require("node:crypto").webcrypto,configurable:true});
 require("../backup-crypto.js");
 async function run(){
   const payload={
