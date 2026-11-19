@@ -391,15 +391,18 @@
 
   async function savePurchase(purchase){
     if(!purchase||!Array.isArray(purchase.items)||!purchase.items.length)throw new Error("أضف صنفًا واحدًا على الأقل للمشتريات.");
-    const total=Number(purchase.total),paid=Number(purchase.paidAmount||0);
-    if(!Number.isFinite(total)||total<=0||!Number.isFinite(paid)||paid<0||paid>total+0.000001)throw new Error("راجع إجمالي المشتريات والمبلغ المدفوع.");
-    const ids=new Set();
+    const total=Number(purchase.total),paid=Number(purchase.paidAmount||0),method=purchase.paymentMethod||"cash";
+    if(!Number.isFinite(total)||total<=0||!Number.isFinite(paid)||paid<0||paid>total+0.000001||!["cash","electronic"].includes(method))throw new Error("راجع إجمالي المشتريات والمبلغ المدفوع وطريقة الدفع.");
+    const ids=new Set();let calculatedTotal=0;
     for(const item of purchase.items){
       if(!item.productId||ids.has(item.productId))throw new Error("لا تكرر الصنف في نفس فاتورة الشراء.");
       ids.add(item.productId);
-      if(!(Number(item.quantity)>0)||!(Number(item.unitCost)>=0)||(item.unit==="piece"&&!Number.isInteger(Number(item.quantity))))throw new Error("راجع كمية وتكلفة كل صنف؛ كمية القطعة يجب أن تكون عددًا صحيحًا.");
+      const quantity=Number(item.quantity),unitCost=Number(item.unitCost);
+      if(!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(unitCost)||unitCost<0||(item.unit==="piece"&&!Number.isInteger(quantity)))throw new Error("راجع كمية وتكلفة كل صنف؛ كمية القطعة يجب أن تكون عددًا صحيحًا.");
+      calculatedTotal+=quantity*unitCost;
     }
-    const clean={...purchase,total,paidAmount:paid,balance:Math.max(0,total-paid),createdAt:purchase.createdAt||new Date().toISOString()};
+    if(!Number.isFinite(calculatedTotal)||Math.abs(calculatedTotal-total)>0.02)throw new Error("إجمالي فاتورة الشراء لا يطابق مجموع كميات الأصناف مضروبًا في تكلفة الوحدة.");
+    const clean={...purchase,total,paidAmount:paid,paymentMethod:method,balance:Math.max(0,total-paid),createdAt:purchase.createdAt||new Date().toISOString()};
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{

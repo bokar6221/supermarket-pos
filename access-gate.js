@@ -31,11 +31,19 @@ function publicKey(){
   if(!publicKeyPromise)publicKeyPromise=crypto.subtle.importKey("spki",bytesFromBase64(PUBLIC_KEY_DER_B64),{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);
   return publicKeyPromise;
 }
+function supportsLicensePayload(payload){
+  if(!payload||![1,2].includes(payload.schema)||!payload.shopId||!["active","suspended"].includes(payload.status))return false;
+  if(payload.schema===2){
+    if(!["local","cloud"].includes(payload.licenseType))return false;
+    if(!Number.isInteger(payload.maxDevices)||payload.maxDevices<1||payload.maxDevices>500)return false;
+  }
+  return true;
+}
 async function verifyDocument(document){
   try{
     if(!document||!document.payload||typeof document.signature!=="string")return false;
     const payload=document.payload;
-    if(payload.schema!==1||!payload.shopId||!["active","suspended"].includes(payload.status))return false;
+    if(!supportsLicensePayload(payload))return false;
     return await crypto.subtle.verify(
       {name:"ECDSA",hash:"SHA-256"},await publicKey(),bytesFromBase64(document.signature),
       new TextEncoder().encode(stable(payload))
@@ -66,6 +74,18 @@ function openActivation(){
   const node=$("licenseLockScreen");if(node)node.hidden=true;
   document.body.classList.remove("license-locked");
   const email=$("cloudEmail");if(email)email.focus();
+}
+async function importLocalLicense(doc){
+  if(!doc||!doc.payload||doc.payload.licenseType!=="local")throw new Error("هذا الملف ليس ترخيصًا محليًا.");
+  const shopId=String(doc.payload.shopId||"");
+  if(!shopId)throw new Error("ملف الترخيص لا يحتوي معرّف المحل.");
+  const valid=await verifyDocument(doc);
+  if(!valid)throw new Error("التوقيع الرقمي للترخيص غير صحيح.");
+  const ok=await applyLicense(doc,shopId,true,false);
+  if(!ok)throw new Error("الترخيص المحلي منتهي أو موقوف أو لم يبدأ بعد.");
+  setSession({uid:"local-"+shopId,shopId,role:"owner",active:true,local:true});
+  hideLock();
+  return true;
 }
 function licenseCheck(doc,shopId){
   if(!doc||!doc.payload)return {ok:false,reason:"لا يوجد ترخيص لهذا المحل."};
@@ -154,6 +174,10 @@ async function initialize(){
   if(!shopId){showLock("البرنامج غير مفعل","يجب تسجيل الدخول أو إنشاء حساب وربط المحل والتحقق من الترخيص قبل استخدام نقاط البيع.");return;}
   try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
   const doc=cachedLicense(shopId);
+  if(doc&&doc.payload&&doc.payload.licenseType==="local"&&(!session||!session.uid)){
+    session={uid:"local-"+shopId,shopId,role:"owner",active:true,local:true};
+    localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+  }
   if(!session||!session.uid||!session.active||session.shopId!==shopId){
     showLock("يلزم التحقق من الحساب","هذا الجهاز مرتبط بمحل. اتصل بالإنترنت وسجّل الدخول بحساب موظف نشط.");return;
   }
@@ -182,15 +206,32 @@ function installMutationGuards(){
   window.POSDatabase.__localRoleGuarded=true;
 }
 window.POSGate={
-  setSession,setPlatformAdmin,applyLicense,verifyDocument,licenseCheck,assertMutation,roleCan,lock,
+  setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,supportsLicensePayload,licenseCheck,assertMutation,roleCan,lock,
   getSession:()=>session,getLicense:()=>license,
   isManaged, isLicensed:()=>licenseReady&&currentLicenseCheck().ok,
   isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
   isCloudSyncEnabled:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&c.cloudSyncEnabled);},
+  isCloudLicense:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&license&&license.payload&&license.payload.licenseType==="cloud");},
   canOperateLocally,
   roleLabel:role=>ROLE_LABELS[role]||"غير محدد"
 };
 installMutationGuards();
+const localLicenseInput=$("localLicenseFile"),localLicenseButton=$("activateLocalLicense"),localLicenseStatus=$("localLicenseStatus");
+if(localLicenseButton)localLicenseButton.addEventListener("click",async()=>{
+  try{
+    const file=localLicenseInput&&localLicenseInput.files&&localLicenseInput.files[0];
+    if(!file)throw new Error("اختر ملف الترخيص المحلي أولًا.");
+    const parsed=JSON.parse(await file.text());
+    if(typeof window.POSCloudPrepareLocalMode==="function")await window.POSCloudPrepareLocalMode();
+    await importLocalLicense(parsed);
+    if(typeof window.POSCloudRefreshAccessUI==="function")window.POSCloudRefreshAccessUI();
+    if($("shopTitle"))$("shopTitle").textContent=String(parsed.payload.shopName||"المحل");
+    if(localLicenseStatus){localLicenseStatus.textContent="تم تفعيل الترخيص المحلي بنجاح. لا يلزم تسجيل الدخول السحابي.";localLicenseStatus.dataset.state="success";}
+    if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=true;
+    if($("cloudConnectedPanel"))$("cloudConnectedPanel").hidden=true;
+    document.body.classList.remove("license-activation-only");
+  }catch(error){if(localLicenseStatus){localLicenseStatus.textContent="تعذر تفعيل الترخيص: "+String(error.message||error);localLicenseStatus.dataset.state="error";}}
+});
 const activationButton=$("licenseActivationButton");
 if(activationButton)activationButton.addEventListener("click",openActivation);
 document.addEventListener("DOMContentLoaded",initialize);

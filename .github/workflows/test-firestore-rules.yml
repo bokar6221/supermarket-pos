@@ -1,0 +1,44 @@
+name: Test Firestore Security Rules
+
+on:
+  push:
+    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1"]
+    paths:
+      - "firestore.rules"
+      - "firestore.indexes.json"
+      - "firebase.json"
+      - "tests/firestore-rules.test.mjs"
+      - ".github/workflows/test-firestore-rules.yml"
+  pull_request:
+    branches: [main, "offline-first-rebuild-v2", "license-device-management-v1"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    name: Firestore rules emulator tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Set up Java for Firebase Emulator
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install pinned emulator test tools
+        run: |
+          npm install --no-save --package-lock=false firebase@13.2.0 @firebase/rules-unit-testing@6.0.0 firebase-tools@15.37.0
+
+      - name: Run Firestore Rules tests against emulator only
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-supermarket-pos "node tests/firestore-rules.test.mjs"

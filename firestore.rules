@@ -76,7 +76,7 @@ service cloud.firestore {
         || (
           isMember(shopId)
           && get(memberPath(shopId, request.auth.uid)).data.role == 'cashier'
-          && store in ['products', 'invoices', 'movements', 'cashEntries', 'customers']
+          && store in ['products', 'invoices', 'movements', 'customers']
         )
         || (
           isMember(shopId)
@@ -190,6 +190,45 @@ service cloud.firestore {
             'joinedAt', 'createdAt', 'updatedAt'
           ]);
         allow delete: if isOwner(shopId) && resource.data.role != 'owner';
+      }
+
+      match /devices/{deviceId} {
+        allow get, list: if isPlatformAdmin() || isMember(shopId);
+        allow create: if isMember(shopId)
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.deviceId == deviceId
+          && request.resource.data.active == true
+          && request.resource.data.slot is string
+          && getAfter(/databases/$(database)/documents/shops/$(shopId)/deviceSlots/$(request.resource.data.slot)).data.deviceId == deviceId
+          && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud';
+        allow update: if isPlatformAdmin()
+          || (isMember(shopId)
+            && resource.data.uid == request.auth.uid
+            && request.resource.data.uid == resource.data.uid
+            && request.resource.data.deviceId == resource.data.deviceId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt','active'])
+            && request.resource.data.active == true)
+          || (isMember(shopId)
+            && resource.data.uid == request.auth.uid
+            && resource.data.active == false
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.deviceId == deviceId
+            && request.resource.data.slot is string
+            && getAfter(/databases/$(database)/documents/shops/$(shopId)/deviceSlots/$(request.resource.data.slot)).data.deviceId == deviceId
+            && request.resource.data.active == true);
+        allow delete: if false;
+      }
+
+      match /deviceSlots/{slotId} {
+        allow get, list: if isPlatformAdmin() || isMember(shopId);
+        allow create: if isMember(shopId)
+          && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
+          && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud'
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.active == true
+          && getAfter(/databases/$(database)/documents/shops/$(shopId)/devices/$(request.resource.data.deviceId)).data.slot == slotId;
+        allow update: if isPlatformAdmin();
+        allow delete: if isPlatformAdmin();
       }
 
       match /records/{recordId} {

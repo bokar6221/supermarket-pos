@@ -273,6 +273,13 @@
     <div class="panel">
       <h2>المزامنة السحابية</h2>
       <p class="hint">البيع محلي على الجهاز، بينما الاتصال السحابي اختياري ويخضع لسياسة مدير المنصة. يمكن منع الأوفلاين أو إيقاف المزامنة لكل محل من لوحة إدارة التراخيص.</p>
+      <div class="panel" id="localLicensePanel">
+        <h3>تفعيل ترخيص محلي دون حساب سحابي</h3>
+        <p class="hint">هذا الوضع يعمل على هذا الجهاز فقط، ولا يحتاج تسجيل دخول Firebase أو دعوات موظفين أو مزامنة. استورد ملف الترخيص الذي أصدره مدير المنصة.</p>
+        <label>ملف الترخيص المحلي (JSON)<input id="localLicenseFile" type="file" accept=".json,application/json"></label>
+        <button class="primary" id="activateLocalLicense" type="button">استيراد وتفعيل الترخيص المحلي</button>
+        <p class="hint" id="localLicenseStatus" role="status"></p>
+      </div>
       <div id="cloudAuthPanel">
         <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
         <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
@@ -292,6 +299,11 @@
         </div>
       </div>
       <p class="hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
+      <section class="panel sync-conflicts-panel" id="cloudConflictsPanel" hidden aria-live="polite">
+        <h3>تعارضات المزامنة تحتاج مراجعة</h3>
+        <p class="hint">اختر النسخة الصحيحة لكل سجل بعد مراجعة بياناته. لا يتم استبدال النسخ المتعارضة تلقائيًا.</p>
+        <div id="cloudConflictsList"></div>
+      </section>
       <p class="hint">صاحب المحل ينشئ لكل موظف حسابًا منفصلًا من تبويب «الموظفون والصلاحيات» بدعوة بريدية. لا تشارك كلمة مرور أي حساب بين الموظفين.</p>
       <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password في Firebase، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
     </div>
