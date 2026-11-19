@@ -2,7 +2,7 @@ name: Build Android POS APK
 
 on:
   push:
-    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1"]
+    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1", "commercial-hardening-1.10.1"]
     paths:
       - "android-app/**"
       - "app.js"
@@ -13,6 +13,7 @@ on:
       - "accounts.js"
       - "firebase-sync.js"
       - "access-gate.js"
+      - "backup-crypto.js"
       - "sw.js"
       - "firestore.rules"
       - "firestore.indexes.json"
@@ -57,6 +58,7 @@ jobs:
           node --check catalog.js
           node --check accounts.js
           node --check access-gate.js
+          node --check backup-crypto.js
           node --input-type=module --check < firebase-sync.js
 
       - name: Install browser database test dependency
@@ -66,11 +68,12 @@ jobs:
         run: |
           node tests/validate-integrity.js
           node --require fake-indexeddb/auto tests/data-integrity.test.cjs
+          node tests/backup-crypto.test.cjs
 
       - name: Sync web app into Android assets
         run: |
           mkdir -p android-app/app/src/main/assets/www
-          cp index.html app.js db.js styles.css catalog.js accounts.js access-gate.js firebase-sync.js icon.svg manifest.json android-app/app/src/main/assets/www/
+          cp index.html app.js db.js styles.css catalog.js accounts.js access-gate.js backup-crypto.js firebase-sync.js icon.svg manifest.json android-app/app/src/main/assets/www/
 
       - name: Build APK
         working-directory: android-app
@@ -83,7 +86,8 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -F "package: name='com.supermarket.pos'" /tmp/apk-badging.txt
-          grep -F "versionCode='14'" /tmp/apk-badging.txt
+          grep -F "versionCode='15'" /tmp/apk-badging.txt
+          grep -F "versionName='1.10.1-test'" /tmp/apk-badging.txt
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
