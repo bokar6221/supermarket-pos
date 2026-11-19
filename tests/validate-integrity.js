@@ -67,6 +67,10 @@ assert.equal(html.includes('<script type="module" src="firebase-sync.js"></scrip
 assert.ok(accessGate.includes('const offlineAllowed=licenseType==="local"||(maxDevices===1&&p.offlineAllowed!==false);'), "Cloud offline mode must be restricted to a single-device license");
 assert.ok(firebase.includes('offlineAllowed:type==="local"?true:(cap===1&&(!old||old.offlineAllowed!==false))'), "New cloud licenses must default to online-only when multi-device");
 assert.ok(firebase.includes('if(offlineAllowed&&maxDevices>1)'), "Admin policy save must reject offline mode for multi-device cloud licenses");
+assert.ok(firebase.includes("const occupiedSnapshot=await getDocs(slotCollection)"), "Device slot discovery must happen before the transaction");
+assert.ok(firebase.includes("const slotSnapshot=await tx.get(selectedSlotRef)"), "The selected device slot must be rechecked inside the transaction");
+assert.ok(firebase.includes("device/slot-taken"), "Concurrent device registration must retry on an occupied slot");
+assert.doesNotMatch(firebase, /for\\(const slot of slots\\)/, "Device registration must not read up to 500 slot documents in one transaction");
 assert.match(accessGate, /يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام/, "Unlinked installs must not receive an offline license");
 assert.doesNotMatch(accessGate, /if\(method==="saveSettings"\)return true/, "No local business mutation may bypass initial activation");
 assert.match(html, /id="licenseActivationButton"/, "Locked installs must have a visible route to activation");
