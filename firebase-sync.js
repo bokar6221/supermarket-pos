@@ -1246,7 +1246,8 @@ function renderPlatformShops(){
    const offlineRisk=document.createElement("p");offlineRisk.className="hint";
    const updateOfflineRisk=()=>{
     const multiDeviceCloud=licenseType.value==="cloud"&&Number(deviceLimit.value)>1;
-    if(multiDeviceCloud)offline.checked=false;
+    if(licenseType.value==="local")offline.checked=true;
+    else if(multiDeviceCloud)offline.checked=false;
     offline.disabled=!payload||licenseType.value==="local"||multiDeviceCloud;
     offlineRisk.textContent=multiDeviceCloud
      ?"لضمان سلامة المخزون، لا يمكن تفعيل البيع أوفلاين مع أكثر من جهاز في الترخيص السحابي. يمكن تشغيل عدة أجهزة مع اتصال دائم، أو استخدام جهاز واحد بترخيص سحابي يسمح بالأوفلاين."
