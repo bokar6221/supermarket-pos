@@ -1,0 +1,73 @@
+"use strict";
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const read = file => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
+const html = read("index.html");
+const app = read("app.js");
+const accounts = read("accounts.js");
+const db = read("db.js");
+const gradle = read("android-app/app/build.gradle");
+const firebase = read("firebase-sync.js");
+const rules = read("firestore.rules");
+const indexes = read("firestore.indexes.json");
+const manifest = read("android-app/app/src/main/AndroidManifest.xml");
+const accessGate = read("access-gate.js");
+
+for (const file of ["app.js", "db.js", "accounts.js", "catalog.js", "sw.js", "access-gate.js"]) {
+  const source = read(file);
+  // Compile without executing browser-dependent code.
+  new Function(source);
+}
+
+const ids = [...html.matchAll(/\bid=["']([^"']+)["']/g)].map(match => match[1]);
+const duplicates = ids.filter((id, index) => ids.indexOf(id) !== index);
+assert.deepEqual([...new Set(duplicates)], [], "HTML must not contain duplicate IDs");
+
+const dynamicIds = new Set([
+  "openShiftForm", "openingCash", "shiftOpenNote", "closedShiftHistory",
+  "closeShiftForm", "countedCash"
+]);
+const referencedIds = [...(app + "\n" + accounts + "\n" + firebase).matchAll(/\$\(["']([^"']+)["']\)/g)]
+  .map(match => match[1]);
+const missingIds = [...new Set(referencedIds)].filter(id => !ids.includes(id) && !dynamicIds.has(id));
+assert.deepEqual(missingIds, [], "Every static JavaScript DOM reference must exist in index.html");
+
+for (const match of html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)) {
+  assert.ok(fs.existsSync(path.join(__dirname, "..", match[1])), "Missing script asset: " + match[1]);
+}
+
+assert.match(db, /مجموع بنود الفاتورة لا يطابق الإجمالي قبل الخصم/, "Invoice line totals must reconcile");
+assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
+assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
+assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
+assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
+assert.match(gradle, /versionName '1.8.1'/, "Android version must match this release");
+
+assert.match(firebase, /projectId: "supermarketpos-e448a"/, "Firebase project ID must match the registered web app");
+assert.match(firebase, /firebasejs\/13\.2\.0/, "Firebase SDK version must be pinned");
+assert.match(firebase, /applyCloudRecords/, "Cloud sync must use the guarded local database adapter");
+assert.match(db, /async function applyCloudRecords/, "Local database must safely apply cloud changes");
+assert.match(rules, /function isMember\(shopId\)/, "Firestore rules must enforce shop membership");
+assert.match(rules, /allow get, list: if canReadStore\(shopId, resource\.data\.store\)/, "Cloud record reads must be restricted by employee role");
+assert.match(html, /id="subtabsHost" class="subtabs-host"/, "Nested tab bar must be mounted directly below the main navigation");
+assert.match(app, /function mountSubtabs\(viewName\)/, "Each main section must mount its own nested navigation");
+assert.match(app, /document\.querySelectorAll\('\[data-subpanel-group=/, "Nested panels must remain connected after moving their tab bar");
+assert.match(manifest, /android\.permission\.INTERNET/, "Android must have network permission");
+assert.match(accessGate, /subtle\.verify/, "Offline licenses must be verified using the embedded public key");
+assert.match(accessGate, /expiresAt/, "License expiry must be enforced locally");
+assert.match(accessGate, /const licenseStatus=licenseCheck\(license,managedShop\)/, "Every protected mutation must re-check license expiry");
+assert.match(accessGate, /setInterval\(recheckLocalLicenseExpiry,15000\)/, "An open app must lock when an offline license expires");
+assert.match(firebase, /async function createEmployeeInvite/, "Owner employee invitations must be implemented");
+assert.match(firebase, /async function handleEmployeeRegister/, "Employees must be able to register with an invitation");
+assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
+assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
+assert.match(firebase, /if\(role==="cashier"\)return \["products","invoices","movements","customers"\]/, "Cashiers must not download the full cash ledger");
+assert.match(firebase, /where\("store","in",stores\)/, "Cloud queries must filter the stores permitted for the current role");
+assert.match(firebase, /async function writeLicense/, "Project administrator must be able to issue and suspend licenses");
+assert.match(rules, /match \/platformAdmins\//, "Platform administrator collection must be protected");
+assert.match(rules, /match \/licenses\//, "License records must be protected by Firestore rules");
+assert.match(rules, /function canWriteStore/, "Firestore must enforce role-based data writes");
+
+console.log("POS integrity checks passed: syntax, HTML IDs, assets, invoice integrity, product history, employees, signed licensing, Firestore role rules and release version.");

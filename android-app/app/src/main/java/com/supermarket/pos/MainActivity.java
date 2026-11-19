@@ -8,6 +8,10 @@ import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.media.Image;
 import android.net.Uri;
+import android.content.Context;
+import android.print.PrintAttributes;
+import android.print.PrintJob;
+import android.print.PrintManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -66,6 +70,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -103,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
     private ValueCallback<Uri[]> filePathCallback;
     private ActivityResultLauncher<String> saveBackupLauncher;
     private String pendingBackupJson;
+    private final List<WebView> activePrintViews = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -232,6 +238,21 @@ public class MainActivity extends AppCompatActivity {
                 saveBackupLauncher.launch(fileName);
             });
         }
+
+        @JavascriptInterface
+        public void shareText(String text) {
+            runOnUiThread(() -> shareTextNative(text));
+        }
+
+        @JavascriptInterface
+        public void sendWhatsApp(String phone, String text) {
+            runOnUiThread(() -> sendWhatsAppNative(phone, text));
+        }
+
+        @JavascriptInterface
+        public void printHtml(String html, String jobName) {
+            runOnUiThread(() -> printHtmlNative(html, jobName));
+        }
     }
 
     private void writeBackupToUri(Uri uri) {
@@ -248,6 +269,115 @@ public class MainActivity extends AppCompatActivity {
         } finally {
             pendingBackupJson = null;
         }
+    }
+
+    private void shareTextNative(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            Toast.makeText(this, "لا توجد بيانات لمشاركتها", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            Intent sendIntent = new Intent(Intent.ACTION_SEND);
+            sendIntent.setType("text/plain");
+            sendIntent.putExtra(Intent.EXTRA_TEXT, text);
+            startActivity(Intent.createChooser(sendIntent, "مشاركة الفاتورة"));
+        } catch (Exception e) {
+            Toast.makeText(this, "تعذر فتح تطبيقات المشاركة: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void sendWhatsAppNative(String phone, String text) {
+        String digits = phone == null ? "" : phone.replaceAll("\\D", "");
+        if (digits.startsWith("00")) digits = digits.substring(2);
+        else if (digits.startsWith("0")) digits = "20" + digits.substring(1);
+        if (digits.length() < 10 || digits.length() > 15) {
+            shareTextNative(text);
+            return;
+        }
+        try {
+            Uri uri = Uri.parse("https://wa.me/" + digits + "?text=" + Uri.encode(text == null ? "" : text));
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (Exception e) {
+            shareTextNative(text);
+        }
+    }
+
+    private void printHtmlNative(String html, String jobName) {
+        if (html == null || html.trim().isEmpty()) {
+            Toast.makeText(this, "لا توجد فاتورة للطباعة", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final String safeJobName = (jobName == null || jobName.trim().isEmpty())
+                ? "فاتورة المحل" : jobName.trim();
+        final WebView printView = new WebView(this);
+        printView.setBackgroundColor(Color.WHITE);
+        printView.setVisibility(View.INVISIBLE);
+        printView.setClickable(false);
+        printView.setFocusable(false);
+        printView.getSettings().setJavaScriptEnabled(false);
+        root.addView(printView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+        ));
+        activePrintViews.add(printView);
+
+        final boolean[] submitted = {false};
+        printView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                if (submitted[0]) return;
+                submitted[0] = true;
+                try {
+                    PrintManager printManager = (PrintManager) getSystemService(Context.PRINT_SERVICE);
+                    if (printManager == null) throw new IllegalStateException("خدمة الطباعة غير متاحة");
+                    PrintAttributes attributes = new PrintAttributes.Builder()
+                            .setColorMode(PrintAttributes.COLOR_MODE_MONOCHROME)
+                            .build();
+                    PrintJob job = printManager.print(
+                            safeJobName,
+                            printView.createPrintDocumentAdapter(safeJobName),
+                            attributes
+                    );
+                    monitorPrintJob(job, printView);
+                    Toast.makeText(MainActivity.this, "تم فتح نافذة الطباعة", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    releasePrintView(printView);
+                    Toast.makeText(MainActivity.this, "تعذرت الطباعة: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+        printView.loadDataWithBaseURL(
+                APP_URL,
+                html,
+                "text/html",
+                "UTF-8",
+                null
+        );
+    }
+
+    private void monitorPrintJob(PrintJob job, WebView printView) {
+        mainHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (job == null || job.isCompleted() || job.isCancelled() || job.isFailed()) {
+                    releasePrintView(printView);
+                } else {
+                    mainHandler.postDelayed(this, 1000L);
+                }
+            }
+        }, 1000L);
+    }
+
+    private void releasePrintView(WebView printView) {
+        if (printView == null || !activePrintViews.contains(printView)) return;
+        activePrintViews.remove(printView);
+        try {
+            if (printView.getParent() instanceof FrameLayout) {
+                ((FrameLayout) printView.getParent()).removeView(printView);
+            }
+            printView.stopLoading();
+            printView.destroy();
+        } catch (Exception ignored) { }
     }
 
     @Override
@@ -619,6 +749,9 @@ public class MainActivity extends AppCompatActivity {
             toneGenerator = null;
         }
         analysisExecutor.shutdown();
+        for (WebView printView : new ArrayList<>(activePrintViews)) {
+            releasePrintView(printView);
+        }
         if (webView != null) {
             webView.destroy();
             webView = null;

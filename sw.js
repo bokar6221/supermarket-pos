@@ -1,5 +1,5 @@
-const CACHE_NAME="supermarket-pos-shell-v11";
-const APP_FILES=["./","./index.html","./styles.css","./db.js","./app.js","./catalog.js","./manifest.json","./icon.svg"];
+const CACHE_NAME="supermarket-pos-shell-v20";
+const APP_FILES=["./","./index.html","./styles.css","./db.js","./app.js","./catalog.js","./accounts.js","./access-gate.js","./firebase-sync.js","./manifest.json","./icon.svg"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_FILES)));self.skipWaiting();});
 self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener("fetch",event=>{if(event.request.method!=="GET")return;event.respondWith(caches.match(event.request).then(hit=>hit||fetch(event.request).then(response=>{if(response&&response.ok){const copy=response.clone();caches.open(CACHE_NAME).then(cache=>cache.put(event.request,copy));}return response;})));});

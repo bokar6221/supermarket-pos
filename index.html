@@ -8,60 +8,363 @@
 <body class="sales-view">
 <header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1></div><span class="offline-tag" id="connectionState">محلي</span></header>
 <nav class="tabs" aria-label="أقسام التطبيق">
-<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button>
+<button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="inventory">المخزون والجرد</button><button class="tab" data-view="purchases">المشتريات والموردون</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="customers">العملاء والحسابات</button><button class="tab" data-view="cash">الخزينة والورديات</button><button class="tab" data-view="reports">التقارير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button><button class="tab" id="employeesTab" data-view="employees" hidden>الموظفون والصلاحيات</button><button class="tab" id="platformTab" data-view="platform" hidden>إدارة التراخيص</button>
 </nav>
+<div id="subtabsHost" class="subtabs-host" hidden aria-label="التبويبات الفرعية"></div>
 <div id="scannerArea" class="scanner-area" hidden><video id="cameraPreview" playsinline></video><p id="scannerMessage">وجّه كاميرا الموبايل إلى باركود المنتج. عند سماع الرنة ارفع الباركود لمسح الصنف التالي.</p><button class="secondary" id="closeScanner">إغلاق المسح</button></div>
 <main class="layout">
 <section class="view active" id="view-sale">
 <div class="panel">
 <div class="section-heading"><div><h2>فاتورة جديدة</h2><p>امسح الباركود أو اختر صنفاً مسجلاً أو أضفه يدوياً</p></div></div>
-<div class="actions"><button class="primary" id="scanButton">مسح باركود بالكاميرا</button><button class="secondary" id="manualButton">بيع يدوي</button></div>
-
-<div class="mobile-product-browser">
+<div class="inner-tabs" data-subtab-group="cashier"><button type="button" class="inner-tab active" data-subtab="scan">مسح الباركود</button><button type="button" class="inner-tab" data-subtab="manual">بيع يدوي</button></div><div class="inner-tab-panel active" data-subpanel-group="cashier" data-subpanel="scan"><div class="actions"><button class="primary" id="scanButton">تشغيل كاميرا الباركود</button></div><div class="mobile-product-browser">
   <div class="quick-head"><h3>اختار المنتج</h3><input id="quickSearch" placeholder="ابحث باسم المنتج أو امسح الباركود"></div>
   <div id="quickCategories" class="category-list"></div>
   <div id="quickProducts" class="quick-products"><p class="empty">أضف منتجات من قسم المنتجات لتظهر هنا.</p></div>
-</div>
+</div></div><div class="inner-tab-panel" data-subpanel-group="cashier" data-subpanel="manual"><div class="panel form-panel manual-sale-panel"><h2>إضافة بند للفاتورة</h2>
+<form id="itemForm"><label>اسم الصنف<input id="itemName" required placeholder="مثال: جبنة رومي"></label>
+<div class="form-grid"><label>طريقة البيع<select id="saleType"><option value="piece">بالقطعة / العبوة</option><option value="weight">بالوزن (كيلو)</option><option value="manual">سعر مباشر يدوي</option></select></label><label>الكمية / الوزن<input id="itemQuantity" type="number" min="0.001" step="0.001" value="1" required></label></div>
+<label>سعر الوحدة بالجنيه<input id="itemPrice" type="number" min="0" step="0.01" required></label><p class="hint" id="unitHint">الكمية بالقطعة أو العبوة.</p><button class="primary full">إضافة إلى الفاتورة</button></form></div></div>
 <div class="invoice-panel" id="invoicePanel" aria-label="فاتورة البيع">
   <div class="invoice-drawer-top"><div><h3>فاتورة البيع</h3><p>راجع الأصناف والمبالغ قبل الحفظ</p></div><button class="secondary" type="button" id="closeInvoice">إغلاق</button></div>
   <div class="cart-head"><h3>الأصناف في الفاتورة</h3><span id="cartCount">0 صنف</span></div>
   <div id="cartItems" class="cart-items"><p class="empty">لم تتم إضافة أصناف بعد</p></div>
   <div class="checkout-fields"><label>طريقة الدفع<select id="paymentMethod"><option value="cash">نقدي</option><option value="electronic">دفع إلكتروني</option><option value="credit">آجل</option></select></label><label>خصم الفاتورة (جنيه)<input id="discount" type="number" min="0" step="0.01" value="0"></label></div>
+  <div class="form-grid invoice-customer-fields">
+    <label>اسم العميل (اختياري)<input id="customerName" autocomplete="name" placeholder="اسم العميل"></label>
+    <label>رقم واتساب العميل (اختياري)<input id="customerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="01xxxxxxxxx"></label>
+  </div><p class="hint" id="creditHint" hidden>البيع الآجل يتطلب اسم العميل ورقم هاتف صحيحًا حتى يتم إنشاء حسابه وتسجيل المديونية.</p>
   <div class="total-row"><span>الإجمالي بعد الخصم</span><strong id="grandTotal">0.00 ج.م</strong></div>
   <button class="checkout" id="checkoutButton" disabled>حفظ الفاتورة</button>
 </div>
-</div>
-<div class="panel form-panel" id="manualPanel"><h2>إضافة بند للفاتورة</h2>
-<form id="itemForm"><label>اسم الصنف<input id="itemName" required placeholder="مثال: جبنة رومي"></label>
-<div class="form-grid"><label>طريقة البيع<select id="saleType"><option value="piece">بالقطعة / العبوة</option><option value="weight">بالوزن (كيلو)</option><option value="manual">سعر مباشر يدوي</option></select></label><label>الكمية / الوزن<input id="itemQuantity" type="number" min="0.001" step="0.001" value="1" required></label></div>
-<label>سعر الوحدة بالجنيه<input id="itemPrice" type="number" min="0" step="0.01" required></label><p class="hint" id="unitHint">الكمية بالقطعة أو العبوة.</p><button class="primary full">إضافة إلى الفاتورة</button></form></div>
-</section>
-<section class="view" id="view-products">
-<div class="panel"><div class="section-heading"><div><h2>إدارة المنتجات</h2><p>تسجيل المنتجات المغلفة والسائبة بدون اشتراط باركود</p></div></div>
+</div></section>
+<section class="view" id="view-products"><div class="inner-tabs" data-subtab-group="products"><button type="button" class="inner-tab active" data-subtab="list">قائمة المنتجات</button><button type="button" class="inner-tab" data-subtab="add">إضافة منتج</button></div><div class="inner-tab-panel active" data-subpanel-group="products" data-subpanel="list"><div class="panel"><div class="quick-head"><h2>قائمة المنتجات</h2><input id="productSearch" placeholder="بحث بالاسم أو الباركود"></div><div id="productCategories" class="category-list"></div><div id="productList"></div></div></div><div class="inner-tab-panel" data-subpanel-group="products" data-subpanel="add"><div class="panel"><div class="section-heading"><div><h2>إدارة المنتجات</h2><p>تسجيل المنتجات المغلفة والسائبة بدون اشتراط باركود</p></div></div>
 <form id="productForm"><input id="productId" type="hidden"><div class="form-grid"><label>اسم المنتج<input id="productName" required></label><div class="barcode-field"><label for="productBarcode">الباركود (اختياري)<input id="productBarcode" inputmode="numeric" autocomplete="off"></label><button class="secondary" type="button" id="scanProductBarcode">مسح الباركود بالكاميرا</button></div></div>
 <div class="form-grid"><label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label><label>وحدة البيع<select id="productUnit"><option value="piece">قطعة / عبوة</option><option value="kg">كيلو</option><option value="gram">جرام</option></select></label></div>
-<div class="form-grid"><label>سعر البيع بالجنيه للوحدة المختارة (قطعة أو كيلو أو جرام)<input id="productPrice" type="number" min="0" step="0.01" required></label><label>تكلفة الشراء (اختياري)<input id="productCost" type="number" min="0" step="0.01"></label></div>
-<label class="check-label"><input id="trackStock" type="checkbox"> متابعة المخزون لهذا المنتج</label><label id="stockLabel" hidden>الرصيد الحالي<input id="productStock" type="number" min="0" step="0.001" value="0"></label>
-<div class="actions"><button class="primary" type="submit">حفظ المنتج</button><button class="secondary" type="button" id="resetProduct">منتج جديد</button></div></form></div>
-<div class="panel"><div class="quick-head"><h2>قائمة المنتجات</h2><input id="productSearch" placeholder="بحث بالاسم أو الباركود"></div><div id="productList"></div></div>
-<div class="panel catalog-panel">
+<div class="form-grid"><label>سعر البيع بالجنيه للوحدة المختارة (قطعة أو كيلو أو جرام)<input id="productPrice" type="number" min="0" step="0.01" required></label><label>تكلفة الشراء (اختياري؛ اتركه فارغًا إذا لم تكن معروفة)<input id="productCost" type="number" min="0" step="0.01"></label></div>
+<label class="check-label"><input id="trackStock" type="checkbox"> متابعة المخزون لهذا المنتج</label><div id="stockLabel" hidden><div class="form-grid"><label>الرصيد الحالي<input id="productStock" type="number" min="0" step="0.001" value="0"></label><label>حد التنبيه عند الوصول إلى<input id="productMinStock" type="number" min="0" step="0.001" value="0"></label></div><p class="hint">عند وصول الرصيد إلى هذا الحد يظهر الصنف في تنبيهات النواقص. اتركه صفرًا لإيقاف التنبيه.</p></div>
+<div class="actions"><button class="primary" type="submit">حفظ المنتج</button><button class="secondary" type="button" id="resetProduct">منتج جديد</button></div></form></div><div class="panel catalog-panel">
   <div class="section-heading catalog-heading"><div><h2>كتالوج المنتجات المصرية الجاهز</h2><p id="catalogSummary">كتالوج بداية قابل للبحث والإضافة.</p></div><button class="primary" type="button" id="catalogImportAll">إضافة الكتالوج كاملًا</button></div>
   <p class="hint">أسعار بداية استرشادية بالجنيه، جُمعت من رصد المتاجر يوم 8 نوفمبر 2026 وبعضها تقديري؛ راجع سعر العبوة عند الاستلام. أصناف السجائر تُسجل يدويًا من نموذج المنتج.</p>
   <input id="catalogSearch" class="catalog-search" placeholder="ابحث عن منتج أو ماركة أو حجم">
   <div id="catalogCategories" class="category-list"></div>
   <div id="catalogList" class="catalog-list"></div>
   <p class="hint" id="catalogMessage">اختَر الصنف لإضافته إلى قائمة منتجات المحل.</p>
-</div>
+</div></div></section>
+
+<section class="view" id="view-inventory"><div class="inner-tabs" data-subtab-group="inventory"><button type="button" class="inner-tab active" data-subtab="alerts">تنبيهات المخزون</button><button type="button" class="inner-tab" data-subtab="adjustment">تسوية حركة مخزون</button><button type="button" class="inner-tab" data-subtab="stocktake">الجرد الفعلي</button><button type="button" class="inner-tab" data-subtab="balances">رصيد الأصناف</button><button type="button" class="inner-tab" data-subtab="movements">حركة المخزون</button></div><div class="inner-tab-panel active" data-subpanel-group="inventory" data-subpanel="alerts"><div class="panel">
+    <div class="section-heading">
+      <div><h2>ملخص المخزون</h2><p>الأرصدة الحالية والتنبيهات وقيمة المخزون بالتكلفة المسجلة</p></div>
+      <button class="secondary" id="refreshInventory" type="button">تحديث</button>
+    </div>
+    <div class="stock-summary-grid">
+      <article class="stock-stat"><span>أصناف تتابع مخزونها</span><strong id="stockTrackedCount">0</strong></article>
+      <article class="stock-stat"><span>تحت حد الطلب</span><strong id="stockLowCount">0</strong></article>
+      <article class="stock-stat"><span>نفد المخزون</span><strong id="stockOutCount">0</strong></article>
+      <article class="stock-stat"><span>قيمة المخزون بالتكلفة</span><strong id="stockCostValue">0.00 ج.م</strong></article>
+    </div>
+  </div><div class="panel">
+    <div class="section-heading"><div><h2>تنبيهات المخزون</h2><p>الأصناف التي وصلت إلى حد إعادة الطلب أو نفدت</p></div></div>
+    <div id="inventoryAlerts"><p class="empty">لا توجد تنبيهات.</p></div>
+  </div></div><div class="inner-tab-panel" data-subpanel-group="inventory" data-subpanel="adjustment"><div class="panel">
+    <h2>تسوية حركة مخزون</h2>
+    <p class="hint">لتسجيل زيادة أو نقص أو ضبط الرصيد الفعلي مع كتابة سبب واضح. كل تسوية تسجل في سجل الحركة.</p>
+    <form id="stockAdjustmentForm">
+      <label>الصنف<select id="adjustProduct" required></select></label>
+      <div class="form-grid">
+        <label>نوع التسوية<select id="adjustmentType"><option value="add">إضافة كمية</option><option value="remove">خصم كمية</option><option value="set">ضبط الرصيد إلى كمية</option></select></label>
+        <label>الكمية<input id="adjustmentQuantity" type="number" min="0" step="0.001" required inputmode="decimal"></label>
+      </div>
+      <label>سبب التسوية<input id="adjustmentReason" maxlength="120" required placeholder="مثال: بضاعة تالفة / رصيد افتتاحي / تصحيح خطأ"></label>
+      <button class="primary" type="submit">حفظ حركة المخزون</button>
+      <p class="hint" id="adjustmentMessage" role="status"></p>
+    </form>
+  </div></div><div class="inner-tab-panel" data-subpanel-group="inventory" data-subpanel="stocktake"><div class="panel">
+    <div class="section-heading"><div><h2>جرد فعلي</h2><p>قارن الكميات الفعلية بالأرصدة المسجلة واعتمد الفروق دفعة واحدة</p></div><button class="primary" id="startStocktakeButton" type="button">بدء جرد جديد</button></div>
+    <div id="stocktakeEditor" hidden>
+      <p class="hint">الجرد الحالي يشمل الأصناف المفعّل لها تتبع المخزون. أدخل الكمية التي وجدتها فعليًا؛ اترك الكمية كما هي إذا لم تعدّ الصنف.</p>
+      <div id="stocktakeRows"></div>
+      <div class="actions"><button class="primary" id="completeStocktakeButton" type="button">اعتماد الجرد وتسوية الأرصدة</button><button class="secondary" id="cancelStocktakeButton" type="button">إلغاء</button></div>
+      <p class="hint" id="stocktakeMessage" role="status"></p>
+    </div>
+    <div id="stocktakeHistory"></div>
+  </div></div><div class="inner-tab-panel" data-subpanel-group="inventory" data-subpanel="balances"><div class="panel">
+    <div class="section-heading"><div><h2>رصيد الأصناف</h2><p>كل الأصناف التي تتابع مخزونها حاليًا</p></div></div>
+    <div class="table-scroll" id="inventoryTable"></div>
+  </div></div><div class="inner-tab-panel" data-subpanel-group="inventory" data-subpanel="movements"><div class="panel">
+    <div class="section-heading"><div><h2>آخر حركات المخزون</h2><p>بيع وشراء وتسويات وجرد</p></div></div>
+    <div id="movementList"></div>
+  </div></div></section>
+
+<section class="view" id="view-purchases">
+  <div class="inner-tabs" data-subtab-group="purchases">
+    <button type="button" class="inner-tab active" data-subtab="add-supplier">إضافة مورد</button>
+    <button type="button" class="inner-tab" data-subtab="purchase">فاتورة مشتريات</button>
+    <button type="button" class="inner-tab" data-subtab="payment">سداد حساب مورد</button>
+    <button type="button" class="inner-tab" data-subtab="history">سجل المشتريات</button>
+  </div>
+
+  <div class="inner-tab-panel active" data-subpanel-group="purchases" data-subpanel="add-supplier">
+    <div class="panel">
+      <h2>إضافة مورد</h2>
+      <form id="supplierForm">
+        <label>اسم المورد<input id="supplierName" required maxlength="90" placeholder="اسم المورد أو الشركة"></label>
+        <div class="form-grid">
+          <label>رقم الهاتف<input id="supplierPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
+          <label>رصيد سابق مستحق للمورد (جنيه)<input id="supplierOpeningBalance" type="number" min="0" step="0.01" value="0"></label>
+        </div>
+        <button class="primary" type="submit">حفظ المورد</button>
+        <p class="hint" id="supplierMessage" role="status"></p>
+      </form>
+    </div>
+  </div>
+
+  <div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="purchase">
+    <div class="panel">
+      <h2>فاتورة مشتريات جديدة</h2>
+      <p class="hint">إضافة المشتريات تزيد رصيد المخزون تلقائيًا، وتحدّث تكلفة الصنف بمتوسط التكلفة المرجح. اختر المورد والمبلغ المدفوع لحساب المديونية.</p>
+      <form id="purchaseItemForm">
+        <label>الصنف<select id="purchaseProduct" required></select></label>
+        <div class="form-grid">
+          <label>الكمية<input id="purchaseQuantity" type="number" min="0.001" step="0.001" value="1" required inputmode="decimal"></label>
+          <label>تكلفة الوحدة<input id="purchaseUnitCost" type="number" min="0" step="0.01" required inputmode="decimal"></label>
+        </div>
+        <button class="secondary" type="submit">إضافة إلى المشتريات</button>
+      </form>
+      <div id="purchaseDraftList"><p class="empty">لم تتم إضافة أصناف إلى فاتورة الشراء.</p></div>
+      <div class="purchase-total-row"><span>إجمالي المشتريات</span><strong id="purchaseDraftTotal">0.00 ج.م</strong></div>
+      <label>المورد<select id="purchaseSupplier"><option value="">بدون مورد محدد</option></select></label>
+      <div class="form-grid">
+        <label>المدفوع الآن<input id="purchasePaidAmount" type="number" min="0" step="0.01" value="0" inputmode="decimal"></label>
+        <label>طريقة الدفع<select id="purchasePaymentMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label>
+      </div>
+      <p class="hint" id="purchaseDuePreview">المتبقي بعد السداد: 0.00 ج.م</p>
+      <label>ملاحظة / رقم فاتورة المورد<input id="purchaseNote" maxlength="140" placeholder="اختياري"></label>
+      <button class="checkout" id="savePurchaseButton" type="button" disabled>حفظ فاتورة المشتريات وتحديث المخزون</button>
+      <p class="hint" id="purchaseMessage" role="status"></p>
+    </div>
+  </div>
+
+  <div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="payment">
+    <div class="panel">
+      <h2>سداد حساب مورد</h2>
+      <p class="hint">سجل أي دفعة لاحقة للمورد؛ سيتم خصمها من رصيده المستحق.</p>
+      <form id="supplierPaymentForm">
+        <label>المورد<select id="paymentSupplier" required></select></label>
+        <div class="form-grid">
+          <label>مبلغ السداد<input id="supplierPaymentAmount" type="number" min="0.01" step="0.01" required inputmode="decimal"></label>
+          <label>طريقة السداد<select id="supplierPaymentMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label>
+        </div>
+        <label>ملاحظة<input id="supplierPaymentNote" maxlength="140" placeholder="رقم إيصال أو ملاحظة"></label>
+        <button class="primary" type="submit">تسجيل السداد</button>
+        <p class="hint" id="supplierPaymentMessage" role="status"></p>
+      </form>
+    </div>
+    <div class="panel">
+      <div class="section-heading"><div><h2>الموردون وأرصدتهم</h2><p>الرصيد الموجب يعني مبلغًا مستحقًا للمورد</p></div></div>
+      <div id="supplierList"></div>
+      <label>كشف حساب مورد<select id="statementSupplier"></select></label>
+      <div id="supplierStatement"><p class="empty">اختر موردًا لعرض كشف حسابه.</p></div>
+    </div>
+  </div>
+
+  <div class="inner-tab-panel" data-subpanel-group="purchases" data-subpanel="history">
+    <div class="panel">
+      <div class="section-heading"><div><h2>سجل المشتريات</h2><p>فواتير الشراء والمدفوع والمتبقي</p></div></div>
+      <div id="purchaseHistory"></div>
+    </div>
+  </div>
 </section>
-<section class="view" id="view-invoices"><div class="panel"><h2>سجل الفواتير</h2><p class="hint">الفواتير محفوظة على هذا الجهاز فقط.</p><div id="invoiceList"></div></div></section>
+
+<section class="view" id="view-invoices"><div class="panel"><h2>سجل الفواتير</h2><p class="hint">عرض الفواتير وإعادة طباعتها أو تسجيل مرتجع كلي أو جزئي.</p><div id="invoiceList"></div></div></section>
+
+<section class="view" id="view-customers">
+  <div class="inner-tabs" data-subtab-group="customers">
+    <button class="inner-tab active" type="button" data-subtab="list">قائمة العملاء</button>
+    <button class="inner-tab" type="button" data-subtab="add">إضافة عميل</button>
+    <button class="inner-tab" type="button" data-subtab="collect">تحصيل حساب</button>
+    <button class="inner-tab" type="button" data-subtab="statement">كشف حساب</button>
+  </div>
+  <div class="inner-tab-panel active" data-subpanel-group="customers" data-subpanel="list">
+    <div class="panel"><div class="section-heading"><div><h2>العملاء والأرصدة</h2><p>الرصيد المستحق يشمل الرصيد السابق وفواتير البيع الآجل والتحصيلات والمرتجعات</p></div><button class="secondary" id="refreshCustomers" type="button">تحديث</button></div>
+    <input id="customerSearch" placeholder="ابحث باسم العميل أو رقم الهاتف"><div class="stock-summary-grid customer-summary"><article class="stock-stat"><span>عدد العملاء</span><strong id="customerCount">0</strong></article><article class="stock-stat"><span>إجمالي المديونية</span><strong id="customerDebt">0.00 ج.م</strong></article></div>
+    <div id="customerList"><p class="empty">لا يوجد عملاء مسجلون بعد.</p></div></div>
+  </div>
+  <div class="inner-tab-panel" data-subpanel-group="customers" data-subpanel="add">
+    <div class="panel"><h2>إضافة عميل أو تعديل بياناته</h2><form id="customerForm"><input id="customerId" type="hidden">
+      <label>اسم العميل<input id="customerNameForm" required maxlength="100" placeholder="اسم العميل"></label>
+      <div class="form-grid"><label>رقم الهاتف<input id="customerPhoneForm" type="tel" inputmode="tel" maxlength="24" placeholder="رقم الهاتف"></label><label>رصيد سابق مستحق على العميل (جنيه)<input id="customerOpeningBalance" type="number" min="0" step="0.01" value="0"></label></div>
+      <label>ملاحظات<input id="customerNote" maxlength="140" placeholder="عنوان أو ملاحظة اختيارية"></label>
+      <div class="actions"><button class="primary" type="submit">حفظ العميل</button><button class="secondary" type="button" id="resetCustomer">عميل جديد</button></div><p class="hint" id="customerMessage" role="status"></p>
+    </form></div>
+  </div>
+  <div class="inner-tab-panel" data-subpanel-group="customers" data-subpanel="collect">
+    <div class="panel"><h2>تسجيل تحصيل من عميل</h2><p class="hint">التسجيل هنا يخصم من مديونية العميل ويضيف المبلغ إلى حركة الخزينة حسب طريقة التحصيل.</p>
+      <form id="customerPaymentForm"><label>العميل<select id="collectionCustomer" required></select></label>
+      <div class="customer-balance-preview" id="collectionBalance">اختر العميل لعرض رصيده.</div>
+      <div class="form-grid"><label>مبلغ التحصيل<input id="collectionAmount" type="number" min="0.01" step="0.01" required inputmode="decimal"></label><label>طريقة التحصيل<select id="collectionMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label></div>
+      <label>ملاحظة<input id="collectionNote" maxlength="140" placeholder="اختياري"></label><button class="primary" type="submit">حفظ التحصيل</button><p class="hint" id="collectionMessage" role="status"></p></form>
+    </div>
+  </div>
+  <div class="inner-tab-panel" data-subpanel-group="customers" data-subpanel="statement">
+    <div class="panel"><h2>كشف حساب العميل</h2><label>اختر العميل<select id="statementCustomer"></select></label><div id="customerStatement"><p class="empty">اختر عميلًا لعرض كشف الحساب.</p></div></div>
+  </div>
+</section>
+
+<section class="view" id="view-cash">
+  <div class="inner-tabs" data-subtab-group="cash">
+    <button class="inner-tab active" type="button" data-subtab="summary">ملخص الخزينة</button><button class="inner-tab" type="button" data-subtab="entry">إيراد / مصروف</button><button class="inner-tab" type="button" data-subtab="shift">الورديات</button><button class="inner-tab" type="button" data-subtab="ledger">سجل الخزينة</button>
+  </div>
+  <div class="inner-tab-panel active" data-subpanel-group="cash" data-subpanel="summary"><div class="panel"><div class="section-heading"><div><h2>ملخص حركة اليوم</h2><p id="cashTodayLabel">حركة اليوم حسب التاريخ المحلي</p></div><button class="secondary" id="refreshCash" type="button">تحديث</button></div>
+    <div class="stock-summary-grid"><article class="stock-stat"><span>نقدية واردة</span><strong id="cashIn">0.00 ج.م</strong></article><article class="stock-stat"><span>نقدية منصرفة</span><strong id="cashOut">0.00 ج.م</strong></article><article class="stock-stat"><span>صافي النقدية</span><strong id="cashNet">0.00 ج.م</strong></article><article class="stock-stat"><span>صافي إلكتروني</span><strong id="electronicNet">0.00 ج.م</strong></article></div>
+    <div class="customer-balance-preview" id="activeShiftSummary">لا توجد وردية مفتوحة حاليًا.</div></div></div>
+  <div class="inner-tab-panel" data-subpanel-group="cash" data-subpanel="entry"><div class="panel"><h2>تسجيل حركة مالية</h2><p class="hint">استخدمها للمصروفات والإيرادات غير المرتبطة بفاتورة بيع أو شراء. الحركات التلقائية تظهر في سجل الخزينة أيضًا.</p>
+    <form id="cashEntryForm"><div class="form-grid"><label>نوع الحركة<select id="cashEntryType"><option value="expense">مصروف</option><option value="income">إيراد إضافي</option></select></label><label>التصنيف<select id="cashEntryCategory"><option value="rent">إيجار</option><option value="salary">أجور</option><option value="utilities">مرافق</option><option value="transport">نقل ومواصلات</option><option value="maintenance">صيانة</option><option value="withdrawal">مسحوبات</option><option value="other">أخرى</option></select></label></div>
+    <div class="form-grid"><label>المبلغ بالجنيه<input id="cashEntryAmount" type="number" min="0.01" step="0.01" required></label><label>طريقة الحركة<select id="cashEntryMethod"><option value="cash">نقدي</option><option value="electronic">إلكتروني</option></select></label></div>
+    <label>البيان<input id="cashEntryNote" required maxlength="140" placeholder="وصف واضح للحركة"></label><button class="primary" type="submit">حفظ الحركة المالية</button><p class="hint" id="cashEntryMessage" role="status"></p></form></div></div>
+  <div class="inner-tab-panel" data-subpanel-group="cash" data-subpanel="shift"><div class="panel"><div class="section-heading"><div><h2>إدارة الورديات</h2><p>رصيد بداية الوردية والتسوية عند الإغلاق</p></div></div>
+    <div id="shiftPanel"><p class="empty">جارٍ تحميل حالة الوردية.</p></div></div></div>
+  <div class="inner-tab-panel" data-subpanel-group="cash" data-subpanel="ledger"><div class="panel"><h2>سجل الخزينة</h2><p class="hint">كل إيراد ومصروف تلقائي أو يدوي، مع وسيلة الدفع والمرجع.</p><div id="cashLedger"></div></div></div>
+</section>
+
+<section class="view" id="view-reports"><div class="inner-tabs" data-subtab-group="reports"><button type="button" class="inner-tab active" data-subtab="today">تقرير اليوم</button><button type="button" class="inner-tab" data-subtab="month">تقرير الشهر</button><button type="button" class="inner-tab" data-subtab="balances">المخزون والأرصدة</button></div>
+  <div class="inner-tab-panel active" data-subpanel-group="reports" data-subpanel="today"><div class="panel"><h2>تقرير اليوم</h2>
+    <div class="stock-summary-grid"><article class="stock-stat"><span>إجمالي المبيعات</span><strong id="reportTodaySales">0.00 ج.م</strong></article><article class="stock-stat"><span>عدد الفواتير</span><strong id="reportTodayInvoices">0</strong></article><article class="stock-stat"><span>مرتجعات اليوم</span><strong id="reportTodayReturns">0.00 ج.م</strong></article><article class="stock-stat"><span>صافي المبيعات</span><strong id="reportTodayNet">0.00 ج.م</strong></article></div>
+    <h3 class="report-subheading">الربحية التقديرية اليوم</h3><div class="stock-summary-grid">
+      <article class="stock-stat"><span>تكلفة البضاعة المباعة</span><strong id="reportTodayCogs">0.00 ج.م</strong></article>
+      <article class="stock-stat"><span>مجمل الربح التقديري</span><strong id="reportTodayGrossProfit">0.00 ج.م</strong></article>
+      <article class="stock-stat"><span>مصروفات التشغيل</span><strong id="reportTodayOperatingExpenses">0.00 ج.م</strong></article>
+      <article class="stock-stat"><span>النتيجة بعد المصروفات</span><strong id="reportTodayOperatingResult">0.00 ج.م</strong></article>
+    </div><p class="hint" id="reportTodayProfitNote">الحساب تقديري حسب تكلفة الأصناف المسجلة.</p>
+  </div></div>
+  <div class="inner-tab-panel" data-subpanel-group="reports" data-subpanel="month"><div class="panel"><h2>تقرير الشهر</h2>
+    <div class="stock-summary-grid"><article class="stock-stat"><span>إجمالي المبيعات</span><strong id="reportMonthSales">0.00 ج.م</strong></article><article class="stock-stat"><span>عدد الفواتير</span><strong id="reportMonthInvoices">0</strong></article><article class="stock-stat"><span>مرتجعات الشهر</span><strong id="reportMonthReturns">0.00 ج.م</strong></article><article class="stock-stat"><span>صافي المبيعات</span><strong id="reportMonthNet">0.00 ج.م</strong></article></div>
+    <h3 class="report-subheading">الربحية التقديرية للشهر</h3><div class="stock-summary-grid">
+      <article class="stock-stat"><span>تكلفة البضاعة المباعة</span><strong id="reportMonthCogs">0.00 ج.م</strong></article>
+      <article class="stock-stat"><span>مجمل الربح التقديري</span><strong id="reportMonthGrossProfit">0.00 ج.م</strong></article>
+      <article class="stock-stat"><span>مصروفات التشغيل</span><strong id="reportMonthOperatingExpenses">0.00 ج.م</strong></article>
+      <article class="stock-stat"><span>النتيجة بعد المصروفات</span><strong id="reportMonthOperatingResult">0.00 ج.م</strong></article>
+    </div><p class="hint" id="reportMonthProfitNote">الحساب تقديري حسب تكلفة الأصناف المسجلة.</p>
+  </div></div>
+  <div class="inner-tab-panel" data-subpanel-group="reports" data-subpanel="balances"><div class="panel"><h2>المخزون والأرصدة</h2><div class="stock-summary-grid"><article class="stock-stat"><span>قيمة المخزون بالتكلفة</span><strong id="reportStockValue">0.00 ج.م</strong></article><article class="stock-stat"><span>مديونية العملاء</span><strong id="reportCustomerDebt">0.00 ج.م</strong></article><article class="stock-stat"><span>مستحقات الموردين</span><strong id="reportSupplierDebt">0.00 ج.م</strong></article><article class="stock-stat"><span>إجمالي المنصرف من الخزينة هذا الشهر</span><strong id="reportMonthExpenses">0.00 ج.م</strong></article></div><p class="hint">المنصرف من الخزينة يشمل المشتريات وسداد الموردين والمرتجعات والمصروفات. تقارير الربحية التشغيلية تستبعد مدفوعات شراء البضاعة حتى لا تحتسب مرتين.</p><p class="hint">هذه تقارير تشغيلية تقديرية محلية، وليست قوائم مالية أو إقرارًا ضريبيًا معتمدًا.</p></div></div>
+</section>
+<section class="view" id="view-settings">
+  <div class="inner-tabs" data-subtab-group="settings">
+    <button type="button" class="inner-tab active" data-subtab="profile">بيانات المحل</button>
+    <button type="button" class="inner-tab" data-subtab="cloud">المزامنة السحابية</button>
+  </div>
+  <div class="inner-tab-panel active" data-subpanel-group="settings" data-subpanel="profile">
+    <div class="panel">
+      <h2>بيانات المحل والفاتورة</h2>
+      <p class="hint">تظهر البيانات التالية في الفواتير المطبوعة والمُرسلة. تحفظ محليًا وتنتقل إلى أجهزتك المرتبطة عند المزامنة.</p>
+      <form id="shopSettingsForm">
+        <label>اسم المحل<input id="shopName" required maxlength="70" placeholder="اسم المحل"></label>
+        <div class="form-grid">
+          <label>رقم هاتف المحل<input id="shopPhone" type="tel" inputmode="tel" maxlength="24" placeholder="رقم التواصل"></label>
+          <label>عرض ورق الفاتورة<select id="paperWidth"><option value="58">58 مم</option><option value="80" selected>80 مم</option><option value="A4">A4</option></select></label>
+        </div>
+        <label>العنوان<input id="shopAddress" maxlength="140" placeholder="عنوان المحل"></label>
+        <label>عبارة أسفل الفاتورة<input id="receiptFooter" maxlength="120" value="شكراً لزيارتكم" placeholder="شكراً لزيارتكم"></label>
+        <button class="primary" type="submit">حفظ بيانات المحل</button>
+        <p class="hint" id="settingsMessage" role="status"></p>
+      </form>
+    </div>
+  </div>
+  <div class="inner-tab-panel" data-subpanel-group="settings" data-subpanel="cloud">
+    <div class="panel">
+      <h2>المزامنة السحابية</h2>
+      <p class="hint">اربط المحل بحساب سحابي خاص به. تظل المبيعات محفوظة على الهاتف حتى عند انقطاع الإنترنت، ثم تُرسل التغييرات عند عودة الاتصال.</p>
+      <div id="cloudAuthPanel">
+        <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
+        <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
+        <label>اسم المحل عند إنشاء حساب جديد<input id="cloudShopName" maxlength="70" placeholder="اسم المحل"></label><label>كود دعوة الموظف (للموظف فقط)<input id="cloudInviteCode" autocomplete="off" maxlength="80" placeholder="أدخل كود الدعوة الذي أرسله صاحب المحل"></label><button class="secondary" id="cloudEmployeeRegister" type="button">إنشاء حساب موظف وقبول الدعوة</button>
+        <div class="actions">
+          <button class="primary" id="cloudRegister" type="button">إنشاء حساب ومحل جديد</button>
+          <button class="secondary" id="cloudLogin" type="button">تسجيل الدخول وربط الجهاز</button>
+        </div>
+        <button class="secondary" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
+      </div>
+      <div id="cloudConnectedPanel" hidden>
+        <p>الحساب: <strong id="cloudAccountEmail"></strong></p><p>الصلاحية: <strong id="cloudAccountRole">جارٍ التحقق</strong></p><p>رقم الحساب (UID): <code id="cloudAccountUid"></code></p>
+        <p>المحل المرتبط: <strong id="cloudConnectedShop"></strong></p>
+        <div class="actions">
+          <button class="primary" id="cloudSyncNow" type="button">مزامنة الآن</button>
+          <button class="secondary" id="cloudSignOut" type="button">تسجيل الخروج</button>
+        </div>
+      </div>
+      <p class="hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
+      <p class="hint">صاحب المحل ينشئ لكل موظف حسابًا منفصلًا من تبويب «الموظفون والصلاحيات» بدعوة بريدية. لا تشارك كلمة مرور أي حساب بين الموظفين.</p>
+      <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password في Firebase، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
+    </div>
+  </div>
+</section>
+<section class="view" id="view-employees">
+  <div class="panel">
+    <div class="section-heading"><div><h2>الموظفون وصلاحياتهم</h2><p>أنشئ دعوة لكل موظف ببريده الإلكتروني، ثم اختر دوره. الموظف ينشئ كلمة مروره بنفسه.</p></div></div>
+    <div id="employeeOwnerPanel">
+      <form id="employeeInviteForm">
+        <div class="form-grid">
+          <label>البريد الإلكتروني للموظف<input id="employeeInviteEmail" type="email" maxlength="160" required placeholder="employee@example.com"></label>
+          <label>الدور الوظيفي<select id="employeeInviteRole"><option value="cashier">كاشير</option><option value="accountant">محاسب</option><option value="manager">مدير</option></select></label>
+        </div>
+        <button class="primary" type="submit">إنشاء دعوة موظف</button>
+        <p class="hint" id="employeeInviteMessage" role="status"></p>
+        <div id="employeeInviteCodeBox" class="employee-invite-code" hidden><span>كود الدعوة الخاص بالموظف</span><strong id="employeeInviteCode"></strong><button type="button" class="secondary" id="copyEmployeeInvite">نسخ الكود</button></div>
+      </form>
+      <div class="panel employee-list-panel"><h3>الموظفون المسجلون</h3><p class="hint">إيقاف الموظف يمنع دخوله ومزامنة بيانات المحل بعد وصول التحديث إليه.</p><div id="employeeMembers"><p class="empty">جارٍ تحميل الموظفين...</p></div></div>
+      <div class="panel employee-list-panel"><h3>الدعوات المعلقة</h3><div id="employeeInvites"><p class="empty">لا توجد دعوات.</p></div></div>
+    </div>
+    <p class="hint" id="employeeAccessMessage" role="status"></p>
+  </div>
+</section>
+<section class="view" id="view-platform">
+  <div class="panel">
+    <div class="section-heading"><div><h2>إدارة تراخيص البرنامج</h2><p>لوحة مدير المشروع. لا تظهر إلا للحساب الموجود في قائمة مديري المنصة.</p></div></div>
+    <div class="platform-security-note"><strong>حماية التوقيع</strong><p>مفتاح التوقيع الخاص لا يُحفظ في التطبيق أو GitHub. ارفع ملف المفتاح عند إصدار الترخيص فقط، ثم أغلق الصفحة. التوقيع يربط الترخيص بالمحل والمدة وحالة التشغيل.</p><p>الإيقاف المركزي يصل فور عودة اتصال الجهاز. عند انقطاع الإنترنت لا يمكن وصول أمر جديد عن بُعد؛ لكن انتهاء الترخيص المحفوظ يظل مفروضًا محليًا.</p></div>
+    <p>حساب مدير المشروع: <strong id="platformAdminEmail"></strong></p>
+    <p>UID: <code id="platformAdminUid"></code></p>
+    <label>ملف مفتاح التوقيع الخاص (PEM)<input id="licensePrivateKeyFile" type="file" accept=".pem,.key,text/plain"></label>
+    <p class="hint" id="licenseKeyStatus" role="status">لم يتم تحميل مفتاح التوقيع في هذه الجلسة.</p>
+    <div class="quick-head"><h3>المحلات المسجلة</h3><input id="platformShopSearch" placeholder="بحث باسم المحل أو رقم UID"></div>
+    <button type="button" class="secondary" id="refreshPlatformShops">تحديث قائمة المحلات</button>
+    <div id="platformShopList"><p class="empty">جارٍ تحميل المحلات...</p></div>
+    <p class="hint" id="platformMessage" role="status"></p>
+  </div>
+</section>
 <section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
 </main>
+<div class="receipt-modal-backdrop" id="receiptModal" hidden>
+  <section class="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receiptModalTitle">
+    <div class="receipt-modal-heading"><h2 id="receiptModalTitle">معاينة الفاتورة</h2><button class="secondary" id="closeReceiptModal" type="button">إغلاق</button></div>
+    <div class="receipt-preview" id="receiptPreview"></div>
+    <div class="receipt-actions">
+      <button class="primary" id="receiptPrint" type="button">طباعة الفاتورة</button>
+      <button class="secondary" id="receiptShare" type="button">مشاركة عبر واتساب</button>
+    </div>
+  </section>
+</div>
+<div class="receipt-modal-backdrop" id="salesReturnModal" hidden>
+  <section class="receipt-modal sales-return-modal" role="dialog" aria-modal="true" aria-labelledby="salesReturnTitle">
+    <div class="receipt-modal-heading"><h2 id="salesReturnTitle">مرتجع مبيعات</h2><button class="secondary" id="closeSalesReturn" type="button">إغلاق</button></div>
+    <p class="hint" id="salesReturnInfo"></p><div class="receipt-preview" id="salesReturnLines"></div>
+    <div class="purchase-total-row"><span>قيمة المرتجع</span><strong id="salesReturnTotal">0.00 ج.م</strong></div>
+    <label>طريقة التسوية<select id="salesReturnMethod"><option value="cash">رد نقدي</option><option value="electronic">رد إلكتروني</option><option value="credit">تخفيض مديونية العميل</option></select></label>
+    <label>ملاحظة<input id="salesReturnNote" maxlength="140" placeholder="سبب أو ملاحظة"></label>
+    <button class="primary full" id="saveSalesReturn" type="button">اعتماد المرتجع</button><p class="hint" id="salesReturnMessage" role="status"></p>
+  </section>
+</div>
 <div class="invoice-backdrop" id="invoiceBackdrop" hidden></div>
 <button class="mobile-invoice-toggle" id="mobileInvoiceToggle" type="button" aria-controls="invoicePanel" aria-expanded="false">
   <span class="mobile-invoice-count"><strong id="mobileCartCount">0</strong><small>صنف في الفاتورة</small></span>
   <span class="mobile-invoice-total"><small>الإجمالي</small><strong id="mobileGrandTotal">0.00 ج.م</strong></span>
   <span class="mobile-invoice-action">عرض الفاتورة ←</span>
 </button>
+<div class="license-lock-screen" id="licenseLockScreen" hidden role="alertdialog" aria-modal="true" aria-labelledby="licenseLockTitle">
+  <div class="license-lock-card">
+    <div class="license-lock-icon">!</div><h2 id="licenseLockTitle">البرنامج غير مفعل</h2>
+    <p id="licenseLockMessage">يتم التحقق من الترخيص...</p>
+    <p class="hint">عند التجديد أو إعادة التفعيل، اتصل بإدارة البرنامج ثم أعد فتح التطبيق مع اتصال الإنترنت.</p>
+  </div>
+</div>
 <footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>
-<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script>
+<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script><script src="access-gate.js"></script><script type="module" src="firebase-sync.js"></script>
 </body></html>
