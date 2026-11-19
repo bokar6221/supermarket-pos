@@ -20,7 +20,7 @@ on:
       - "tests/**"
       - ".github/workflows/build-android-apk.yml"
   pull_request:
-    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2"]
+    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "commercial-release-1.10.1"]
   workflow_dispatch:
 
 permissions:
