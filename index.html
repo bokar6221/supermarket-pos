@@ -342,7 +342,7 @@
     <p class="hint" id="platformMessage" role="status"></p>
   </div>
 </section>
-<section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>احفظ نسخة من بيانات المحل في مكان آمن بشكل دوري. الاستعادة تستبدل البيانات الموجودة على هذا الجهاز.</p><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة احتياطية</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json"></label></div><p class="hint" id="backupMessage">لا ترفع ملفات النسخ الاحتياطي إلى مستودع GitHub؛ فهي تحتوي بيانات المحل.</p></div></section>
+<section class="view" id="view-backup"><div class="panel"><h2>النسخ الاحتياطي والاستعادة</h2><p>تُشفّر النسخة الجديدة باستخدام AES-256-GCM. اختر كلمة مرور قوية من 10 أحرف على الأقل، واحتفظ بها منفصلة؛ لا يمكن استعادة النسخة المشفرة بدونها.</p><label>كلمة مرور النسخة الاحتياطية<input id="backupPassword" type="password" minlength="10" maxlength="256" autocomplete="new-password" placeholder="10 أحرف على الأقل"></label><div class="actions"><button class="primary" id="exportBackup">تنزيل نسخة مشفرة</button><label class="file-button">استعادة نسخة<input id="importBackup" type="file" accept="application/json,.json"></label></div><p class="hint" id="backupMessage">يمكن استيراد النسخ القديمة غير المشفرة بعد تأكيد تحذير الخصوصية. لا ترفع نسخ المحل إلى GitHub.</p></div></section>
 </main>
 <div class="receipt-modal-backdrop" id="receiptModal" hidden>
   <section class="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receiptModalTitle">
@@ -379,5 +379,21 @@
   </div>
 </div>
 <footer>نسخة تطوير محلية — اختبرها قبل استخدامها في البيع الفعلي أو الاعتماد المحاسبي.</footer>
-<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script><script src="access-gate.js"></script><script type="module" src="firebase-sync.js"></script>
+<script src="backup-crypto.js"></script>
+<script src="db.js"></script><script src="catalog.js"></script><script src="app.js"></script><script src="accounts.js"></script><script src="access-gate.js"></script><script type="module">
+  let cloudModulePromise = null;
+  const loadCloudModule = () => {
+    if (!navigator.onLine) return;
+    if (!cloudModulePromise) {
+      cloudModulePromise = import("./firebase-sync.js").catch(error => {
+        cloudModulePromise = null;
+        console.warn("Cloud sync is temporarily unavailable; local POS remains active.", error);
+      });
+    }
+    return cloudModulePromise;
+  };
+  window.addEventListener("online", loadCloudModule);
+  window.addEventListener("focus", loadCloudModule);
+  loadCloudModule();
+</script>
 </body></html>
