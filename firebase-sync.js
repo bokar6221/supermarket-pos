@@ -1117,28 +1117,56 @@ function deviceSlotRef(shopId,index){return doc(cloudDb,"shops",shopId,"deviceSl
 let stopOwnDeviceListener=null;
 async function registerCurrentDevice(shopId,uid){
  if(!navigator.onLine)throw new Error("يلزم الاتصال بالإنترنت للتحقق من حد الأجهزة عند ربط جهاز جديد.");
- const id=deviceId(),ref=deviceRef(shopId,id),licenseSnapshot=await getDoc(licenseRef(shopId));
- if(!licenseSnapshot.exists())throw new Error("لا يوجد ترخيص لهذا المحل.");
- const payload=licenseSnapshot.data().payload||{};
- if(payload.licenseType!=="cloud")throw new Error("هذا الترخيص محلي ولا يسمح بربط أجهزة أو مزامنة سحابية.");
- const cap=Math.max(1,Math.min(500,Number(payload.maxDevices)||1));
- const slots=Array.from({length:cap},(_,i)=>deviceSlotRef(shopId,i));
- await runTransaction(cloudDb,async tx=>{
-  const lic=await tx.get(licenseRef(shopId)),own=await tx.get(ref);
-  if(!lic.exists()||lic.data().payload.status!=="active")throw new Error("الترخيص غير نشط.");
-  const current=lic.data().payload;
-  if(current.licenseType!=="cloud")throw new Error("نوع الترخيص لا يسمح بالربط السحابي.");
-  if(own.exists()&&own.data().active===true){
-   tx.update(ref,{lastSeenAt:serverTimestamp(),uid,active:true});
-   return;
+ const id=deviceId(),ref=deviceRef(shopId,id);
+ let registered=false;
+ for(let attempt=0;attempt<5&&!registered;attempt++){
+  const licenseSnapshot=await getDoc(licenseRef(shopId));
+  if(!licenseSnapshot.exists())throw new Error("لا يوجد ترخيص لهذا المحل.");
+  const payload=licenseSnapshot.data().payload||{};
+  if(payload.licenseType!=="cloud")throw new Error("هذا الترخيص محلي ولا يسمح بربط أجهزة أو مزامنة سحابية.");
+  const cap=Math.max(1,Math.min(500,Math.floor(Number(payload.maxDevices)||1)));
+  const slotCollection=collection(cloudDb,"shops",shopId,"deviceSlots");
+  const occupiedSnapshot=await getDocs(slotCollection);
+  const occupied=new Set(occupiedSnapshot.docs.map(item=>item.id));
+  let free=-1;
+  for(let index=0;index<cap;index++){
+   if(!occupied.has(String(index))){free=index;break;}
   }
-  const slotSnapshots=[];
-  for(const slot of slots)slotSnapshots.push(await tx.get(slot));
-  const free=slotSnapshots.findIndex(s=>!s.exists()||s.data().active!==true);
   if(free<0)throw new Error("وصل المحل إلى الحد الأقصى للأجهزة المسموح بها ("+cap+"). اطلب من مدير المنصة زيادة الحد أو إلغاء ربط جهاز قديم.");
-  const record={deviceId:id,uid,label:"جهاز "+id.slice(0,8),platform:/Android/i.test(navigator.userAgent)?"Android":"متصفح",userAgent:String(navigator.userAgent||"").slice(0,180),active:true,slot:String(free),linkedAt:serverTimestamp(),lastSeenAt:serverTimestamp()};
-  tx.set(ref,record);tx.set(slots[free],{deviceId:id,uid,active:true,updatedAt:serverTimestamp()});
- });
+  const slotId=String(free),selectedSlotRef=deviceSlotRef(shopId,slotId);
+  try{
+   await runTransaction(cloudDb,async tx=>{
+    const lic=await tx.get(licenseRef(shopId)),own=await tx.get(ref);
+    if(!lic.exists()||lic.data().payload.status!=="active")throw new Error("الترخيص غير نشط.");
+    const current=lic.data().payload||{};
+    if(current.licenseType!=="cloud")throw new Error("نوع الترخيص لا يسمح بالربط السحابي.");
+    const currentCap=Math.max(1,Math.min(500,Math.floor(Number(current.maxDevices)||1)));
+    if(free>=currentCap){
+     const error=new Error("تغير حد الأجهزة أثناء عملية الربط. أعد المحاولة.");
+     error.code="device/limit-changed";
+     throw error;
+    }
+    if(own.exists()&&own.data().active===true){
+     tx.update(ref,{lastSeenAt:serverTimestamp(),uid,active:true});
+     return;
+    }
+    const slotSnapshot=await tx.get(selectedSlotRef);
+    if(slotSnapshot.exists()){
+     const error=new Error("تم حجز خانة الجهاز من جهاز آخر بالتزامن. جارٍ إعادة المحاولة.");
+     error.code="device/slot-taken";
+     throw error;
+    }
+    const record={deviceId:id,uid,label:"جهاز "+id.slice(0,8),platform:/Android/i.test(navigator.userAgent)?"Android":"متصفح",userAgent:String(navigator.userAgent||"").slice(0,180),active:true,slot:slotId,linkedAt:serverTimestamp(),lastSeenAt:serverTimestamp()};
+    tx.set(ref,record);
+    tx.set(selectedSlotRef,{deviceId:id,uid,active:true,updatedAt:serverTimestamp()});
+   });
+   registered=true;
+  }catch(error){
+   if(["device/slot-taken","device/limit-changed"].includes(error&&error.code)&&attempt<4)continue;
+   throw error;
+  }
+ }
+ if(!registered)throw new Error("تعذر حجز خانة جهاز بعد عدة محاولات. حدّث الصفحة وأعد المحاولة.");
  if(stopOwnDeviceListener)stopOwnDeviceListener();
  stopOwnDeviceListener=onSnapshot(ref,snapshot=>{
   if(!snapshot.exists()||snapshot.data().active!==true){
