@@ -79,6 +79,7 @@ assert.match(firebase, /async function handleEmployeeRegister/, "Employees must 
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
 assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
 assert.match(firebase, /async function resolveSyncConflict\(/, "Managers must be able to resolve sync conflicts explicitly");
+assert.match(firebase, /تنبيه تشغيلي: السماح بالأوفلاين مع عدة أجهزة/, "Admin must be warned about multi-device offline stock overselling");
 assert.match(firebase, /اعتماد نسخة السحابة/, "Conflict UI must expose the cloud version choice");
 assert.match(firebase, /اعتماد نسخة هذا الجهاز/, "Conflict UI must expose the local version choice");
 assert.match(firebase, /\["owner","manager","accountant"\]\.includes\(activeMember\.role\)/, "Only authorized shop roles may resolve sync conflicts");
