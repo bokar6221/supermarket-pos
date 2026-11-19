@@ -876,8 +876,57 @@ async function scan(mode="sale"){
   }
 }
 $("scanButton").onclick=()=>scan("sale");$("scanProductBarcode").onclick=()=>scan("product");$("closeScanner").onclick=stopCamera;
-$("exportBackup").onclick=async()=>{try{const data=await POSDatabase.backupData(),json=JSON.stringify(data,null,2);if(window.AndroidScanner&&typeof window.AndroidScanner.saveBackup==="function"){window.AndroidScanner.saveBackup(json);$("backupMessage").textContent="اختر مكان حفظ النسخة من نافذة Android.";return;}const blob=new Blob([json],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="supermarket-pos-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(url);$("backupMessage").textContent="تم إنشاء النسخة؛ احتفظ بها خارج الهاتف.";}catch(e){alert(e.message);}};
-$("importBackup").onchange=async e=>{const f=e.target.files[0];if(!f)return;if(!confirm("الاستعادة ستحذف البيانات الحالية وتستبدلها. هل تتابع؟")){e.target.value="";return;}try{await POSDatabase.restoreData(JSON.parse(await f.text()));await load();await renderInvoices();$("backupMessage").textContent="تمت الاستعادة بنجاح.";}catch(err){alert("فشلت الاستعادة: "+err.message);}finally{e.target.value="";}};
+$("exportBackup").onclick=async()=>{
+  const passwordInput=$("backupPassword");
+  try{
+    if(!window.POSBackupCrypto)throw new Error("وحدة تشفير النسخ الاحتياطية غير محملة. حدّث التطبيق واتصل بالإنترنت مرة واحدة.");
+    const password=String(passwordInput&&passwordInput.value||"");
+    if(password.length<10)throw new Error("اكتب كلمة مرور من 10 أحرف على الأقل قبل إنشاء النسخة.");
+    const data=await POSDatabase.backupData();
+    const encrypted=await POSBackupCrypto.encrypt(data,password);
+    const json=JSON.stringify(encrypted,null,2);
+    if(window.AndroidScanner&&typeof window.AndroidScanner.saveBackup==="function"){
+      window.AndroidScanner.saveBackup(json);
+      $("backupMessage").textContent="اختر مكان حفظ النسخة المشفرة AES-256-GCM من نافذة Android.";
+      return;
+    }
+    const blob=new Blob([json],{type:"application/json"});
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;
+    a.download="supermarket-pos-encrypted-backup-"+new Date().toISOString().slice(0,10)+".json";
+    a.click();
+    URL.revokeObjectURL(url);
+    $("backupMessage").textContent="تم إنشاء نسخة مشفرة AES-256-GCM. احتفظ بكلمة المرور والملف في مكانين آمنين منفصلين.";
+  }catch(e){alert(e.message||"تعذر إنشاء النسخة المشفرة.");}
+  finally{if(passwordInput)passwordInput.value="";}
+};
+$("importBackup").onchange=async e=>{
+  const file=e.target.files&&e.target.files[0];
+  const passwordInput=$("backupPassword");
+  if(!file)return;
+  try{
+    const parsed=JSON.parse(await file.text());
+    let payload;
+    if(window.POSBackupCrypto&&window.POSBackupCrypto.isEncrypted(parsed)){
+      const password=String(passwordInput&&passwordInput.value||"");
+      if(password.length<10)throw new Error("اكتب كلمة مرور النسخة المشفرة أولًا.");
+      payload=await window.POSBackupCrypto.decrypt(parsed,password);
+    }else{
+      const acceptedLegacy=confirm("هذه نسخة احتياطية قديمة غير مشفرة، وقد تحتوي بيانات المحل كنص واضح. لا تستوردها إلا من مصدر موثوق. هل تريد المتابعة؟");
+      if(!acceptedLegacy)return;
+      payload=parsed;
+    }
+    if(!confirm("ستستبدل الاستعادة كل بيانات المحل الموجودة على هذا الجهاز. تأكد من وجود نسخة حالية قبل المتابعة. هل تريد الاستعادة؟"))return;
+    await POSDatabase.restoreData(payload);
+    await load();
+    await renderInvoices();
+    $("backupMessage").textContent="تمت استعادة البيانات بنجاح. أنشئ نسخة مشفرة جديدة بعد التحقق من البيانات.";
+  }catch(err){alert("فشلت الاستعادة: "+(err.message||"خطأ غير معروف"));}
+  finally{
+    if(passwordInput)passwordInput.value="";
+    e.target.value="";
+  }
+};
 window.addEventListener("online",()=>$("connectionState").textContent="متصل");window.addEventListener("offline",()=>$("connectionState").textContent="دون إنترنت");
 if(!window.AndroidScanner&&"serviceWorker"in navigator&&location.protocol!=="file:")addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(()=>{}));
 (async()=>{try{await load();renderCart();}catch(e){alert("تعذر فتح قاعدة البيانات: "+e.message);}})();
