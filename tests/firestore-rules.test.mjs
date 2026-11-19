@@ -75,6 +75,10 @@ async function seed() {
       ...recordData("cashEntries", "c1"),
       updatedAt: new Date()
     });
+    await setDoc(recordRef(db, shopId, "settings--private"), {
+      ...recordData("settings", "private"),
+      updatedAt: new Date()
+    });
     await setDoc(recordRef(db, otherShopId, "products--secret"), {
       ...recordData("products", "secret"),
       updatedAt: new Date()
@@ -115,6 +119,10 @@ async function test() {
       recordData("cashEntries", "accountant")
     ));
     await assertFails(getDoc(recordRef(manager, shopId, "settings--private")));
+    await assertFails(setDoc(
+      recordRef(manager, shopId, "settings--manager-write"),
+      recordData("settings", "manager-write")
+    ));
     await assertSucceeds(setDoc(
       recordRef(manager, shopId, "products--manager-product"),
       recordData("products", "manager-product")
