@@ -560,6 +560,7 @@ async function applyRealtimeDocuments(snapshots, shopId) {
     await refreshLocalViews();
   }
   writeState(state);
+  renderSyncConflicts();
   if(changes.length)scheduleSync();
   if (conflictAdded) {
     setStatus("وصل تحديث على سجل تم تعديله محليًا أيضًا. أوقفنا استبداله تلقائيًا لحماية البيانات؛ يلزم حل التعارض.", "warning");
@@ -754,6 +755,7 @@ async function syncNow(includePull) {
     const pushed = await pushLocalChanges(state);
     const pulledAfterWrite = includePull === false ? 0 : await pullIncremental(state);
     writeState(state);
+    renderSyncConflicts();
     const conflictCount = (state.conflicts || []).length;
     const products = await window.POSDatabase.getProducts();
     const negativeStockCount = products.filter(product => product.trackStock && Number(product.stock || 0) < -0.001).length;
