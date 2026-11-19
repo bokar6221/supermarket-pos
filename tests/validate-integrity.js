@@ -70,7 +70,7 @@ assert.ok(firebase.includes('if(offlineAllowed&&maxDevices>1)'), "Admin policy s
 assert.ok(firebase.includes("const occupiedSnapshot=await getDocs(slotCollection)"), "Device slot discovery must happen before the transaction");
 assert.ok(firebase.includes("const slotSnapshot=await tx.get(selectedSlotRef)"), "The selected device slot must be rechecked inside the transaction");
 assert.ok(firebase.includes("device/slot-taken"), "Concurrent device registration must retry on an occupied slot");
-assert.doesNotMatch(firebase, /for\\(const slot of slots\\)/, "Device registration must not read up to 500 slot documents in one transaction");
+assert.equal(firebase.includes("for(const slot of slots)"), false, "Device registration must not read up to 500 slot documents in one transaction");
 assert.match(accessGate, /يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام/, "Unlinked installs must not receive an offline license");
 assert.doesNotMatch(accessGate, /if\(method==="saveSettings"\)return true/, "No local business mutation may bypass initial activation");
 assert.match(html, /id="licenseActivationButton"/, "Locked installs must have a visible route to activation");
