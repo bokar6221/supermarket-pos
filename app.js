@@ -894,8 +894,10 @@ $("exportBackup").onclick=async()=>{
     const url=URL.createObjectURL(blob),a=document.createElement("a");
     a.href=url;
     a.download="supermarket-pos-encrypted-backup-"+new Date().toISOString().slice(0,10)+".json";
+    document.body.append(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
     $("backupMessage").textContent="تم إنشاء نسخة مشفرة AES-256-GCM. احتفظ بكلمة المرور والملف في مكانين آمنين منفصلين.";
   }catch(e){alert(e.message||"تعذر إنشاء النسخة المشفرة.");}
   finally{if(passwordInput)passwordInput.value="";}
