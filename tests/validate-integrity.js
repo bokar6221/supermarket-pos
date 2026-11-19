@@ -78,6 +78,11 @@ assert.match(firebase, /async function createEmployeeInvite/, "Owner employee in
 assert.match(firebase, /async function handleEmployeeRegister/, "Employees must be able to register with an invitation");
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
 assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
+assert.match(firebase, /async function resolveSyncConflict\(/, "Managers must be able to resolve sync conflicts explicitly");
+assert.match(firebase, /اعتماد نسخة السحابة/, "Conflict UI must expose the cloud version choice");
+assert.match(firebase, /اعتماد نسخة هذا الجهاز/, "Conflict UI must expose the local version choice");
+assert.match(firebase, /\["owner","manager","accountant"\]\.includes\(activeMember\.role\)/, "Only authorized shop roles may resolve sync conflicts");
+assert.match(html, /id="cloudConflictsPanel"/, "Cloud settings must expose a sync conflict review panel");
 assert.match(firebase, /if\(role==="cashier"\)return \["products","invoices","movements","customers"\]/, "Cashiers must not download the full cash ledger");
 assert.match(rules, /role == 'cashier'\s*&& store in \['products', 'invoices', 'movements', 'customers'\]/, "Cashiers must not write directly to the cash ledger");
 assert.doesNotMatch(rules, /role == 'cashier'\s*&& store in \[[^\]]*'cashEntries'/, "Cashier role must not be granted direct cash ledger writes");
