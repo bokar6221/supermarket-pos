@@ -753,3 +753,40 @@ body.license-activation-only #view-settings .inner-tab-panel[data-subpanel="clou
 .platform-device-panel p{margin:10px 0 2px;font-weight:700}
 #localLicensePanel{margin-bottom:16px;border:1px solid var(--line,#dbe4df);border-radius:12px;padding:14px;background:var(--surface,#f8faf9)}
 #localLicensePanel h3{margin-top:0}
+
+
+.sync-conflicts-panel {
+  margin-top: 14px;
+  border: 1px solid #d6a34a;
+  background: #fffaf0;
+}
+.sync-conflict-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #eadfc9;
+}
+.sync-conflict-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.sync-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sync-conflict-actions button {
+  min-height: 38px;
+}
+@media (max-width: 560px) {
+  .sync-conflict-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .sync-conflict-actions button {
+    flex: 1 1 140px;
+  }
+}
