@@ -299,6 +299,11 @@
         </div>
       </div>
       <p class="hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
+      <section class="panel sync-conflicts-panel" id="cloudConflictsPanel" hidden aria-live="polite">
+        <h3>تعارضات المزامنة تحتاج مراجعة</h3>
+        <p class="hint">اختر النسخة الصحيحة لكل سجل بعد مراجعة بياناته. لا يتم استبدال النسخ المتعارضة تلقائيًا.</p>
+        <div id="cloudConflictsList"></div>
+      </section>
       <p class="hint">صاحب المحل ينشئ لكل موظف حسابًا منفصلًا من تبويب «الموظفون والصلاحيات» بدعوة بريدية. لا تشارك كلمة مرور أي حساب بين الموظفين.</p>
       <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password في Firebase، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
     </div>
