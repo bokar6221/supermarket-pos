@@ -881,6 +881,7 @@ function applyRoleAccess(){
   :(role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.");
  if($("platformAdminEmail"))$("platformAdminEmail").textContent=activeUser&&activeUser.email||"";
  if($("platformAdminUid"))$("platformAdminUid").textContent=activeUser&&activeUser.uid||"";
+ renderSyncConflicts();
  const current=document.querySelector(".tab.active");
  if(current&&!current.hidden)return;
  const first=document.querySelector('.tab[data-view="sale"]:not([hidden])')||document.querySelector('.tab:not([hidden])');
