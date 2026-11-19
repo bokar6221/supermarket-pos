@@ -14,9 +14,13 @@ const rules = read("firestore.rules");
 const indexes = read("firestore.indexes.json");
 const manifest = read("android-app/app/src/main/AndroidManifest.xml");
 const accessGate = read("access-gate.js");
+const backupCrypto = read("backup-crypto.js");
+const serviceWorker = read("sw.js");
+const debugWorkflow = read(".github/workflows/build-android-apk.yml");
+const releaseWorkflow = read(".github/workflows/build-android-release.yml");
 const androidMainActivity = read("android-app/app/src/main/java/com/supermarket/pos/MainActivity.java");
 
-for (const file of ["app.js", "db.js", "accounts.js", "catalog.js", "sw.js", "access-gate.js"]) {
+for (const file of ["app.js", "db.js", "accounts.js", "catalog.js", "sw.js", "access-gate.js", "backup-crypto.js"]) {
   const source = read(file);
   // Compile without executing browser-dependent code.
   new Function(source);
@@ -44,8 +48,26 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.10.0'/, "Android version must match this release");
-assert.match(gradle, /versionCode 14/, "Android version code must be incremented for this release");
+assert.match(gradle, /versionName '1.10.1'/, "Android version must match this release");
+assert.match(gradle, /versionCode 15/, "Android version code must be incremented for this release");
+assert.match(html, /<script src="backup-crypto\\.js"><\\/script>/, "Encrypted backup module must load before the app");
+assert.match(app, /POSBackupCrypto\\.encrypt/, "New backup exports must use authenticated encryption");
+assert.match(app, /POSBackupCrypto\\.decrypt/, "Encrypted backups must be decrypted before restore");
+assert.match(app, /نسخة احتياطية قديمة غير مشفرة/, "Legacy plaintext backups must require an explicit warning confirmation");
+assert.match(backupCrypto, /AES-256-GCM/, "Backup encryption must use AES-256-GCM");
+assert.match(backupCrypto, /PBKDF2-SHA-256/, "Backup keys must be derived using PBKDF2-SHA-256");
+assert.match(serviceWorker, /backup-crypto\\.js/, "Offline shell must cache the backup crypto module");
+assert.match(debugWorkflow, /backup-crypto\\.js/, "Debug APK must package the backup crypto module");
+assert.match(releaseWorkflow, /backup-crypto\\.js/, "Release APK must package the backup crypto module");
+assert.match(debugWorkflow, /tests\\/backup-crypto\\.test\\.cjs/, "Debug CI must run encryption tests");
+assert.match(releaseWorkflow, /tests\\/backup-crypto\\.test\\.cjs/, "Release CI must run encryption tests");
+assert.match(html, /import\\("\\.\\/firebase-sync\\.js"\\)/, "Cloud module must load dynamically after internet becomes available");
+assert.match(html, /addEventListener\\("online", loadCloudModule\\)/, "Cloud module must retry after reconnection");
+assert.doesNotMatch(html, /<script type="module" src="firebase-sync\\.js"><\\/script>/, "Firebase module must not block cold offline startup");
+assert.match(accessGate, /maxDevices=Math\\.max\\(1,Math\\.floor\\(Number\\(p\\.maxDevices\\)\\|\\|1\\)\\)/, "License policy must check the signed device cap");
+assert.match(accessGate, /maxDevices===1&&p\\.offlineAllowed!==false/, "Cloud offline mode must be restricted to a single-device license");
+assert.match(firebase, /cap===1&&\\(!old\\|\\|old\\.offlineAllowed!==false\\)/, "New cloud licenses must default to online-only when multi-device");
+assert.match(firebase, /if\\(offlineAllowed&&maxDevices>1\\)/, "Admin policy save must reject offline mode for multi-device cloud licenses");
 assert.match(accessGate, /function isManaged\(\)\{return true;\}/, "Every installation must pass the activation gate");
 assert.match(accessGate, /يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام/, "Unlinked installs must not receive an offline license");
 assert.doesNotMatch(accessGate, /if\(method==="saveSettings"\)return true/, "No local business mutation may bypass initial activation");
@@ -79,7 +101,7 @@ assert.match(firebase, /async function handleEmployeeRegister/, "Employees must 
 assert.match(firebase, /async function verifyPlatformAdmin/, "Project administrator authorization must be implemented");
 assert.match(firebase, /function permittedSyncStores/, "Cloud sync must be scoped by employee role");
 assert.match(firebase, /async function resolveSyncConflict\(/, "Managers must be able to resolve sync conflicts explicitly");
-assert.match(firebase, /تنبيه تشغيلي: السماح بالأوفلاين مع عدة أجهزة/, "Admin must be warned about multi-device offline stock overselling");
+assert.match(firebase, /لا يمكن تفعيل البيع أوفلاين مع أكثر من جهاز/, "Admin must be blocked from enabling unsafe multi-device cloud offline mode");
 assert.match(firebase, /اعتماد نسخة السحابة/, "Conflict UI must expose the cloud version choice");
 assert.match(firebase, /اعتماد نسخة هذا الجهاز/, "Conflict UI must expose the local version choice");
 assert.match(firebase, /\["owner","manager","accountant"\]\.includes\(activeMember\.role\)/, "Only authorized shop roles may resolve sync conflicts");
