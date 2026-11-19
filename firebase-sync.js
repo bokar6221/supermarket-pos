@@ -633,6 +633,100 @@ async function pushLocalChanges(state) {
   }
   return pushed;
 }
+function conflictStoreLabel(store){
+  return ({
+    products:"منتج",invoices:"فاتورة",movements:"حركة مخزون",suppliers:"مورد",
+    purchases:"فاتورة مشتريات",supplierPayments:"سداد مورد",stocktakes:"جرد",
+    customers:"عميل",customerPayments:"تحصيل",returns:"مرتجع",cashEntries:"حركة خزينة",
+    shifts:"وردية",settings:"إعدادات"
+  })[store]||store;
+}
+function renderSyncConflicts(){
+  const panel=$("cloudConflictsPanel"),root=$("cloudConflictsList");
+  if(!panel||!root)return;
+  const state=readState(),conflicts=Array.isArray(state&&state.conflicts)?state.conflicts:[];
+  root.replaceChildren();
+  panel.hidden=conflicts.length===0;
+  if(!conflicts.length)return;
+  const role=activeMember&&activeMember.role;
+  const canResolve=!!activeUser&&["owner","manager","accountant"].includes(role)&&!!activeShopId;
+  conflicts.forEach(conflict=>{
+    const row=document.createElement("div");row.className="sync-conflict-row";
+    const detail=document.createElement("span");
+    detail.textContent=conflictStoreLabel(conflict.store)+" · "+String(conflict.recordId||conflict.docId)+" · "+new Date(conflict.detectedAt||Date.now()).toLocaleString("ar-EG");
+    row.append(detail);
+    if(canResolve){
+      const actions=document.createElement("div");actions.className="sync-conflict-actions";
+      const cloud=document.createElement("button");cloud.type="button";cloud.className="secondary";cloud.textContent="اعتماد نسخة السحابة";
+      cloud.onclick=()=>clickAction(()=>resolveSyncConflict(conflict.docId,"cloud"));
+      const local=document.createElement("button");local.type="button";local.className="primary";local.textContent="اعتماد نسخة هذا الجهاز";
+      local.onclick=()=>clickAction(()=>resolveSyncConflict(conflict.docId,"local"));
+      actions.append(cloud,local);row.append(actions);
+    }
+    root.append(row);
+  });
+  if(!canResolve){
+    const note=document.createElement("p");note.className="hint";
+    note.textContent="حل التعارضات متاح لصاحب المحل أو المدير أو المحاسب. اطلب من أحدهم مراجعتها من جهاز متصل بالإنترنت.";
+    root.append(note);
+  }
+}
+async function resolveSyncConflict(docId,choice){
+  if(!navigator.onLine)throw new Error("يلزم الاتصال بالإنترنت لحل تعارض المزامنة.");
+  if(!activeUser||!activeShopId||!activeMember||!["owner","manager","accountant"].includes(activeMember.role))
+    throw new Error("حل تعارضات المزامنة متاح لصاحب المحل أو المدير أو المحاسب فقط.");
+  if(window.POSGate&&!window.POSGate.isCloudSyncEnabled())throw new Error("المزامنة السحابية متوقفة حسب سياسة الترخيص.");
+  if(!["cloud","local"].includes(choice))throw new Error("اختيار حل التعارض غير صحيح.");
+  const state=readState();
+  if(!state||state.shopId!==activeShopId)throw new Error("لا توجد حالة مزامنة للمحل الحالي.");
+  const conflict=(state.conflicts||[]).find(item=>item.docId===docId);
+  if(!conflict)throw new Error("هذا التعارض لم يعد موجودًا. حدّث حالة المزامنة.");
+  const localMap=await buildLocalRecords();
+  const localEntry=localMap.get(docId)||null;
+  if(choice==="local"&&!confirm("سيتم اعتماد نسخة هذا الجهاز لهذا السجل ورفعها فوق النسخة السحابية الحالية. لا تستخدم هذا الخيار قبل مراجعة تفاصيل السجل. هل تريد المتابعة؟"))return false;
+  if(choice==="cloud"&&!confirm("سيتم استبدال نسخة هذا الجهاز بالنسخة السحابية لهذا السجل. هل تريد المتابعة؟"))return false;
+  const ref=doc(recordsRef(activeShopId),docId);
+  const remoteSnapshot=await getDoc(ref);
+  const remote=remoteSnapshot.exists()?remoteSnapshot.data():null;
+  const expectedRemoteHash=remote?await cloudHash(remote):null;
+  if(choice==="cloud"){
+    const change=remote?cloudToLocalChange(remote):{
+      store:conflict.store,recordId:conflict.recordId,deleted:true,data:null
+    };
+    suppressSync=true;
+    try{await window.POSDatabase.applyCloudRecords([change],false);}
+    finally{suppressSync=false;}
+    if(remote)state.records[docId]={hash:expectedRemoteHash,deleted:!!remote.deleted};
+    else delete state.records[docId];
+  }else{
+    const store=localEntry?localEntry.store:conflict.store;
+    const recordId=localEntry?localEntry.recordId:conflict.recordId;
+    const data=localEntry?localEntry.data:null;
+    const deleted=!localEntry;
+    const payload=cloudRecordPayload(store,recordId,data,deleted);
+    const writeData={
+      store,recordId,data:deleted?null:data,deleted,
+      deviceId:deviceId(),clientUpdatedAt:Date.now(),updatedAt:serverTimestamp()
+    };
+    await runTransaction(cloudDb,async transaction=>{
+      const current=await transaction.get(ref);
+      const currentHash=current.exists()?await cloudHash(current.data()):null;
+      if(currentHash!==expectedRemoteHash){
+        const error=new Error("تغيرت النسخة السحابية أثناء حل التعارض. أعد تحميل البيانات وحاول مرة أخرى.");
+        error.code="sync/conflict";
+        throw error;
+      }
+      transaction.set(ref,writeData);
+    });
+    state.records[docId]={hash:await digest(payload),deleted};
+  }
+  state.conflicts=(state.conflicts||[]).filter(item=>item.docId!==docId);
+  writeState(state);
+  renderSyncConflicts();
+  await refreshLocalViews();
+  setStatus("تم حل التعارض واعتماد النسخة المختارة. راجع المخزون والتقارير بعد المزامنة.","success");
+  return true;
+}
 async function syncNow(includePull) {
   if (syncBusy) return;
   if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
