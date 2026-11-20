@@ -44,8 +44,8 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.10.0'/, "Android version must match this release");
-assert.match(gradle, /versionCode 14/, "Android version code must be incremented for this release");
+assert.match(gradle, /versionName '1.11.0'/, "Android version must match this release");
+assert.match(gradle, /versionCode 15/, "Android version code must be incremented for this release");
 assert.match(accessGate, /function isManaged\(\)\{return true;\}/, "Every installation must pass the activation gate");
 assert.match(accessGate, /يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام/, "Unlinked installs must not receive an offline license");
 assert.doesNotMatch(accessGate, /if\(method==="saveSettings"\)return true/, "No local business mutation may bypass initial activation");
@@ -108,7 +108,7 @@ assert.match(accessGate, /importLocalLicense/, "Local license activation must ve
 assert.match(accessGate, /licenseType==="local"/, "Local mode must initialize a local owner session without Firebase membership");
 assert.match(accessGate, /isCloudLicense:/, "Cloud device registration must remain enforced when data sync is disabled");
 assert.match(firebase, /const localMode=!!\(gateSession&&gateSession\.local\)/, "Local mode must be derived from the signed local access-gate session");
-assert.match(firebase, /if\(\$\("employeeOwnerPanel"\)\)\$\("employeeOwnerPanel"\)\.hidden=role!==\"owner\"\|\|localMode/, "Local-only licenses must hide cloud employee invitations and management");
+assert.match(firebase, /if\(\$\("employeeOwnerPanel"\)\)\$\("employeeOwnerPanel"\)\.hidden=isPlatformAdmin\|\|role!==\"owner\"\|\|localMode/, "Only shop owners may see cloud employee invitations; platform admins stay separate");
 assert.match(html, /id="localLicenseFile"/, "The local license import control must exist");
 assert.match(html, /id="activateLocalLicense"/, "The local license activation control must exist");
 assert.match(rules, /match \/devices\//, "Firestore must protect the registered cloud devices collection");
@@ -118,4 +118,20 @@ assert.match(rules, /match \/platformAdmins\//, "Platform administrator collecti
 assert.match(rules, /match \/licenses\//, "License records must be protected by Firestore rules");
 assert.match(rules, /function canWriteStore/, "Firestore must enforce role-based data writes");
 
-console.log("POS integrity checks passed: syntax, HTML IDs, assets, invoice integrity, product history, employees, signed licensing, Firestore role rules and release version.");
+
+assert.match(accessGate, /TRIAL_DURATION_MS=7\*24\*60\*60\*1000/, "The device trial must last exactly seven days");
+assert.match(accessGate, /function startTrial\(info\)/, "A first-run installation must be able to start a local device trial");
+assert.match(accessGate, /function activateTrial\(shopId,role\)/, "A trial must be attachable to a shop without granting cloud sync");
+assert.match(accessGate, /trialEntitlement\.consumed===true/, "A signed license must prevent reusing the free trial");
+assert.match(firebase, /setPersistence\(auth,browserLocalPersistence\)/, "Firebase Auth must explicitly use local persistence");
+assert.match(firebase, /signInAnonymously\(auth\)/, "An unregistered device must be able to start a trial anonymously");
+assert.match(firebase, /match \/trialDevices\//, "The device trial must be recorded in Firestore");
+assert.match(firebase, /auth\/network-request-failed/, "Network sign-in errors must have a clear user-facing message");
+assert.match(androidMainActivity, /getTrialInfo\(\)/, "Android must provide a stable device identifier and first-run clock to the WebView");
+assert.match(html, /id="trialStatusBanner"/, "Trial and license status must stay visible in the app header");
+assert.match(html, /class="account-connected-panel"/, "Account details must remain visible after a successful sign-in");
+assert.match(rules, /match \/trialDevices\//, "Trial device records must be protected by Firestore rules");
+assert.match(rules, /allow update, delete: if false;/, "A client must not reset or delete a device's trial record");
+assert.doesNotMatch(rules.slice(rules.indexOf("function canReadStore"), rules.indexOf("function canWriteStore")), /isPlatformAdmin\(\)/, "Platform admins must not bypass shop data read roles");
+
+console.log("POS integrity checks passed: syntax, HTML IDs, assets, invoice integrity, product history, employees, signed licensing, Firestore role rules and release version, seven-day trial and platform-admin separation.");
