@@ -566,6 +566,7 @@ async function createShopForUser(user, shopName) {
   startMemberListener(newShop.id,user.uid);
   if (window.POSGate && window.POSGate.isTrialActive()) {
     showSignedIn(user, name);
+    startLicenseListener(newShop.id);
     setTrialPanel(window.POSGate.getTrial(), "تم إنشاء المحل وربطه بحسابك. يمكنك البيع محليًا خلال الفترة التجريبية؛ ستحتاج ترخيصًا ساريًا للمزامنة السحابية والأجهزة الإضافية.");
     setStatus("المحل جاهز على هذا الجهاز ضمن التجربة المجانية. البيانات محلية حتى إصدار الترخيص.", "success");
     return null;
@@ -587,6 +588,7 @@ async function connectExistingShop(user, shopId) {
   activeShopId = shopId;
   activeShopName = String(shop.data().name || "المحل");
   activeMember = member.data();
+  if(activeMember.role!=="owner"&&window.POSGate&&window.POSGate.clearTrial)window.POSGate.clearTrial();
   localStorage.setItem(MANAGED_SHOP_KEY,shopId);
   setGateSession();
   showSignedIn(user, activeShopName);
@@ -1230,6 +1232,14 @@ function startLicenseListener(shopId){
    setStatus("يعمل المحل خلال الفترة المتبقية من التجربة المجانية.", "warning");
    return;
   }
+  if(valid&&window.POSGate.isCloudLicense()&&activeUser&&activeMember){
+   try{await registerCurrentDevice(shopId,activeUser.uid);}
+   catch(error){
+    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+    if(window.POSGate)window.POSGate.lock(error.message||"تعذر تفعيل هذا الجهاز ضمن حد الأجهزة.");
+    setStatus(firebaseError(error),"error");showSignedIn(activeUser,"");return;
+   }
+  }
   if(valid&&activeMember&&activeMember.role==="owner"&&activeShopName&&window.POSDatabase){
    const localSettings=await window.POSDatabase.getSettings();
    if(String(localSettings.shopName||"")!==String(activeShopName))
@@ -1621,7 +1631,7 @@ onAuthStateChanged(auth, async user => {
       setStatus("لا توجد جلسة تشغيل محلية صالحة لهذا المحل. اتصل بالإنترنت للتحقق من الحساب والسياسة.","error");
     }
     if(localStorage.getItem(REGISTERED_ACCOUNT_KEY)!=="1")await startTrialSession();
-    else setStatus("لم يتم تسجيل الدخول. أدخل بيانات الحساب أو اضغط إعادة المحاولة؛ لم يتم حذف بيانات الحساب.", "info");
+    else if(!(window.POSGate&&window.POSGate.canOperateLocally()))setStatus("لم يتم تسجيل الدخول. أدخل بيانات الحساب أو اضغط إعادة المحاولة؛ لم يتم حذف بيانات الحساب.", "info");
     return;
   }
   const state = readState();
