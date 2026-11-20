@@ -20,7 +20,11 @@ function customerBalance(customer,invoices,payments,returns){
   const sales=invoices.filter(x=>x.paymentMethod==="credit"&&customerMatches(x,customer)).reduce((s,x)=>
     s+(Number.isFinite(Number(x.remainingAmount))?Number(x.remainingAmount):Number(x.total||0)),0);
   const collected=payments.filter(x=>x.customerId===customer.id).reduce((s,x)=>s+Number(x.amount||0),0);
-  const credited=returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).reduce((s,x)=>s+Number(x.amount||0),0);
+  const credited=returns.filter(x=>invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).reduce((s,x)=>{
+    const credit=Number.isFinite(Number(x.creditReductionAmount))
+      ?Number(x.creditReductionAmount):(x.refundMethod==="credit"?Number(x.amount||0):0);
+    return s+Math.max(0,credit);
+  },0);
   return Math.round((Number(customer.openingBalance||0)+sales-collected-credited)*100)/100;
 }
 async function loadCustomerData(){
@@ -89,7 +93,11 @@ async function renderCustomerStatement(){
     credit:0,note:"فاتورة "+String(inv.id).slice(0,8)
   }));
   payments.filter(x=>x.customerId===id).forEach(p=>events.push({date:p.createdAt,kind:"تحصيل",debit:0,credit:Number(p.amount||0),note:p.note||p.method||""}));
-  returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).forEach(r=>events.push({date:r.createdAt,kind:"مرتجع خفّض المديونية",debit:0,credit:Number(r.amount||0),note:"مرتجع فاتورة"}));
+  returns.filter(x=>invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).forEach(r=>{
+    const credit=Number.isFinite(Number(r.creditReductionAmount))
+      ?Number(r.creditReductionAmount):(r.refundMethod==="credit"?Number(r.amount||0):0);
+    if(credit>0.005)events.push({date:r.createdAt,kind:"مرتجع خفّض المديونية",debit:0,credit,note:"مرتجع فاتورة"});
+  });
   events.sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
   let balance=0;
   const rows=events.map(e=>{balance+=e.debit-e.credit;return '<tr><td>'+esc(e.date?new Date(e.date).toLocaleDateString("ar-EG"):"—")+'</td><td>'+esc(e.kind)+(e.note?"<small class='table-note'>"+esc(e.note)+"</small>":"")+'</td><td>'+esc(money(e.debit))+'</td><td>'+esc(money(e.credit))+'</td><td>'+esc(money(balance))+'</td></tr>';}).join("");
