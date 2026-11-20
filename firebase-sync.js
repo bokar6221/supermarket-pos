@@ -3,6 +3,11 @@ import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously,
+  EmailAuthProvider,
+  linkWithCredential,
+  setPersistence,
+  browserLocalPersistence,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
@@ -11,6 +16,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   query,
   where,
@@ -38,6 +44,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(error => {
+  console.warn("Firebase local auth persistence could not be initialized; keeping SDK fallback.", error);
+  return false;
+});
 const cloudDb = getFirestore(app);
 const PAGE_SIZE = 250;
 const SYNC_STORES = [
@@ -156,12 +166,199 @@ function firebaseError(error) {
     "auth/invalid-credential": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
     "auth/user-disabled": "تم تعطيل هذا الحساب.",
     "auth/too-many-requests": "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
+    "auth/network-request-failed": "تعذر الاتصال بخدمة تسجيل الدخول في Firebase. لم يتم حذف الحساب ولم نُسجّل خروجك؛ افحص الاتصال واضغط «إعادة المحاولة».",
+    "auth/internal-error": "حدث خطأ داخلي أثناء تسجيل الدخول. أعد المحاولة بعد قليل.",
     "permission-denied": "رفضت قواعد Firestore العملية. تأكد من نشر قواعد الحماية المرفقة.",
     "unavailable": "خدمة Firebase غير متاحة حاليًا. سيظل البيع المحلي يعمل.",
     "failed-precondition": "قاعدة Firestore غير جاهزة أو تحتاج إلى إعداد في لوحة Firebase."
   };
   return messages[code] || (error && error.message) || "حدث خطأ غير معروف أثناء الاتصال.";
 }
+
+const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const TRIAL_DEVICE_SEED_KEY = "supermarket-pos-trial-device-seed-v1";
+const TRIAL_CACHE_PREFIX = "supermarket-pos-trial-cache-v1:";
+const REGISTERED_ACCOUNT_KEY = "supermarket-pos-registered-account-v1";
+let trialDeviceIdPromise = null;
+let trialStartPromise = null;
+
+async function sha256Hex(value) {
+  if (!window.crypto || !window.crypto.subtle) throw new Error("يلزم تشغيل التطبيق من بيئة آمنة لإنشاء معرّف التجربة.");
+  const bytes = new TextEncoder().encode(String(value));
+  const digestValue = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digestValue)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+async function getTrialDeviceId() {
+  if (trialDeviceIdPromise) return trialDeviceIdPromise;
+  trialDeviceIdPromise = (async () => {
+    try {
+      const nativeId = window.AndroidScanner && typeof window.AndroidScanner.getDeviceFingerprint === "function"
+        ? String(window.AndroidScanner.getDeviceFingerprint() || "").toLowerCase()
+        : "";
+      if (/^[a-f0-9]{64}$/.test(nativeId)) return nativeId;
+    } catch (error) {
+      console.warn("Native device fingerprint is unavailable; using browser fallback.", error);
+    }
+    let seed = localStorage.getItem(TRIAL_DEVICE_SEED_KEY);
+    if (!seed) {
+      seed = randomId();
+      localStorage.setItem(TRIAL_DEVICE_SEED_KEY, seed);
+    }
+    return sha256Hex(firebaseConfig.projectId + "|browser|" + seed);
+  })();
+  return trialDeviceIdPromise;
+}
+function trialRef(deviceId) {
+  return doc(cloudDb, "deviceTrials", deviceId);
+}
+function trialFromSnapshot(snapshot, uid, deviceId) {
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() || {};
+  if (String(data.uid || "") !== String(uid) || String(data.deviceId || "") !== String(deviceId) ||
+      Number(data.trialDays) !== 7 || Number(data.schemaVersion) !== 1) return null;
+  const startedAt = data.startedAt && typeof data.startedAt.toMillis === "function"
+    ? data.startedAt.toMillis()
+    : (data.startedAt instanceof Date ? data.startedAt.getTime() : NaN);
+  if (!Number.isFinite(startedAt)) return null;
+  return {
+    deviceId,
+    uid: String(uid),
+    status: String(data.status || "active"),
+    startedAtMs: startedAt,
+    expiresAtMs: startedAt + TRIAL_DURATION_MS,
+    verifiedAtMs: Date.now()
+  };
+}
+function readTrialCache(deviceId, uid) {
+  try {
+    const value = JSON.parse(localStorage.getItem(TRIAL_CACHE_PREFIX + deviceId) || "null");
+    if (!value || value.deviceId !== deviceId || value.uid !== uid ||
+        !Number.isFinite(Number(value.expiresAtMs)) || !Number.isFinite(Number(value.startedAtMs))) return null;
+    return value;
+  } catch (_) {
+    return null;
+  }
+}
+function saveTrialCache(value) {
+  localStorage.setItem(TRIAL_CACHE_PREFIX + value.deviceId, JSON.stringify(value));
+}
+async function ensureDeviceTrial(user, allowCreate) {
+  if (!user || !user.uid) return null;
+  const deviceId = await getTrialDeviceId();
+  const cache = readTrialCache(deviceId, user.uid);
+  if (!navigator.onLine) return cache;
+  try {
+    const ref = trialRef(deviceId);
+    if (allowCreate && user.isAnonymous) {
+      await runTransaction(cloudDb, async transaction => {
+        const current = await transaction.get(ref);
+        if (!current.exists()) {
+          transaction.set(ref, {
+            deviceId,
+            uid: user.uid,
+            startedAt: serverTimestamp(),
+            trialDays: 7,
+            status: "active",
+            schemaVersion: 1
+          });
+        } else if (String(current.data().uid || "") !== user.uid) {
+          throw new Error("هذا الجهاز استخدم التجربة المجانية من قبل ولا يمكن بدء تجربة جديدة.");
+        }
+      });
+    }
+    const snapshot = await getDocFromServer(ref);
+    if (!snapshot.exists()) {
+      localStorage.removeItem(TRIAL_CACHE_PREFIX + deviceId);
+      return null;
+    }
+    const value = trialFromSnapshot(snapshot, user.uid, deviceId);
+    if (!value) {
+      localStorage.removeItem(TRIAL_CACHE_PREFIX + deviceId);
+      return null;
+    }
+    saveTrialCache(value);
+    return value;
+  } catch (error) {
+    if (cache) {
+      console.warn("Using previously server-verified trial cache while Firebase is unavailable.", error);
+      return cache;
+    }
+    throw error;
+  }
+}
+function trialRemainingText(trial) {
+  if (!trial) return "";
+  const remaining = Number(trial.expiresAtMs) - Date.now();
+  if (remaining <= 0 || trial.status !== "active") return "انتهت التجربة المجانية";
+  const days = Math.ceil(remaining / (24 * 60 * 60 * 1000));
+  const hours = Math.ceil((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  return days > 1 ? "متبقي " + days + " أيام" : "متبقي أقل من يوم (" + hours + " ساعة تقريبًا)";
+}
+function setTrialPanel(trial, message) {
+  const panel = $("cloudTrialPanel");
+  if (!panel) return;
+  panel.hidden = !trial && !message;
+  const title = $("cloudTrialTitle");
+  const detail = $("cloudTrialMessage");
+  const remaining = $("cloudTrialRemaining");
+  if (title) title.textContent = trial && trial.status === "active" ? "التجربة المجانية لمدة 7 أيام" : "حالة التجربة المجانية";
+  if (detail) detail.textContent = message || (trial ? "بدأت التجربة في " + new Date(trial.startedAtMs).toLocaleString("ar-EG") : "يلزم الاتصال بالإنترنت مرة واحدة لبدء التجربة.");
+  if (remaining) remaining.textContent = trial ? trialRemainingText(trial) : "";
+}
+function activateTrialForOwner(user, trial) {
+  if (!user || !trial || !window.POSGate || !window.POSGate.setTrial) return false;
+  if (window.POSGate.setTrial(trial) !== true) {
+    setTrialPanel(trial, "انتهت التجربة المجانية في " + new Date(trial.expiresAtMs).toLocaleString("ar-EG") + ". سجّل الدخول أو تواصل مع مدير المنصة لتفعيل البرنامج.");
+    return false;
+  }
+  activeUser = user;
+  activeShopId = "";
+  activeShopName = "";
+  activeMember = { uid: user.uid, email: user.email || "", role: "owner", active: true, trial: true };
+  isPlatformAdmin = false;
+  window.POSGate.setPlatformAdmin(false);
+  setTrialPanel(trial, "التجربة مفعلة على هذا الجهاز حتى " + new Date(trial.expiresAtMs).toLocaleString("ar-EG") + ". بيانات البيع محفوظة محليًا.");
+  applyRoleAccess();
+  setStatus("التجربة المجانية مفعلة. " + trialRemainingText(trial) + ". لا يلزم إدخال بيانات دفع.", "success");
+  return true;
+}
+async function handleAnonymousTrial(user) {
+  showSignedIn(null, "");
+  setTrialPanel(null, navigator.onLine ? "جارٍ تفعيل تجربة هذا الجهاز لأول مرة..." : "اتصل بالإنترنت مرة واحدة لبدء التجربة المجانية. بعد التفعيل يمكنك البيع دون إنترنت خلال مدة التجربة.");
+  try {
+    const trial = await ensureDeviceTrial(user, true);
+    if (!trial) throw new Error("لم يتم إنشاء سجل تجربة لهذا الجهاز. تأكد من تفعيل Anonymous Authentication ونشر قواعد Firestore الخاصة بالتجربة.");
+    if (!activateTrialForOwner(user, trial)) return;
+  } catch (error) {
+    setTrialPanel(null, "لم تبدأ التجربة بعد. اتصل بالإنترنت ثم اضغط «إعادة المحاولة». لا يتم احتساب الأيام قبل تأكيد Firebase لبداية التجربة.");
+    setStatus("تعذر تفعيل التجربة المجانية: " + firebaseError(error), "error");
+  }
+}
+async function startTrialSession() {
+  if (localStorage.getItem(REGISTERED_ACCOUNT_KEY) === "1") return false;
+  if (!navigator.onLine) {
+    setTrialPanel(null, "يلزم الاتصال بالإنترنت مرة واحدة فقط لبدء الأيام السبعة. بعد بدء التجربة يمكن استخدام البرنامج دون إنترنت.");
+    setStatus("التجربة لم تبدأ بعد؛ الاتصال بالإنترنت مطلوب لأول تفعيل.", "warning");
+    return false;
+  }
+  if (trialStartPromise) return trialStartPromise;
+  trialStartPromise = (async () => {
+    await authPersistenceReady;
+    if (auth.currentUser) {
+      if (auth.currentUser.isAnonymous) await handleAnonymousTrial(auth.currentUser);
+      return !!(window.POSGate && window.POSGate.isTrialActive());
+    }
+    const credential = await signInAnonymously(auth);
+    await handleAnonymousTrial(credential.user);
+    return !!(window.POSGate && window.POSGate.isTrialActive());
+  })().catch(error => {
+    setTrialPanel(null, "تعذر بدء التجربة. افحص الإنترنت وإعداد Anonymous Authentication ثم أعد المحاولة.");
+    setStatus("تعذر بدء التجربة المجانية: " + firebaseError(error), "error");
+    return false;
+  }).finally(() => { trialStartPromise = null; });
+  return trialStartPromise;
+}
+
 function shopRef(shopId) {
   return doc(cloudDb, "shops", shopId);
 }
