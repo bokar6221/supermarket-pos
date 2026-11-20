@@ -96,6 +96,9 @@ async function test() {
     const accountant = testEnv.authenticatedContext("accountant").firestore();
     const platformAdmin = testEnv.authenticatedContext("platform-admin").firestore();
     const outsider = testEnv.authenticatedContext("outsider").firestore();
+    const deletionUser = testEnv.authenticatedContext("deletion-user", {
+      email: "deletion-user@example.test"
+    }).firestore();
 
     await assertFails(getDoc(recordRef(anonymous, shopId, "products--p1")));
     await assertSucceeds(getDoc(recordRef(owner, shopId, "products--p1")));
@@ -132,6 +135,28 @@ async function test() {
       doc(cashier, "licenses", shopId),
       { payload: { status: "active" }, signature: "forged" }
     ));
+    const deletionRequest = doc(deletionUser, "accountDeletionRequests", "deletion-user");
+    await assertSucceeds(setDoc(deletionRequest, {
+      uid: "deletion-user",
+      email: "deletion-user@example.test",
+      role: "owner",
+      status: "pending",
+      requestedAt: serverTimestamp()
+    }));
+    await assertSucceeds(getDoc(deletionRequest));
+    await assertFails(getDoc(doc(outsider, "accountDeletionRequests", "deletion-user")));
+    await assertFails(setDoc(
+      doc(outsider, "accountDeletionRequests", "victim"),
+      { uid: "victim", email: "victim@example.test", status: "pending", requestedAt: serverTimestamp() }
+    ));
+    await assertFails(setDoc(
+      doc(anonymous, "accountDeletionRequests", "anonymous"),
+      { uid: "anonymous", email: "anonymous@example.test", status: "pending", requestedAt: serverTimestamp() }
+    ));
+    await assertFails(setDoc(deletionRequest, {
+      uid: "deletion-user", email: "deletion-user@example.test", status: "processed"
+    }));
+
     await assertSucceeds(getDoc(doc(platformAdmin, "licenses", shopId)));
     await assertSucceeds(setDoc(
       doc(platformAdmin, "licenses", shopId),
