@@ -2,7 +2,7 @@ name: Test Firestore Security Rules
 
 on:
   push:
-    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1"]
+    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1", "commercial-trial-auth-ux-v1"]
     paths:
       - "firestore.rules"
       - "firestore.indexes.json"
