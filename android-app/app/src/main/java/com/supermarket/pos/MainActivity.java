@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Size;
 import android.view.Gravity;
 import android.view.View;
@@ -198,6 +199,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private class AndroidBridge {
+        @JavascriptInterface
+        public String getDeviceFingerprint() {
+            try {
+                String androidId = Settings.Secure.getString(
+                        getContentResolver(),
+                        Settings.Secure.ANDROID_ID
+                );
+                if (androidId == null || androidId.trim().isEmpty()) return "";
+                byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(
+                        (getPackageName() + "|" + androidId).getBytes(StandardCharsets.UTF_8)
+                );
+                StringBuilder hex = new StringBuilder(digest.length * 2);
+                for (byte value : digest) hex.append(String.format(Locale.US, "%02x", value & 0xff));
+                return hex.toString();
+            } catch (Exception error) {
+                return "";
+            }
+        }
+
         @JavascriptInterface
         public void startScan(String mode) {
             runOnUiThread(() -> {
