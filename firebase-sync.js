@@ -160,6 +160,7 @@ function showSignedIn(user, shopName) {
   if ($("cloudConnectedShop")) $("cloudConnectedShop").textContent = shopName || (signedIn ? "لم يتم ربط محل بهذا الحساب بعد" : "");
   if ($("cloudSyncNow")) $("cloudSyncNow").hidden = !(signedIn && !!shopName && !isPlatformAdmin);
   if ($("cloudSignOut")) $("cloudSignOut").hidden = !signedIn;
+  if ($("cloudRetryVerification")) $("cloudRetryVerification").hidden = true;
   if ($("shopTitle") && signedIn && shopName) $("shopTitle").textContent = shopName;
 }
 function firebaseError(error) {
@@ -1410,6 +1411,37 @@ function bindUI() {
   if ($("cloudRegister")) $("cloudRegister").addEventListener("click", () => clickAction(handleRegister));
   if ($("cloudLogin")) $("cloudLogin").addEventListener("click", () => clickAction(handleLogin));
   if ($("cloudCreateShop")) $("cloudCreateShop").addEventListener("click", () => clickAction(handleCreateShop));
+  if ($("cloudRetryVerification")) $("cloudRetryVerification").addEventListener("click", () => clickAction(async () => {
+    const user = auth.currentUser;
+    if (!user || user.isAnonymous) throw new Error("لا توجد جلسة حساب مسجلة لإعادة التحقق.");
+    isPlatformAdmin = await verifyPlatformAdmin(user);
+    if (window.POSGate) window.POSGate.setPlatformAdmin(isPlatformAdmin);
+    if (isPlatformAdmin) {
+      if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
+      stopGovernanceListeners();
+      activeShopId = ""; activeShopName = ""; activeMember = null;
+      showSignedIn(user, "إدارة المنصة"); applyRoleAccess();
+      await loadPlatformShops();
+      setStatus("تم التحقق من الحساب كمدير منصة.", "success");
+      return;
+    }
+    const profile = await getDoc(userRef(user.uid));
+    const shopId = profile.exists() ? String(profile.data().activeShopId || "") : "";
+    if (shopId) {
+      await connectExistingShop(user, shopId);
+      return;
+    }
+    const inviteCode = $("cloudInviteCode") && $("cloudInviteCode").value.trim();
+    if (inviteCode) {
+      await acceptEmployeeInvite(user, inviteCode);
+      return;
+    }
+    await ensureTrialExperience(user, true, "owner");
+    showSignedIn(user, "");
+    if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;
+    applyRoleAccess();
+    setStatus("الحساب متصل، ولم يُربط بمحل بعد. يمكنك إنشاء محل لهذا الحساب.", "info");
+  }));
   if ($("cloudSyncNow")) $("cloudSyncNow").addEventListener("click", () => clickAction(async () => {
     if (!activeUser) throw new Error("سجّل الدخول أولًا.");
     const state = readState();
@@ -1587,12 +1619,13 @@ onAuthStateChanged(auth, async user => {
     if(error&&String(error.message||"").includes("PLATFORM_ADMIN_CHECK_FAILED")){
       showSignedIn(user,"");
       if($("cloudCreateShop"))$("cloudCreateShop").hidden=true;
-      if($("cloudAuthPanel"))$("cloudAuthPanel").hidden=false;
+      if($("cloudRetryVerification"))$("cloudRetryVerification").hidden=false;
       if(window.POSGate)window.POSGate.setPlatformAdmin(false);
-      setStatus(error.message,"error");
+      setStatus("الحساب مسجل الدخول بالفعل، لكن تعذر التحقق من صلاحياته بسبب الاتصال بقاعدة البيانات. لا تنشئ حسابًا جديدًا؛ اضغط «إعادة التحقق من الحساب والصلاحيات» عند عودة الاتصال.", "warning");
       return;
     }
     showSignedIn(user, "");
+    if($("cloudRetryVerification")&&user)$("cloudRetryVerification").hidden=false;
     if(window.POSGate&&window.POSGate.canOperateLocally()){
       const saved=window.POSGate.getSession();
       if(saved){activeShopId=saved.shopId;activeMember=saved;applyRoleAccess();}
