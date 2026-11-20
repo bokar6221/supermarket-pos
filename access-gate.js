@@ -58,6 +58,7 @@ function cachedLicense(shopId){
 }
 function trialCheck(){
   if(!trialEntitlement||!trialEntitlement.deviceId)return {ok:false,reason:"لا توجد تجربة مجانية مسجلة على هذا الجهاز."};
+  if(trialEntitlement.consumed===true)return {ok:false,reason:"تم استخدام التجربة المجانية لهذا الجهاز بالفعل. يلزم ترخيص ساري لمواصلة التشغيل."};
   const expiresAt=Number(trialEntitlement.expiresAt||0);
   const lastSeenAt=Number(trialEntitlement.lastSeenAt||0);
   const now=Math.max(Date.now(),lastSeenAt);
@@ -84,6 +85,13 @@ function updateTrialBanner(check){
 }
 function startTrial(info){
   if(!info||!info.deviceId)throw new Error("تعذر التعرف على هذا الجهاز لبدء التجربة.");
+  if(trialEntitlement&&trialEntitlement.consumed===true){
+    const unavailable=trialCheck();
+    licenseReady=false;
+    updateTrialBanner(unavailable);
+    showLock("التجربة المجانية مستخدمة",unavailable.reason);
+    return unavailable;
+  }
   const suppliedStart=Number(info.startedAt||info.firstRunAt||Date.now());
   const previousStart=Number(trialEntitlement&&trialEntitlement.startedAt||0);
   const startedAt=previousStart>0?Math.min(previousStart,suppliedStart):suppliedStart;
@@ -121,7 +129,7 @@ function activateTrial(shopId,role){
   updateTrialBanner(check);hideLock();
   return true;
 }
-function hasActiveTrial(){return trialCheck().ok;}
+function hasActiveTrial(){return !!(session&&session.trial&&trialCheck().ok);}
 function showLock(title,message){
   const node=$("licenseLockScreen");if(!node)return;
   node.hidden=false;
@@ -189,9 +197,19 @@ async function applyLicense(doc,shopId,persist=true,verifiedOnline=persist){
     showLock("تعذر التحقق من الترخيص","التوقيع الرقمي غير صحيح أو ملف الترخيص غير معتمد.");
     return false;
   }
+  // A correctly signed paid/local license consumes the one-time device trial.
+  if(trialEntitlement&&!trialEntitlement.consumed){
+    trialEntitlement.consumed=true;
+    try{localStorage.setItem(TRIAL_KEY,JSON.stringify(trialEntitlement));}catch(_){}
+  }
   const check=licenseCheck(doc,shopId);
   license=doc;licenseReady=!!check.ok;licenseOnlineVerified=!!(check.ok&&verifiedOnline);
   if(persist)localStorage.setItem(LICENSE_PREFIX+shopId,JSON.stringify(doc));
+  const trialBanner=$("trialStatusBanner");
+  if(trialBanner){
+    if(check.ok)trialBanner.hidden=true;
+    else{trialBanner.hidden=false;trialBanner.textContent=check.reason;trialBanner.dataset.state="error";}
+  }
   if(!check.ok){
     if(session&&session.trial){session.trial=false;localStorage.setItem(SESSION_KEY,JSON.stringify(session));}
     showLock("البرنامج متوقف",check.reason);
