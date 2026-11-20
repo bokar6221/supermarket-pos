@@ -120,6 +120,49 @@ async function run(){
   generated=(await db.getCashEntries()).filter(x=>x.referenceId===remoteSale.id&&x.category==="sale");
   assert.equal(generated.length,1,"Repeated invoice sync must not duplicate the cash ledger entry");
 
+  await db.saveCustomer({
+    id:"partial-customer",name:"عميل دفع جزئي",phone:"01099998888",
+    openingBalance:0,note:"",active:true
+  });
+  const partialInvoice={
+    id:"invoice-partial-paid",createdAt:new Date().toISOString(),customerId:"partial-customer",
+    customerName:"عميل دفع جزئي",customerPhone:"01099998888",
+    items:[{name:"بيع جزئي",unit:"piece",quantity:1,stockQuantity:1,unitPrice:100,total:100}],
+    subtotal:100,discount:0,total:100,paymentMethod:"credit",
+    paidAmount:30,remainingAmount:70,paidMethod:"electronic",currency:"EGP",status:"saved"
+  };
+  await db.saveInvoice(partialInvoice);
+  assert.equal(partialInvoice.paidAmount,30,"Partial invoice must persist the amount actually received");
+  assert.equal(partialInvoice.remainingAmount,70,"Partial invoice must persist the customer's remaining balance");
+  const partialCash=(await db.getCashEntries()).filter(x=>x.referenceId==="invoice-partial-paid"&&x.category==="sale");
+  assert.equal(partialCash.length,1,"Partial invoice must create exactly one cash entry for the received amount");
+  assert.equal(partialCash[0].amount,30,"Cash ledger must never book the unpaid portion as received");
+  assert.equal(partialCash[0].method,"electronic","Partial payment must preserve the actual received payment method");
+  await db.saveCustomerPayment({
+    id:"collection-partial",customerId:"partial-customer",amount:25,method:"cash",
+    createdAt:new Date().toISOString()
+  });
+  await assert.rejects(
+    db.saveCustomerPayment({
+      id:"collection-overdue",customerId:"partial-customer",amount:50,method:"cash",
+      createdAt:new Date().toISOString()
+    }),
+    /مديونية العميل/
+  );
+  const partialCollections=(await db.getCustomerPayments()).filter(x=>x.customerId==="partial-customer");
+  assert.equal(partialCollections.reduce((sum,x)=>sum+x.amount,0),25,"Customer collections must be limited by the remaining balance");
+
+  const remotePartial={
+    id:"cloud-partial-sale",createdAt:new Date().toISOString(),
+    items:[{name:"بيع سحابي جزئي",unit:"piece",quantity:1,unitPrice:40,total:40}],
+    subtotal:40,discount:0,total:40,paymentMethod:"credit",
+    paidAmount:12,remainingAmount:28,paidMethod:"cash"
+  };
+  await db.applyCloudRecords([{store:"invoices",recordId:remotePartial.id,deleted:false,data:remotePartial}],false);
+  const remotePartialCash=(await db.getCashEntries()).filter(x=>x.referenceId===remotePartial.id&&x.category==="sale");
+  assert.equal(remotePartialCash.length,1,"Owner sync must create a cash entry for the paid portion of a partially paid invoice");
+  assert.equal(remotePartialCash[0].amount,12,"Owner sync must not treat the unpaid balance as cash received");
+
   const roundingInvoice={
     id:"invoice-rounding",createdAt:new Date().toISOString(),
     items:[{productId:"piece-1",name:"منتج اختبار",unit:"piece",quantity:2,stockQuantity:2,unitPrice:50,total:100,cost:20,costKnown:true}],
