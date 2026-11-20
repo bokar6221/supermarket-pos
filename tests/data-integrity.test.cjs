@@ -168,6 +168,13 @@ async function run(){
   assert.equal(partialRefund.length,1,"Only the paid portion of a partial invoice return enters the cash ledger");
   assert.equal(partialRefund[0].amount,5,"The cash ledger must not refund the full returned amount when most of it reduces debt");
   assert.equal(partialRefund[0].method,"electronic","The returned paid portion must preserve the selected cash/electronic channel");
+  await assert.rejects(
+    db.saveCustomerPayment({
+      id:"collection-after-partial-return",customerId:"partial-customer",amount:1,method:"cash",
+      createdAt:new Date().toISOString()
+    }),
+    /مديونية العميل/
+  );
 
   const remotePartial={
     id:"cloud-partial-sale",createdAt:new Date().toISOString(),
