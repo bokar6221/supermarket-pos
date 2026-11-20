@@ -62,7 +62,8 @@ function updatePaymentSummary(resetDefault=false){
   const remaining=Math.round((total-(valid?paid:0))*100)/100;
   remainingNode.textContent=money(remaining);
   remainingNode.dataset.state=valid&&remaining>=-0.005?"success":"error";
-  if(totalNode)totalNode.textContent=money(total);
+  if(totalNode){totalNode.textContent=money(total);totalNode.dataset.amount=String(total);}
+  window.dispatchEvent(new Event("cashiro-payment-summary"));
 }
 function renderCart(){
   const netTotal=invoiceNetTotal();
