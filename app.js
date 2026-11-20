@@ -663,14 +663,16 @@ function receiptDocument(inv){
 }
 function receiptMessage(inv){
   const lines=(inv.items||[]).map(item=>'• '+item.name+' — '+receiptQuantity(item)+' × '+money(item.unitPrice)+' = '+money(item.total));
+  const paid=Number.isFinite(Number(inv.paidAmount))?Number(inv.paidAmount):(inv.paymentMethod==="credit"?0:Number(inv.total||0));
+  const remaining=Number.isFinite(Number(inv.remainingAmount))?Number(inv.remainingAmount):Math.max(0,Number(inv.total||0)-paid);
+  const method=paid>0?paymentName(inv.paidMethod||inv.paymentMethod):paymentName(inv.paymentMethod);
   return [shopSettings.shopName||"فاتورة مبيعات",shopSettings.shopAddress||"",shopSettings.shopPhone?"هاتف: "+shopSettings.shopPhone:"",
     "فاتورة رقم: "+invoiceNumber(inv),"التاريخ: "+receiptDate(inv),inv.customerName?"العميل: "+inv.customerName:"",inv.customerPhone?"هاتف العميل: "+inv.customerPhone:"",
     "--------------------",...lines,"--------------------",
     "الإجمالي قبل الخصم: "+money(inv.subtotal??(Number(inv.total||0)+Number(inv.discount||0))),
     "الخصم: "+money(inv.discount||0),"الإجمالي المطلوب: "+money(inv.total||0),
-    "المدفوع: "+money(Number.isFinite(Number(inv.paidAmount))?inv.paidAmount:(inv.paymentMethod==="credit"?0:inv.total||0)),
-    "الباقي: "+money(Number.isFinite(Number(inv.remainingAmount))?inv.remainingAmount:Math.max(0,Number(inv.total||0)-Number(inv.paidAmount??(inv.paymentMethod==="credit"?0:inv.total||0)))),
-    "طريقة استلام المدفوع: "+paymentName(inv.paidMethod||inv.paymentMethod),shopSettings.receiptFooter||"شكراً لزيارتكم"
+    "المدفوع: "+money(paid),"الباقي: "+money(remaining),
+    "طريقة استلام المدفوع: "+method,shopSettings.receiptFooter||"شكراً لزيارتكم"
   ].filter(Boolean).join("\n");
 }
 function showReceipt(inv){activeReceipt=inv;$("receiptPreview").innerHTML=receiptContent(inv);$("receiptModal").hidden=false;}
