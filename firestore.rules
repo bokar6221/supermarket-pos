@@ -43,6 +43,7 @@ service cloud.firestore {
 
     function isMember(shopId) {
       return registeredUser()
+        && !isPlatformAdmin()
         && exists(memberPath(shopId, request.auth.uid))
         && get(memberPath(shopId, request.auth.uid)).data.active == true;
     }
