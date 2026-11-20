@@ -1074,8 +1074,8 @@ async function checkShopLicense(shopId){
  }
  let cached=null;try{cached=JSON.parse(localStorage.getItem(LICENSE_CACHE_PREFIX+shopId)||"null");}catch(_){}
  if(!cached&&activeUser&&window.POSGate){
-  await ensureTrialExperience(activeUser,true,trialRole);
   const trialRole=activeMember&&activeMember.role||"owner";
+  await ensureTrialExperience(activeUser,true,trialRole);
   if(window.POSGate.activateTrial(shopId,trialRole)){
    setStatus(trialMessage()+" — لا يوجد ترخيص متاح حاليًا؛ تعمل بيانات المحل محليًا أثناء التجربة.","warning");
    return true;
