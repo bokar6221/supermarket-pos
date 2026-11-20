@@ -85,6 +85,7 @@ let trialBootstrapPromise = null;
 const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 const TRIAL_DEVICE_KEY = "supermarket-pos-trial-device-info-v2";
 const LAST_REAL_UID_KEY = "supermarket-pos-last-real-auth-uid-v1";
+const EXPLICIT_SIGNOUT_KEY = "supermarket-pos-explicit-signout-v1";
 
 function randomId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
@@ -1169,6 +1170,27 @@ async function createEmployeeInvite(email,role){
  batch.set(employeeInviteRef(code),{code,shopId:activeShopId,shopName:activeShopName,email:cleanEmail,role,active:true,createdBy:activeUser.uid,createdAt:serverTimestamp()});
  await batch.commit();return code;
 }
+async function submitAccountDeletionRequest(){
+  if(!activeUser||activeUser.isAnonymous||!activeUser.email)throw new Error("سجّل الدخول بحساب بريد إلكتروني أولًا.");
+  if(isPlatformAdmin)throw new Error("طلب حذف حساب مدير المنصة يحتاج معالجة من مالك مشروع Firebase خارج التطبيق.");
+  if(!navigator.onLine)throw new Error("يلزم الاتصال بالإنترنت لإرسال طلب حذف الحساب.");
+  const requestRef=doc(cloudDb,"accountDeletionRequests",activeUser.uid);
+  const existing=await getDoc(requestRef);
+  if(existing.exists())throw new Error("يوجد طلب حذف سابق لهذا الحساب. تواصل مع مدير Cashiro لمتابعة حالته.");
+  const payload={
+    uid:activeUser.uid,
+    email:activeUser.email,
+    role:activeMember&&activeMember.role?activeMember.role:"unlinked",
+    requestedAt:serverTimestamp(),
+    status:"pending"
+  };
+  if(activeShopId)payload.shopId=activeShopId;
+  await setDoc(requestRef,payload);
+  const status=$("accountDeletionStatus");
+  if(status)status.textContent="تم تسجيل طلب حذف الحساب. الطلب قيد المراجعة، ولم يتم حذف الحساب أو سجلات المحل حتى الآن.";
+  setStatus("تم إرسال طلب حذف الحساب إلى إدارة Cashiro للمراجعة.","success");
+}
+
 async function loadEmployeeWorkspace(){
  if(!activeShopId||!activeMember||activeMember.role!=="owner")return;
  const [membersSnapshot,invitesSnapshot]=await Promise.all([getDocs(memberCollection(activeShopId)),getDocs(query(collection(cloudDb,"employeeInvites"),where("shopId","==",activeShopId)))]);
@@ -1473,15 +1495,22 @@ function bindUI() {
     await syncNow(true);
   }));
   if ($("cloudSignOut")) $("cloudSignOut").addEventListener("click", () => clickAction(async () => {
+    if (!activeUser && !auth.currentUser) throw new Error("لا يوجد حساب مسجل للخروج منه.");
+    if (!window.confirm("سيتم تسجيل الخروج وقفل الوصول المحلي حتى تسجل الدخول مجددًا. بيانات المحل لن تُحذف. هل تريد المتابعة؟")) return;
+    localStorage.setItem(EXPLICIT_SIGNOUT_KEY,"1");
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
     stopGovernanceListeners();
     await signOut(auth);
-    const saved=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
-    activeShopId=saved?saved.shopId:"";
-    activeMember=saved&&saved.active?saved:null;
-    activeShopName="";
+    if(window.POSGate)window.POSGate.setSession(null);
+    activeUser=null;activeShopId="";activeShopName="";activeMember=null;
     showSignedIn(null,"");applyRoleAccess();
-    setStatus("تم فصل الحساب السحابي مع الاحتفاظ بصلاحية التشغيل المحلية وبيانات الجهاز. إيقاف الموظف إداريًا يصل إلى هذا الجهاز عند عودة الاتصال.","info");
+    setStatus("تم تسجيل الخروج بأمان. بيانات المحل ما زالت محفوظة على الجهاز، لكنها مقفولة حتى تعيد تسجيل الدخول.","info");
+  }));
+  if ($("requestAccountDeletion")) $("requestAccountDeletion").addEventListener("click", () => clickAction(async () => {
+    if(!window.confirm("سيتم إرسال طلب حذف الحساب إلى إدارة Cashiro لمراجعته. لن تُحذف بيانات المحل أو الفواتير تلقائيًا. هل تريد المتابعة؟")) return;
+    const button=$("requestAccountDeletion");button.disabled=true;
+    try { await submitAccountDeletionRequest();button.textContent="تم إرسال طلب الحذف"; }
+    catch(error) { button.disabled=false;throw error; }
   }));
 }
 function wrapLocalMutations() {
@@ -1519,6 +1548,7 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   activeUser = user || null;
+  if (user) localStorage.removeItem(EXPLICIT_SIGNOUT_KEY);
   if (user && window.POSGate && typeof window.POSGate.suspendTrial === "function") {
     window.POSGate.suspendTrial();
   }
@@ -1544,7 +1574,11 @@ onAuthStateChanged(auth, async user => {
       try { await ensureTrialExperience(null); }
       catch(error){ setStatus("تعذر بدء التجربة المجانية: "+firebaseError(error),"warning"); }
     }else if(window.POSGate&&window.POSGate.isManaged()){
-      setStatus("لا توجد جلسة تشغيل محلية صالحة لهذا المحل. اتصل بالإنترنت للتحقق من الحساب والسياسة.","error");
+      const explicitlySignedOut=localStorage.getItem(EXPLICIT_SIGNOUT_KEY)==="1";
+      setStatus(explicitlySignedOut
+        ? "تم تسجيل الخروج. بيانات المحل محفوظة على الجهاز لكنها مقفولة حتى تسجل الدخول مرة أخرى."
+        : "لا توجد جلسة تشغيل محلية صالحة لهذا المحل. اتصل بالإنترنت للتحقق من الحساب والسياسة.",
+        explicitlySignedOut?"info":"error");
     }
     return;
   }
