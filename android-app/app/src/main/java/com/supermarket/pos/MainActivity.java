@@ -21,6 +21,10 @@ import android.os.Build;
 import android.util.Size;
 import android.view.Gravity;
 import android.view.View;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -116,8 +120,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setStatusBarColor(Color.rgb(23, 63, 53));
-        getWindow().setNavigationBarColor(Color.rgb(16, 45, 37));
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getWindow().setStatusBarContrastEnforced(false);
+            getWindow().setNavigationBarContrastEnforced(false);
+        }
 
         toneGenerator = new ToneGenerator(AudioManager.STREAM_MUSIC, 100);
         saveBackupLauncher = registerForActivityResult(
@@ -126,7 +135,17 @@ public class MainActivity extends AppCompatActivity {
         );
 
         root = new FrameLayout(this);
-        root.setBackgroundColor(Color.WHITE);
+        // Android 16 enforces edge-to-edge. Keep the native WebView clear of
+        // status, navigation and display-cutout areas while the system bars
+        // reveal the Cashiro brand background.
+        root.setBackgroundColor(Color.rgb(23, 63, 53));
+        ViewCompat.setOnApplyWindowInsetsListener(root, (view, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+            );
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return windowInsets;
+        });
         webView = new WebView(this);
         configureWebView();
         root.addView(webView, new FrameLayout.LayoutParams(
@@ -134,6 +153,7 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
         setContentView(root);
+        ViewCompat.requestApplyInsets(root);
         webView.loadUrl(APP_URL);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
