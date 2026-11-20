@@ -596,8 +596,12 @@
           const sales=invoices.filter(x=>x.paymentMethod==="credit"&&matches(x)).reduce((sum,x)=>
             sum+(Number.isFinite(Number(x.remainingAmount))?Number(x.remainingAmount):Number(x.total||0)),0);
           const collected=payments.filter(x=>x.customerId===customer.id).reduce((sum,x)=>sum+Number(x.amount||0),0);
-          const credited=returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&matches(inv)))
-            .reduce((sum,x)=>sum+Number(x.amount||0),0);
+          const credited=returns.filter(x=>invoices.some(inv=>inv.id===x.invoiceId&&matches(inv)))
+            .reduce((sum,x)=>{
+              const credit=Number.isFinite(Number(x.creditReductionAmount))
+                ?Number(x.creditReductionAmount):(x.refundMethod==="credit"?Number(x.amount||0):0);
+              return sum+Math.max(0,credit);
+            },0);
           const balance=Number(customer.openingBalance||0)+sales-collected-credited;
           if(amount>balance+0.005){failure="مبلغ التحصيل أكبر من مديونية العميل: "+balance.toFixed(2)+" جنيه.";try{tx.abort();}catch(e){}return;}
           clean.customerName=customer.name;
