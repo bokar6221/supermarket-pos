@@ -290,6 +290,20 @@
     if(!Number.isFinite(subtotal)||subtotal<0||!Number.isFinite(discount)||discount<0||discount>subtotal+0.000001||
        !Number.isFinite(total)||total<0||Math.abs(total-Math.round((subtotal-discount)*100)/100)>0.02||
        !["cash","electronic","credit"].includes(invoice.paymentMethod))throw new Error("راجع إجمالي الفاتورة والخصم وطريقة الدفع.");
+    const paidAmount=invoice.paidAmount===undefined||invoice.paidAmount===null
+      ?(invoice.paymentMethod==="credit"?0:total):Number(invoice.paidAmount);
+    const remainingAmount=invoice.remainingAmount===undefined||invoice.remainingAmount===null
+      ?Math.max(0,Math.round((total-paidAmount)*100)/100):Number(invoice.remainingAmount);
+    const paidMethod=invoice.paidMethod|| (invoice.paymentMethod==="electronic"?"electronic":"cash");
+    if(!Number.isFinite(paidAmount)||paidAmount<0||paidAmount>total+0.005||
+       !Number.isFinite(remainingAmount)||remainingAmount<0||
+       Math.abs(Math.round((paidAmount+remainingAmount-total)*100)/100)>0.02||
+       !["cash","electronic"].includes(paidMethod)||
+       (remainingAmount>0.005&&invoice.paymentMethod!=="credit"))
+      throw new Error("راجع المبلغ المدفوع والباقي وطريقة استلام المبلغ.");
+    invoice.paidAmount=Math.round(paidAmount*100)/100;
+    invoice.remainingAmount=Math.round(remainingAmount*100)/100;
+    invoice.paidMethod=paidMethod;
     const quantities=new Map();
     let linesTotal=0;
     for(const item of invoice.items){
@@ -327,9 +341,9 @@
           };
         }
         tx.objectStore("invoices").add(invoice);
-        if(total>0&&(invoice.paymentMethod==="cash"||invoice.paymentMethod==="electronic")){
-          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"income",category:"sale",amount:total,
-            method:invoice.paymentMethod,referenceId:invoice.id,note:"مبيعات "+String(invoice.id||""),
+        if(paidAmount>0.005){
+          tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"income",category:"sale",amount:Math.round(paidAmount*100)/100,
+            method:paidMethod,referenceId:invoice.id,note:"مدفوع فاتورة مبيعات "+String(invoice.id||""),
             createdAt:invoice.createdAt||new Date().toISOString()});
         }
         tx.oncomplete=()=>resolve(true);
@@ -579,7 +593,8 @@
           if(!customer||!invoices||!payments||!returns)return;
           const matches=invoice=>invoice.customerId===customer.id||
             (!!customer.phone&&normalizePhone(invoice.customerPhone)===normalizePhone(customer.phone));
-          const sales=invoices.filter(x=>x.paymentMethod==="credit"&&matches(x)).reduce((sum,x)=>sum+Number(x.total||0),0);
+          const sales=invoices.filter(x=>x.paymentMethod==="credit"&&matches(x)).reduce((sum,x)=>
+            sum+(Number.isFinite(Number(x.remainingAmount))?Number(x.remainingAmount):Number(x.total||0)),0);
           const collected=payments.filter(x=>x.customerId===customer.id).reduce((sum,x)=>sum+Number(x.amount||0),0);
           const credited=returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&matches(inv)))
             .reduce((sum,x)=>sum+Number(x.amount||0),0);
