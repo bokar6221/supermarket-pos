@@ -123,7 +123,7 @@ assert.match(accessGate, /TRIAL_DURATION_MS=7\*24\*60\*60\*1000/, "The device tr
 assert.match(accessGate, /function startTrial\(info\)/, "A first-run installation must be able to start a local device trial");
 assert.match(accessGate, /function activateTrial\(shopId,role\)/, "A trial must be attachable to a shop without granting cloud sync");
 assert.match(accessGate, /trialEntitlement\.consumed===true/, "A signed license must prevent reusing the free trial");
-assert.match(firebase, /setPersistence\(auth,browserLocalPersistence\)/, "Firebase Auth must explicitly use local persistence");
+assert.match(firebase, /setPersistence\(auth,\s*browserLocalPersistence\)/, "Firebase Auth must explicitly use local persistence");
 assert.match(firebase, /signInAnonymously\(auth\)/, "An unregistered device must be able to start a trial anonymously");
 assert.match(firebase, /match \/trialDevices\//, "The device trial must be recorded in Firestore");
 assert.match(firebase, /auth\/network-request-failed/, "Network sign-in errors must have a clear user-facing message");
