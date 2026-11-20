@@ -8,6 +8,8 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
+  deleteDoc,
   serverTimestamp,
   writeBatch
 } from "firebase/firestore";
@@ -66,7 +68,7 @@ async function seed() {
       payload: { licenseType: "cloud", maxDevices: 2, status: "active" },
       signature: "test-only"
     });
-    await setDoc(doc(db, "platformAdmins", "platform-admin"), { active: true });
+    await setDoc(doc(db, "platformAdmins", "platform-admin"), { active: true, role: "platform_admin" });
     await setDoc(recordRef(db, shopId, "products--p1"), {
       ...recordData("products", "p1"),
       updatedAt: new Date()
@@ -96,11 +98,42 @@ async function test() {
     const accountant = testEnv.authenticatedContext("accountant").firestore();
     const platformAdmin = testEnv.authenticatedContext("platform-admin").firestore();
     const outsider = testEnv.authenticatedContext("outsider").firestore();
+    const anonymousTrial = testEnv.authenticatedContext("trial-anonymous", {
+      firebase: { sign_in_provider: "anonymous" }
+    }).firestore();
+    const trialId = "a".repeat(64);
 
     await assertFails(getDoc(recordRef(anonymous, shopId, "products--p1")));
     await assertSucceeds(getDoc(recordRef(owner, shopId, "products--p1")));
     await assertFails(getDoc(recordRef(outsider, shopId, "products--p1")));
     await assertFails(getDoc(recordRef(accountant, otherShopId, "products--secret")));
+    await assertFails(getDoc(recordRef(platformAdmin, shopId, "products--p1")));
+    await assertFails(setDoc(
+      recordRef(platformAdmin, shopId, "products--admin-forbidden"),
+      recordData("products", "admin-forbidden")
+    ));
+
+    await assertSucceeds(setDoc(doc(anonymousTrial, "deviceTrials", trialId), {
+      deviceId: trialId,
+      uid: "trial-anonymous",
+      startedAt: serverTimestamp(),
+      trialDays: 7,
+      status: "active",
+      schemaVersion: 1
+    }));
+    await assertSucceeds(getDoc(doc(anonymousTrial, "deviceTrials", trialId)));
+    await assertFails(updateDoc(doc(anonymousTrial, "deviceTrials", trialId), { trialDays: 30 }));
+    await assertFails(deleteDoc(doc(anonymousTrial, "deviceTrials", trialId)));
+    await assertFails(setDoc(doc(owner, "deviceTrials", "b".repeat(64)), {
+      deviceId: "b".repeat(64),
+      uid: "owner",
+      startedAt: serverTimestamp(),
+      trialDays: 7,
+      status: "active",
+      schemaVersion: 1
+    }));
+    await assertSucceeds(updateDoc(doc(platformAdmin, "deviceTrials", trialId), { status: "suspended" }));
+    await assertFails(setDoc(doc(owner, "platformAdmins", "owner"), { active: true, role: "platform_admin" }));
 
     await assertSucceeds(setDoc(
       recordRef(cashier, shopId, "invoices--cashier-sale"),
