@@ -74,7 +74,12 @@ function renderCart(){
   $("checkoutButton").disabled=!cart.length;
   updatePaymentSummary();
   const root=$("cartItems");root.replaceChildren();
-  if(!cart.length){root.innerHTML='<p class="empty">امسح الباركود أو اضغط على الصنف لإضافته</p>';return;}
+  if(!cart.length){
+    paidAmountTouched=false;
+    updatePaymentSummary(true);
+    root.innerHTML='<p class="empty">امسح الباركود أو اضغط على الصنف لإضافته</p>';
+    return;
+  }
   cart.forEach((x,i)=>{
     const row=document.createElement("div");row.className="cart-item";
     const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");
