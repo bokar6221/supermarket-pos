@@ -48,11 +48,11 @@ assert.match(gradle, /versionName '1.12.0'/, "Cashiro Android version must match
 assert.match(gradle, /versionCode 16/, "Cashiro Android version code must be incremented");
 assert.match(gradle, /targetSdk 36/, "Cashiro must target Android 16");
 assert.match(manifest, /android:allowBackup="false"/, "Sensitive business data must not use automatic Android backup");
-assert.match(manifest, /@mipmap\\/ic_launcher/, "Cashiro app icon must be configured");
+assert.match(manifest, /@drawable\/cashiro_launcher/, "Cashiro app icon must be configured");
 assert.match(html, /id="requestAccountDeletion"/, "Signed-in users must be able to request account deletion");
-assert.match(html, /href="privacy\\.html"/, "Privacy policy must be accessible in the app");
+assert.match(html, /href="privacy\.html"/, "Privacy policy must be accessible in the app");
 assert.match(firebase, /accountDeletionRequests/, "Account deletion requests must use the protected collection");
-assert.match(rules, /match \\/accountDeletionRequests\\/\\{uid\\}/, "Account deletion requests must be protected by Firestore rules");
+assert.match(rules, /match \/accountDeletionRequests\/\{uid\}/, "Account deletion requests must be protected by Firestore rules");
 assert.match(firebase, /EXPLICIT_SIGNOUT_KEY/, "Explicit sign-out must clear the saved local session");
 assert.ok(fs.existsSync(path.join(__dirname, "..", "privacy.html")), "Cashiro privacy policy file must exist");
 assert.match(accessGate, /function isManaged\(\)\{return true;\}/, "Every installation must pass the activation gate");
