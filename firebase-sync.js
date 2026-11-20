@@ -240,7 +240,7 @@ function trialMessage() {
   const days = Math.floor(hours / 24), rest = hours % 24;
   return days > 0 ? "التجربة المجانية سارية — متبقي " + days + " يوم و" + rest + " ساعة." : "التجربة المجانية سارية — متبقي " + hours + " ساعة.";
 }
-async function ensureTrialExperience(user, forceForUnlicensedShop = false) {
+async function ensureTrialExperience(user, forceForUnlicensedShop = false, trialRole = "owner") {
   if (trialBootstrapPromise) return trialBootstrapPromise;
   trialBootstrapPromise = (async () => {
     await authPersistenceReady;
@@ -268,7 +268,8 @@ async function ensureTrialExperience(user, forceForUnlicensedShop = false) {
       deviceId: info.deviceId,
       startedAt,
       effectiveNow: info.effectiveNow,
-      serverVerified: !!serverStart
+      serverVerified: !!serverStart,
+      role: trialRole
     });
     const banner = $("trialStatusBanner");
     if (banner) {
@@ -1047,7 +1048,7 @@ async function checkShopLicense(shopId){
    if(!snapshot.exists()){
     localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
     const trialRole=activeMember&&activeMember.role||"owner";
-    if(window.POSGate&&activeUser)await ensureTrialExperience(activeUser,true);
+    if(window.POSGate&&activeUser)await ensureTrialExperience(activeUser,true,trialRole);
     if(window.POSGate&&window.POSGate.activateTrial(shopId,trialRole)){
      setStatus(trialMessage()+" لم يصدر ترخيص مدفوع لهذا المحل بعد؛ المزامنة السحابية متوقفة أثناء التجربة.","warning");
      return true;
@@ -1073,7 +1074,7 @@ async function checkShopLicense(shopId){
  }
  let cached=null;try{cached=JSON.parse(localStorage.getItem(LICENSE_CACHE_PREFIX+shopId)||"null");}catch(_){}
  if(!cached&&activeUser&&window.POSGate){
-  await ensureTrialExperience(activeUser,true);
+  await ensureTrialExperience(activeUser,true,trialRole);
   const trialRole=activeMember&&activeMember.role||"owner";
   if(window.POSGate.activateTrial(shopId,trialRole)){
    setStatus(trialMessage()+" — لا يوجد ترخيص متاح حاليًا؛ تعمل بيانات المحل محليًا أثناء التجربة.","warning");
@@ -1536,13 +1537,11 @@ onAuthStateChanged(auth, async user => {
       await loadPlatformShops();
       return;
     }
-    // Existing installations may already have a persisted email session from
-    // an older app build; initialize the device trial before shop routing.
-    await ensureTrialExperience(user, true);
     const profile = await getDoc(userRef(user.uid));
     const shopId = profile.exists() ? String(profile.data().activeShopId || "") : "";
     if (!shopId) {
       if(isPlatformAdmin){if($("cloudCreateShop"))$("cloudCreateShop").hidden=true;applyRoleAccess();return;}
+      await ensureTrialExperience(user, true, "owner");
       showSignedIn(user, "");setStatus("الحساب مسجل. أكمل إنشاء المحل أو استخدم كود دعوة الموظف.", "info");
       if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;return;
     }
