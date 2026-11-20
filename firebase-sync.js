@@ -145,7 +145,7 @@ function setStatus(message, kind) {
   node.dataset.state = kind || "info";
 }
 function setBusy(busy) {
-  ["cloudRegister", "cloudLogin", "cloudCreateShop", "cloudSyncNow", "cloudSignOut"].forEach(id => {
+  ["cloudRegister", "cloudLogin", "cloudCreateShop", "cloudSyncNow", "cloudSignOut", "cloudRetryVerification"].forEach(id => {
     const node = $(id);
     if (node) node.disabled = !!busy;
   });
