@@ -2,7 +2,7 @@
 
 ## حالة الإصدار
 - اسم التطبيق: Cashiro
-- نسخة التطبيق: 1.12.0
+- نسخة التطبيق: 1.13.0
 - Android: targetSdk 36 (Android 16)
 - نوع التوزيع المستهدف: APK مباشر للمحلات، وليس Google Play حاليًا.
 - مسار البناء: `.github/workflows/build-android-release.yml`
@@ -52,11 +52,11 @@ Settings → Secrets and variables → Actions → New repository secret
 2. اختر **Build signed Android POS Release**.
 3. اختر الفرع `cashiro-commercial-release-v1` ثم Run workflow.
 4. انتظر نجاح اختبار Firestore Rules وبناء Release والتحقق من توقيع APK.
-5. حمّل Artifact باسم `cashiro-android-release-1.12.0`.
+5. حمّل Artifact باسم `cashiro-android-release-1.13.0`.
 
 يتحقق Workflow من:
 - الحزمة `com.supermarket.pos`.
-- `versionCode 16` و`versionName 1.12.0`.
+- `versionCode 17` و`versionName 1.13.0`.
 - استهداف Android 16 / API 36.
 - توقيع APK وملاءمة ZIP alignment.
 - اختبارات قواعد Firestore واختبارات سلامة بيانات POS.
