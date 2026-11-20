@@ -1,6 +1,7 @@
 (()=>{"use strict";
 const $=id=>document.getElementById(id),cart=[];
 let products=[],stream=null,timer=null,audioCtx=null,scannerMode="sale",scanStarting=false,nativeScannerActive=false;
+let paidAmountTouched=false;
 let shopSettings={shopName:"كاشير المحل",shopPhone:"",shopAddress:"",receiptFooter:"شكراً لزيارتكم",paperWidth:"80"};
 let activeReceipt=null;
 let activeProductCategory="الكل";
@@ -44,54 +45,77 @@ $("closeInvoice").onclick=()=>setInvoiceOpen(false);
 $("invoiceBackdrop").onclick=()=>setInvoiceOpen(false);
 document.addEventListener("keydown",e=>{if(e.key==="Escape")setInvoiceOpen(false);});
 
+function invoiceNetTotal(){
+  const subtotal=sub(),discount=Math.min(disc(),subtotal);
+  return Math.round(Math.max(0,subtotal-discount)*100)/100;
+}
+function updatePaymentSummary(resetDefault=false){
+  const input=$("paidAmount"),remainingNode=$("remainingAmount"),totalNode=$("grandTotal");
+  if(!input||!remainingNode)return;
+  const total=invoiceNetTotal();
+  if(resetDefault||!paidAmountTouched){
+    input.value=$("paymentMethod")&&$("paymentMethod").value==="credit"?"0.00":total.toFixed(2);
+  }
+  input.max=total.toFixed(2);
+  const paid=Number(input.value);
+  const valid=Number.isFinite(paid)&&paid>=0;
+  const remaining=Math.round((total-(valid?paid:0))*100)/100;
+  remainingNode.textContent=money(remaining);
+  remainingNode.dataset.state=valid&&remaining>=-0.005?"success":"error";
+  if(totalNode)totalNode.textContent=money(total);
+}
 function renderCart(){
-  const netTotal=Math.max(0,sub()-Math.min(disc(),sub()));
+  const netTotal=invoiceNetTotal();
   $("cartCount").textContent=cart.length+" صنف";
   $("grandTotal").textContent=money(netTotal);
   $("mobileCartCount").textContent=String(cart.length);
   $("mobileGrandTotal").textContent=money(netTotal);
   $("checkoutButton").disabled=!cart.length;
+  updatePaymentSummary();
   const root=$("cartItems");root.replaceChildren();
   if(!cart.length){root.innerHTML='<p class="empty">امسح الباركود أو اضغط على الصنف لإضافته</p>';return;}
   cart.forEach((x,i)=>{
     const row=document.createElement("div");row.className="cart-item";
     const info=document.createElement("div"),name=document.createElement("strong"),meta=document.createElement("small");
     name.textContent=x.name;
-    meta.textContent=x.quantity+" "+unit(x.unit)+" × سعر الوحدة "+money(x.unitPrice);
+    meta.textContent=unit(x.unit)+" × سعر الوحدة "+money(x.unitPrice);
     info.className="cart-item-info";
-    if(x.productId&&(x.unit==="kg"||x.unit==="gram")){
-      const amountLabel=document.createElement("label"),amountInput=document.createElement("input");
-      amountLabel.className="amount-field";amountLabel.textContent="عايز بكام؟";
-      amountInput.type="number";amountInput.min="0.01";amountInput.step="0.01";amountInput.inputMode="decimal";
-      amountInput.value=Number(x.total).toFixed(2);amountInput.setAttribute("aria-label","المبلغ المطلوب لهذا المنتج");
-      amountInput.addEventListener("change",()=>setCartAmount(i,amountInput.value));
-      amountLabel.append(amountInput);info.append(name,amountLabel,meta);
-    }else info.append(name,meta);
-    const side=document.createElement("div"),amount=document.createElement("strong"),controls=document.createElement("div"),minus=document.createElement("button"),plus=document.createElement("button"),del=document.createElement("button");
-    amount.textContent=money(x.total);controls.className="qty-controls";
-    minus.textContent="−";plus.textContent="+";
-    minus.onclick=()=>changeCartQty(i,-(x.unit==="piece"?1:x.unit==="gram"?250:.25));
-    plus.onclick=()=>changeCartQty(i,x.unit==="piece"?1:x.unit==="gram"?250:.25);
+    info.append(name,meta);
+    const side=document.createElement("div"),amount=document.createElement("strong"),quantityLabel=document.createElement("label"),quantityInput=document.createElement("input"),del=document.createElement("button");
+    amount.textContent=money(x.total);
+    side.className="cart-item-side";
+    quantityLabel.className="cart-quantity-editor";
+    quantityLabel.textContent="الكمية";
+    quantityInput.type="number";
+    quantityInput.min=(x.unit==="piece"||x.unit==="gram")?"1":"0.001";
+    quantityInput.step=(x.unit==="piece"||x.unit==="gram")?"1":"0.001";
+    quantityInput.inputMode="decimal";
+    quantityInput.value=String(x.quantity);
+    quantityInput.setAttribute("aria-label","كمية "+x.name);
+    quantityInput.addEventListener("change",()=>setCartQuantity(i,quantityInput.value));
+    quantityInput.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();quantityInput.blur();}});
+    quantityLabel.append(quantityInput);
     del.className="remove";del.textContent="حذف";
-    del.onclick=()=>{cart.splice(i,1);renderCart()};
-    controls.append(minus,plus);side.className="cart-item-side";side.append(amount,controls,del);
+    del.onclick=()=>{cart.splice(i,1);renderCart();};
+    side.append(amount,quantityLabel,del);
     row.append(info,side);root.append(row);
   });
 }
-function setCartAmount(i,value){
+function setCartQuantity(i,value){
   const x=cart[i];if(!x)return;
-  const amount=Math.round(Number(value)*100)/100;
-  if(!Number.isFinite(amount)||amount<=0){alert("اكتب مبلغًا صحيحًا أكبر من صفر.");renderCart();return;}
-  if(!Number.isFinite(x.unitPrice)||x.unitPrice<=0){alert("سعر الكيلو أو الجرام غير مضبوط لهذا المنتج.");renderCart();return;}
-  const quantity=Math.round((amount/x.unitPrice)*1000)/1000;
-  if(quantity<=0){alert("المبلغ أقل من أن ينتج وزنًا قابلًا للبيع.");renderCart();return;}
-  const product=products.find(p=>p.id===x.productId);
-  if(product&&product.trackStock&&quantity>Number(product.stock||0)+0.000001){
-    alert("الرصيد المتاح لا يكفي لهذا المبلغ. الرصيد: "+product.stock+" "+unit(product.unit));renderCart();return;
+  const quantity=Number(value);
+  const whole=(x.unit==="piece"||x.unit==="gram");
+  if(!Number.isFinite(quantity)||quantity<=0||(whole&&!Number.isInteger(quantity))){
+    alert(whole?"اكتب عددًا صحيحًا أكبر من صفر.":"اكتب كمية صحيحة أكبر من صفر.");
+    renderCart();return;
   }
-  x.quantity=quantity;x.stockQuantity=quantity;x.total=amount;renderCart();
+  const product=x.productId?products.find(item=>item.id===x.productId):null;
+  if(product&&product.trackStock&&quantity>Number(product.stock||0)+0.000001){
+    alert("الرصيد المتاح: "+product.stock+" "+unit(product.unit));renderCart();return;
+  }
+  x.quantity=quantity;x.stockQuantity=quantity;x.total=Math.round(quantity*Number(x.unitPrice||0)*100)/100;
+  renderCart();
 }
-function changeCartQty(i,delta){const x=cart[i];if(!x)return;const next=Math.round((x.quantity+delta)*1000)/1000;if(next<=0){cart.splice(i,1);}else{const p=products.find(item=>item.id===x.productId);if(p&&p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));x.quantity=next;x.stockQuantity=next;x.total=Math.round(next*x.unitPrice*100)/100;}renderCart();}
 function add(x){cart.push({...x,total:Math.round(x.quantity*x.unitPrice*100)/100});renderCart();}
 let activeCategory="الكل";
 function beep(ok=true){
@@ -125,6 +149,8 @@ function weightQty(p,kg){return p.unit==="gram"?kg*1000:kg;}
 function addProduct(p,qty=1){if(p.trackStock&&qty>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));const existing=cart.find(x=>x.productId===p.id);if(existing){const next=existing.quantity+qty;if(p.trackStock&&next>Number(p.stock||0))return alert("الرصيد المتاح: "+p.stock+" "+unit(p.unit));existing.quantity=next;existing.stockQuantity=next;existing.total=Math.round(next*existing.unitPrice*100)/100;}else add({productId:p.id,name:p.name,kind:"product",unit:p.unit,quantity:qty,stockQuantity:qty,unitPrice:Number(p.price),cost:Number(p.cost||0),costKnown:p.costKnown===true||Number(p.cost)>0});beep(true);renderCart();}
 function renderQuick(){const root=$("quickProducts"),q=$("quickSearch").value.trim().toLowerCase(),cats=$("quickCategories");root.replaceChildren();const categories=["الكل",...new Set(products.map(p=>p.category).filter(Boolean))];cats.replaceChildren();categories.forEach(c=>{const b=document.createElement("button");b.className="category-chip"+(activeCategory===c?" active":"");b.textContent=c;b.onclick=()=>{activeCategory=c;renderQuick()};cats.append(b);});const list=products.filter(p=>p.active!==false&&(activeCategory==="الكل"||p.category===activeCategory)&&(!q||p.name.toLowerCase().includes(q)||String(p.barcode||"").includes(q)));if(!list.length){root.innerHTML='<p class="empty">لا توجد منتجات مطابقة. أضف منتجات أو اختر تصنيفًا آخر.</p>';return;}list.forEach(p=>{const card=document.createElement("div");card.className="quick-card";const b=document.createElement("button");b.className="quick-product";b.innerHTML="<strong></strong><small></small>";b.querySelector("strong").textContent=p.name;b.querySelector("small").textContent=money(p.price)+" / "+unit(p.unit);b.onclick=()=>{if(p.unit==="piece")addProduct(p,1);else addProduct(p,weightQty(p,.25));};card.append(b);if(p.unit!=="piece"){const weights=document.createElement("div");weights.className="weight-chips";[[.25,"250 جم"],[.5,"500 جم"],[.75,"750 جم"],[1,"1 كجم"]].forEach(([n,label])=>{const x=document.createElement("button");x.textContent=label;x.onclick=()=>addProduct(p,weightQty(p,n));weights.append(x);});card.append(weights);}root.append(card);});}
 $("quickSearch").oninput=renderQuick;$("discount").oninput=renderCart;
+if($("paidAmount"))$("paidAmount").addEventListener("input",()=>{paidAmountTouched=true;updatePaymentSummary();});
+if($("paymentMethod"))$("paymentMethod").addEventListener("change",()=>{paidAmountTouched=false;updatePaymentSummary(true);});
 $("saleType").onchange=()=>{$("unitHint").textContent=$("saleType").value==="weight"?"أدخل الوزن بالكيلوجرام؛ 0.250 = 250 جرام.":$("saleType").value==="manual"?"بند يدوي لا يخصم من المخزون.":"الكمية بالقطعة أو العبوة.";$("itemQuantity").step=$("saleType").value==="weight"?"0.001":"1";if($("saleType").value!=="weight")$("itemQuantity").value="1";};
 $("itemForm").onsubmit=e=>{e.preventDefault();const name=$("itemName").value.trim(),quantity=Number($("itemQuantity").value),price=Number($("itemPrice").value),kind=$("saleType").value;if(!name||!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(price)||price<0)return;add({name,kind,unit:kind==="weight"?"kg":"piece",quantity,unitPrice:price,stockQuantity:quantity});e.target.reset();$("itemQuantity").value="1";$("saleType").value="piece";};
 
@@ -622,8 +648,12 @@ function receiptContent(inv){
   html+='</header><div class="receipt-meta"><div><span>رقم الفاتورة</span><strong>'+escapeHtml(invoiceNumber(inv))+'</strong></div><div><span>التاريخ</span><strong>'+escapeHtml(receiptDate(inv))+'</strong></div></div>';
   if(inv.customerName||inv.customerPhone)html+='<div class="receipt-customer">'+(inv.customerName?'العميل: '+escapeHtml(inv.customerName):'')+(inv.customerPhone?'<span>هاتف: '+escapeHtml(inv.customerPhone)+'</span>':'')+'</div>';
   html+='<table class="receipt-table"><thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>'+rows+'</tbody></table>';
-  html+='<div class="receipt-totals"><div><span>الإجمالي قبل الخصم</span><strong>'+escapeHtml(money(subtotal))+'</strong></div><div><span>الخصم</span><strong>'+escapeHtml(money(inv.discount||0))+'</strong></div><div class="receipt-grand"><span>المطلوب</span><strong>'+escapeHtml(money(inv.total||0))+'</strong></div></div>';
-  html+='<p class="receipt-payment">طريقة الدفع: '+escapeHtml(paymentName(inv.paymentMethod))+'</p><footer>'+escapeHtml(shopSettings.receiptFooter||"شكراً لزيارتكم")+'</footer></article>';
+  const invoiceTotal=Number(inv.total||0);
+  const paidAmount=Number.isFinite(Number(inv.paidAmount))?Number(inv.paidAmount):(inv.paymentMethod==="credit"?0:invoiceTotal);
+  const remainingAmount=Number.isFinite(Number(inv.remainingAmount))?Number(inv.remainingAmount):Math.max(0,invoiceTotal-paidAmount);
+  const paidMethod=paidAmount>0?paymentName(inv.paidMethod||inv.paymentMethod):paymentName(inv.paymentMethod);
+  html+='<div class="receipt-totals"><div><span>الإجمالي قبل الخصم</span><strong>'+escapeHtml(money(subtotal))+'</strong></div><div><span>الخصم</span><strong>'+escapeHtml(money(inv.discount||0))+'</strong></div><div class="receipt-grand"><span>المبلغ المطلوب</span><strong>'+escapeHtml(money(invoiceTotal))+'</strong></div><div><span>المدفوع</span><strong>'+escapeHtml(money(paidAmount))+'</strong></div><div class="receipt-remaining"><span>الباقي</span><strong>'+escapeHtml(money(remainingAmount))+'</strong></div></div>';
+  html+='<p class="receipt-payment">طريقة استلام المدفوع: '+escapeHtml(paidMethod)+'</p><footer>'+escapeHtml(shopSettings.receiptFooter||"شكراً لزيارتكم")+'</footer></article>';
   return html;
 }
 function receiptDocument(inv){
@@ -637,7 +667,9 @@ function receiptMessage(inv){
     "--------------------",...lines,"--------------------",
     "الإجمالي قبل الخصم: "+money(inv.subtotal??(Number(inv.total||0)+Number(inv.discount||0))),
     "الخصم: "+money(inv.discount||0),"الإجمالي المطلوب: "+money(inv.total||0),
-    "طريقة الدفع: "+paymentName(inv.paymentMethod),shopSettings.receiptFooter||"شكراً لزيارتكم"
+    "المدفوع: "+money(Number.isFinite(Number(inv.paidAmount))?inv.paidAmount:(inv.paymentMethod==="credit"?0:inv.total||0)),
+    "الباقي: "+money(Number.isFinite(Number(inv.remainingAmount))?inv.remainingAmount:Math.max(0,Number(inv.total||0)-Number(inv.paidAmount??(inv.paymentMethod==="credit"?0:inv.total||0)))),
+    "طريقة استلام المدفوع: "+paymentName(inv.paidMethod||inv.paymentMethod),shopSettings.receiptFooter||"شكراً لزيارتكم"
   ].filter(Boolean).join("\n");
 }
 function showReceipt(inv){activeReceipt=inv;$("receiptPreview").innerHTML=receiptContent(inv);$("receiptModal").hidden=false;}
@@ -698,7 +730,8 @@ async function renderInvoices(){
     const row=document.createElement("div");row.className="invoice-row";
     const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("small");
     title.textContent="فاتورة "+invoiceNumber(inv);
-    meta.textContent=receiptDate(inv)+" · "+(inv.items||[]).length+" صنف · "+paymentName(inv.paymentMethod)+(inv.customerName?" · "+inv.customerName:"");
+    const due=Number.isFinite(Number(inv.remainingAmount))?Number(inv.remainingAmount):(inv.paymentMethod==="credit"?Number(inv.total||0):0);
+    meta.textContent=receiptDate(inv)+" · "+(inv.items||[]).length+" صنف · "+paymentName(inv.paymentMethod)+(due>0.005?" · باقي "+money(due):"")+(inv.customerName?" · "+inv.customerName:"");
     info.append(title,meta);
     const total=document.createElement("strong");total.textContent=money(inv.total);
     const actions=document.createElement("div");actions.className="invoice-actions";
@@ -711,14 +744,29 @@ async function renderInvoices(){
 }
 $("checkoutButton").onclick=async()=>{
   if(!cart.length)return;
-  const s=sub(),d=disc();if(d>s)return alert("الخصم أكبر من إجمالي الفاتورة.");
+  const subtotal=Math.round(sub()*100)/100,discount=Math.round(disc()*100)/100;
+  if(discount>subtotal)return alert("الخصم أكبر من إجمالي الفاتورة.");
+  const total=Math.round((subtotal-discount)*100)/100;
+  const paidAmount=Math.round(Number($("paidAmount").value||0)*100)/100;
+  if(!Number.isFinite(paidAmount)||paidAmount<0)return alert("اكتب مبلغًا صحيحًا في خانة المدفوع.");
+  if(paidAmount>total+0.005)return alert("المبلغ المدفوع لا يمكن أن يكون أكبر من المبلغ المطلوب.");
+  const remainingAmount=Math.max(0,Math.round((total-paidAmount)*100)/100);
+  const selectedMethod=$("paymentMethod").value;
+  if(selectedMethod==="credit"&&paidAmount>0.005)return alert("عند تسجيل دفعة جزئية، اختر طريقة استلامها: نقدي أو دفع إلكتروني. اختر «آجل» فقط عندما لا يدفع العميل شيئًا الآن.");
+  const customerName=$("customerName").value.trim(),customerPhone=$("customerPhone").value.trim();
+  const phoneDigits=customerPhone.replace(/\D/g,"");
+  if(remainingAmount>0.005&&(!customerName||phoneDigits.length<8)){
+    return alert("لوجود مبلغ متبقٍ على العميل، اكتب اسم العميل ورقم هاتف صحيحًا (8 أرقام على الأقل).");
+  }
+  const effectivePaymentMethod=remainingAmount>0.005?"credit":selectedMethod;
+  const paidMethod=selectedMethod==="electronic"?"electronic":"cash";
   const inv={id:uid(),createdAt:new Date().toISOString(),items:cart.map(x=>({...x})),
-    subtotal:s,discount:d,total:Math.round((s-d)*100)/100,paymentMethod:$("paymentMethod").value,
-    customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),
-    currency:"EGP",status:"saved"};
+    subtotal,discount,total,paymentMethod:effectivePaymentMethod,paidAmount,
+    remainingAmount,paidMethod,customerName,customerPhone,currency:"EGP",status:"saved"};
   try{
     await POSDatabase.saveInvoice(inv);
     cart.length=0;$("discount").value="0";$("customerName").value="";$("customerPhone").value="";
+    paidAmountTouched=false;$("paymentMethod").value="cash";
     renderCart();setInvoiceOpen(false);await load();showReceipt(inv);
   }catch(err){alert("لم تحفظ الفاتورة: "+err.message);}
 };
