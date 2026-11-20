@@ -181,6 +181,7 @@ const TRIAL_CACHE_PREFIX = "supermarket-pos-trial-cache-v1:";
 const REGISTERED_ACCOUNT_KEY = "supermarket-pos-registered-account-v1";
 let trialDeviceIdPromise = null;
 let trialStartPromise = null;
+let trialActivationPromise = null;
 
 async function sha256Hex(value) {
   if (!window.crypto || !window.crypto.subtle) throw new Error("يلزم تشغيل التطبيق من بيئة آمنة لإنشاء معرّف التجربة.");
@@ -323,16 +324,20 @@ function activateTrialForOwner(user, trial) {
   return true;
 }
 async function handleAnonymousTrial(user) {
-  showSignedIn(null, "");
-  setTrialPanel(null, navigator.onLine ? "جارٍ تفعيل تجربة هذا الجهاز لأول مرة..." : "اتصل بالإنترنت مرة واحدة لبدء التجربة المجانية. بعد التفعيل يمكنك البيع دون إنترنت خلال مدة التجربة.");
-  try {
-    const trial = await ensureDeviceTrial(user, true);
-    if (!trial) throw new Error("لم يتم إنشاء سجل تجربة لهذا الجهاز. تأكد من تفعيل Anonymous Authentication ونشر قواعد Firestore الخاصة بالتجربة.");
-    if (!activateTrialForOwner(user, trial)) return;
-  } catch (error) {
-    setTrialPanel(null, "لم تبدأ التجربة بعد. اتصل بالإنترنت ثم اضغط «إعادة المحاولة». لا يتم احتساب الأيام قبل تأكيد Firebase لبداية التجربة.");
-    setStatus("تعذر تفعيل التجربة المجانية: " + firebaseError(error), "error");
-  }
+  if (trialActivationPromise) return trialActivationPromise;
+  trialActivationPromise = (async () => {
+    showSignedIn(null, "");
+    setTrialPanel(null, navigator.onLine ? "جارٍ تفعيل تجربة هذا الجهاز لأول مرة..." : "اتصل بالإنترنت مرة واحدة لبدء التجربة المجانية. بعد التفعيل يمكنك البيع دون إنترنت خلال مدة التجربة.");
+    try {
+      const trial = await ensureDeviceTrial(user, true);
+      if (!trial) throw new Error("لم يتم إنشاء سجل تجربة لهذا الجهاز. تأكد من تفعيل Anonymous Authentication ونشر قواعد Firestore الخاصة بالتجربة.");
+      activateTrialForOwner(user, trial);
+    } catch (error) {
+      setTrialPanel(null, "لم تبدأ التجربة بعد. اتصل بالإنترنت ثم اضغط «إعادة المحاولة». لا يتم احتساب الأيام قبل تأكيد Firebase لبداية التجربة.");
+      setStatus("تعذر تفعيل التجربة المجانية: " + firebaseError(error), "error");
+    }
+  })().finally(() => { trialActivationPromise = null; });
+  return trialActivationPromise;
 }
 async function startTrialSession() {
   if (localStorage.getItem(REGISTERED_ACCOUNT_KEY) === "1") return false;
@@ -1148,7 +1153,7 @@ async function checkShopLicense(shopId){
  let licenseDocument=null,onlineReadSucceeded=false;
  if(navigator.onLine){
   try{
-   const snapshot=await getDoc(licenseRef(shopId));onlineReadSucceeded=true;
+   const snapshot=await getDocFromServer(licenseRef(shopId));onlineReadSucceeded=true;
    if(!snapshot.exists()){
     localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
     if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص صادر لهذا المحل. تواصل مع مدير المشروع لإصدار ترخيص.");
