@@ -185,14 +185,10 @@ async function openReturn(invoiceId){
   activeReturn=invoice;
   $("salesReturnInfo").textContent="فاتورة "+String(invoice.id).slice(0,12)+" · "+new Date(invoice.createdAt).toLocaleString("ar-EG")+" · "+(invoice.customerName||"عميل نقدي");
   const method=$("salesReturnMethod");
-  const invoicePaid=Number.isFinite(Number(invoice.paidAmount))
-    ?Number(invoice.paidAmount):(invoice.paymentMethod==="credit"?0:Number(invoice.total||0));
-  if(invoice.paymentMethod==="credit"&&invoicePaid<=0.005){
-    method.value="credit";[...method.options].forEach(o=>o.disabled=o.value!=="credit");
-  }else if(invoice.paymentMethod==="credit"){
+  if(invoice.paymentMethod==="credit"){
     method.value=invoice.paidMethod==="electronic"?"electronic":"cash";
     [...method.options].forEach(o=>o.disabled=o.value==="credit");
-    $("salesReturnInfo").textContent+=" · يُخصم المرتجع من المديونية المتبقية أولًا، وأي فرق يُرد بالطريقة المختارة.";
+    $("salesReturnInfo").textContent+=" · يُخصم المرتجع من أي مديونية قائمة أولًا، وأي مبلغ يزيد على المتبقي يُرد نقدًا أو إلكترونيًا حسب الاختيار.";
   }else{
     method.value=invoice.paidMethod==="electronic"||invoice.paymentMethod==="electronic"?"electronic":"cash";
     [...method.options].forEach(o=>o.disabled=o.value==="credit");
