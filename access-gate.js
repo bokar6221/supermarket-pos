@@ -129,7 +129,7 @@ function activateTrial(shopId,role){
   updateTrialBanner(check);hideLock();
   return true;
 }
-function hasActiveTrial(){return !!(session&&session.trial&&trialCheck().ok);}
+function hasActiveTrial(){return !!(session&&session.trial&&session.active!==false&&trialCheck().ok);}
 function showLock(title,message){
   const node=$("licenseLockScreen");if(!node)return;
   node.hidden=false;
@@ -183,7 +183,7 @@ function currentLicenseCheck(){
 }
 function canOperateLocally(){
   if(platformAdminSession)return false;
-  if(session&&session.trial)return trialCheck().ok;
+  if(session&&session.trial)return session.active!==false&&trialCheck().ok;
   const shopId=localStorage.getItem(MANAGED_KEY);
   if(!shopId||!session||!session.uid||!session.active||session.shopId!==shopId)return false;
   const check=currentLicenseCheck();
@@ -260,6 +260,14 @@ function setSession(value){
     if(isManaged())showLock("تم إيقاف صلاحية هذا الجهاز","سجّل الدخول بحساب موظف نشط لهذا المحل.");
   }
 }
+function suspendTrial(){
+  if(!session||!session.trial)return false;
+  session.active=false;
+  try{localStorage.setItem(SESSION_KEY,JSON.stringify(session));}catch(_){}
+  licenseReady=false;
+  showLock("جارٍ التحقق من الحساب","تم إيقاف تشغيل التجربة مؤقتًا لحين التأكد من دور الحساب وعضويته في المحل.");
+  return true;
+}
 function setPlatformAdmin(enabled){
   platformAdminSession=!!enabled;
   if(platformAdminSession)hideLock();
@@ -315,9 +323,9 @@ function installMutationGuards(){
 }
 window.POSGate={
   setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,supportsLicensePayload,licenseCheck,assertMutation,roleCan,lock,
-  startTrial,activateTrial,hasActiveTrial,trialStatus:()=>trialCheck(),
+  startTrial,activateTrial,hasActiveTrial,suspendTrial,trialStatus:()=>trialCheck(),
   getSession:()=>session,getLicense:()=>license,
-  isManaged, isLicensed:()=>!!(session&&session.trial?trialCheck().ok:(licenseReady&&currentLicenseCheck().ok)),
+  isManaged, isLicensed:()=>!!(session&&session.trial?session.active!==false&&trialCheck().ok:(licenseReady&&currentLicenseCheck().ok)),
   isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
   isCloudSyncEnabled:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&c.cloudSyncEnabled&&!(session&&session.trial));},
   isCloudLicense:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&license&&license.payload&&license.payload.licenseType==="cloud"&&!(session&&session.trial));},
