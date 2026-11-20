@@ -1536,6 +1536,9 @@ onAuthStateChanged(auth, async user => {
       await loadPlatformShops();
       return;
     }
+    // Existing installations may already have a persisted email session from
+    // an older app build; initialize the device trial before shop routing.
+    await ensureTrialExperience(user, true);
     const profile = await getDoc(userRef(user.uid));
     const shopId = profile.exists() ? String(profile.data().activeShopId || "") : "";
     if (!shopId) {
