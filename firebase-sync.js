@@ -588,7 +588,7 @@ async function connectExistingShop(user, shopId) {
   activeShopId = shopId;
   activeShopName = String(shop.data().name || "المحل");
   activeMember = member.data();
-  if(activeMember.role!=="owner"&&window.POSGate&&window.POSGate.clearTrial)window.POSGate.clearTrial();
+  if(activeMember.role!=="owner"&&window.POSGate&&window.POSGate.clearTrial){window.POSGate.clearTrial();setTrialPanel(null,"");}
   localStorage.setItem(MANAGED_SHOP_KEY,shopId);
   setGateSession();
   showSignedIn(user, activeShopName);
@@ -1233,7 +1233,7 @@ function startLicenseListener(shopId){
    setStatus("الترخيص غير موجود؛ الحساب ما زال مسجلًا لكن التشغيل يحتاج ترخيصًا أو تجربة سارية.","error");showSignedIn(activeUser,"");return;
   }
   const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true,true);
-  if(valid&&window.POSGate.clearTrial)window.POSGate.clearTrial();
+  if(valid&&window.POSGate.clearTrial){window.POSGate.clearTrial();setTrialPanel(null,"");}
   if(!valid&&window.POSGate.isTrialActive()&&activeMember&&activeMember.role==="owner"){
    setTrialPanel(window.POSGate.getTrial(),"الترخيص غير ساري، لكن التجربة المجانية ما زالت متاحة حتى تاريخ الانتهاء الموضح.");
    setStatus("يعمل المحل خلال الفترة المتبقية من التجربة المجانية.", "warning");
@@ -1687,7 +1687,7 @@ onAuthStateChanged(auth, async user => {
     const member = await getDoc(memberRef(shopId, user.uid));
     if (!member.exists() || member.data().active !== true) throw new Error("لا توجد عضوية نشطة لهذا الحساب.");
     const deviceTrial=member.data().role==="owner" ? await ensureDeviceTrial(user,false).catch(()=>null) : null;
-    if(member.data().role!=="owner"&&window.POSGate&&window.POSGate.clearTrial)window.POSGate.clearTrial();
+    if(member.data().role!=="owner"&&window.POSGate&&window.POSGate.clearTrial){window.POSGate.clearTrial();setTrialPanel(null,"");}
     const shop = await getDoc(shopRef(shopId));
     activeShopId = shopId;
     activeShopName = shop.exists() ? String(shop.data().name || "المحل") : "المحل";
