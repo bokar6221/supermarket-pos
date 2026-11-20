@@ -2,7 +2,7 @@ name: Build Android POS APK
 
 on:
   push:
-    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1"]
+    branches: [main, "qayem-competitive-v1", "offline-first-rebuild-v2", "license-device-management-v1", "trial-login-roles-v2"]
     paths:
       - "android-app/**"
       - "app.js"
