@@ -667,8 +667,8 @@
           const paidAmount=invoice.paidAmount!==undefined&&invoice.paidAmount!==null
             ?Number(invoice.paidAmount):(invoice.paymentMethod==="credit"?0:Number(invoice.total||0));
           const isPartiallyPaid=invoice.paymentMethod==="credit"&&paidAmount>0.005;
-          const allowedMethods=isPartiallyPaid?["cash","electronic"]:
-            [invoice.paymentMethod==="credit"?"credit":invoice.paymentMethod==="electronic"?"electronic":"cash"];
+          const allowedMethods=invoice.paymentMethod==="credit"?["credit","cash","electronic"]:
+            [invoice.paymentMethod==="electronic"?"electronic":"cash"];
           if(!allowedMethods.includes(record.refundMethod)){failed=true;try{tx.abort();}catch(e){}return;}
 
           const existingReq=rs.getAll(),allInvoicesReq=is.getAll(),
