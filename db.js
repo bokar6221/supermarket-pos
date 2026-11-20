@@ -654,17 +654,74 @@
     const db=await openDB();
     try{
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction(["returns","invoices","products","movements","cashEntries"],"readwrite");
+        const tx=db.transaction(["returns","invoices","products","movements","cashEntries","customers","customerPayments"],"readwrite");
         const rs=tx.objectStore("returns"),is=tx.objectStore("invoices"),ps=tx.objectStore("products"),ms=tx.objectStore("movements");
         const invoiceReq=is.get(record.invoiceId);let failed=false;
         invoiceReq.onsuccess=()=>{
           const invoice=invoiceReq.result;
           if(!invoice){failed=true;try{tx.abort();}catch(e){}return;}
-          const expectedMethod=invoice.paymentMethod==="credit"?"credit":invoice.paymentMethod==="electronic"?"electronic":"cash";
-          if(record.refundMethod!==expectedMethod){failed=true;try{tx.abort();}catch(e){}return;}
-          const existingReq=rs.getAll();
-          existingReq.onsuccess=()=>{
-            const prior=existingReq.result.filter(x=>x.invoiceId===record.invoiceId);
+          const paidAmount=invoice.paidAmount!==undefined&&invoice.paidAmount!==null
+            ?Number(invoice.paidAmount):(invoice.paymentMethod==="credit"?0:Number(invoice.total||0));
+          const isPartiallyPaid=invoice.paymentMethod==="credit"&&paidAmount>0.005;
+          const allowedMethods=isPartiallyPaid?["cash","electronic"]:
+            [invoice.paymentMethod==="credit"?"credit":invoice.paymentMethod==="electronic"?"electronic":"cash"];
+          if(!allowedMethods.includes(record.refundMethod)){failed=true;try{tx.abort();}catch(e){}return;}
+
+          const existingReq=rs.getAll(),allInvoicesReq=is.getAll(),
+            allPaymentsReq=tx.objectStore("customerPayments").getAll(),
+            allCustomersReq=tx.objectStore("customers").getAll();
+          let allReturns=null,allInvoices=null,allPayments=null,allCustomers=null,processed=false;
+          const processReturn=()=>{
+            if(processed||allReturns===null||allInvoices===null||allPayments===null||allCustomers===null)return;
+            processed=true;
+            const prior=allReturns.filter(x=>x.invoiceId===record.invoiceId);
+            const normalizePhone=value=>{
+              let digits=String(value||"").replace(/[^0-9]/g,"");
+              if(digits.startsWith("0020"))digits="0"+digits.slice(4);
+              else if(digits.startsWith("20")&&digits.length===12)digits="0"+digits.slice(2);
+              return digits;
+            };
+            const invoicePhone=normalizePhone(invoice.customerPhone);
+            const customer=allCustomers.find(x=>
+              (invoice.customerId&&x.id===invoice.customerId)||
+              (invoicePhone&&normalizePhone(x.phone)===invoicePhone)
+            );
+            const customerId=invoice.customerId||(customer&&customer.id)||"";
+            const matchesCustomer=other=>
+              !!customerId&&other.customerId===customerId ||
+              !!invoicePhone&&normalizePhone(other.customerPhone)===invoicePhone;
+            const customerInvoices=allInvoices
+              .filter(x=>x.paymentMethod==="credit"&&matchesCustomer(x))
+              .sort((x,y)=>String(x.createdAt||"").localeCompare(String(y.createdAt||"")));
+            if(!customerInvoices.some(x=>x.id===invoice.id))customerInvoices.push(invoice);
+            let collected=allPayments
+              .filter(x=>x.customerId===customerId)
+              .reduce((sum,x)=>sum+Number(x.amount||0),0);
+            // Customer collections are allocated FIFO: clear the opening balance,
+            // then the oldest unpaid invoices first. This prevents a return from
+            // reducing debt already settled by a later customer collection.
+            const opening=Math.max(0,Number(customer&&customer.openingBalance||0));
+            collected=Math.max(0,collected-Math.min(opening,collected));
+            let invoiceOutstanding=0;
+            for(const customerInvoice of customerInvoices){
+              const priorCredits=allReturns
+                .filter(x=>x.invoiceId===customerInvoice.id)
+                .reduce((sum,x)=>{
+                  const credit=Number.isFinite(Number(x.creditReductionAmount))
+                    ?Number(x.creditReductionAmount)
+                    :x.refundMethod==="credit"?Number(x.amount||0):0;
+                  return sum+Math.max(0,credit);
+                },0);
+              const baseDue=Number.isFinite(Number(customerInvoice.remainingAmount))
+                ?Number(customerInvoice.remainingAmount)
+                :(customerInvoice.paymentMethod==="credit"?Number(customerInvoice.total||0):0);
+              const due=Math.max(0,baseDue-priorCredits);
+              const settled=Math.min(due,collected);
+              const outstanding=Math.max(0,due-settled);
+              collected=Math.max(0,collected-settled);
+              if(customerInvoice.id===invoice.id)invoiceOutstanding=outstanding;
+            }
+
             const discountedLineTotals=calculateDiscountedLineTotals(invoice);
             let amount=0;const lines=[],seenIndexes=new Set(),returnedInRequest=new Map();
             for(const line of record.items){
@@ -689,7 +746,14 @@
                 cost:sold.cost!==undefined&&sold.cost!==null&&Number.isFinite(Number(sold.cost))?Number(sold.cost):null,
                 costKnown:sold.costKnown===true||(sold.cost!==undefined&&sold.cost!==null&&Number(sold.cost)>0),amount:lineAmount});
             }
-            const clean={...record,items:lines,amount:Math.round(amount*100)/100,createdAt:record.createdAt||new Date().toISOString()};
+            amount=Math.round(amount*100)/100;
+            const creditReductionAmount=Math.min(amount,Math.max(0,invoiceOutstanding));
+            const paidRefundAmount=Math.max(0,Math.round((amount-creditReductionAmount)*100)/100);
+            const paidRefundMethod=paidRefundAmount>0.005
+              ?(record.refundMethod==="cash"||record.refundMethod==="electronic"?record.refundMethod:(invoice.paidMethod||"cash"))
+              :(invoice.paidMethod||record.refundMethod);
+            const clean={...record,items:lines,amount,creditReductionAmount:Math.round(creditReductionAmount*100)/100,
+              paidRefundAmount,paidRefundMethod,createdAt:record.createdAt||new Date().toISOString()};
             rs.add(clean);
             for(const line of lines){
               if(!line.productId)continue;
@@ -702,16 +766,23 @@
                 }
               };
             }
-            if(clean.amount>0&&(clean.refundMethod==="cash"||clean.refundMethod==="electronic")){
-              tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"expense",category:"sales_return",amount:clean.amount,method:clean.refundMethod,referenceId:clean.id,note:"رد قيمة مرتجع فاتورة",createdAt:clean.createdAt});
+            if(clean.paidRefundAmount>0.005){
+              tx.objectStore("cashEntries").add({id:crypto.randomUUID(),type:"expense",category:"sales_return",
+                amount:clean.paidRefundAmount,method:clean.paidRefundMethod,referenceId:clean.id,
+                note:"رد الجزء المدفوع من مرتجع فاتورة",createdAt:clean.createdAt});
             }
           };
+          existingReq.onsuccess=()=>{allReturns=existingReq.result||[];processReturn();};
+          allInvoicesReq.onsuccess=()=>{allInvoices=allInvoicesReq.result||[];processReturn();};
+          allPaymentsReq.onsuccess=()=>{allPayments=allPaymentsReq.result||[];processReturn();};
+          allCustomersReq.onsuccess=()=>{allCustomers=allCustomersReq.result||[];processReturn();};
         };
         tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error);
         tx.onabort=()=>reject(new Error(failed?"كمية المرتجع أكبر من الكمية المتبقية أو بيانات الفاتورة غير صحيحة.":"تعذر حفظ المرتجع."));
       });
     }finally{db.close();}
   }
+
   async function saveCashEntry(entry){
     const amount=Number(entry&&entry.amount),method=entry&&entry.method||"cash";
     if(!entry||!Number.isFinite(amount)||amount<=0||!["income","expense"].includes(entry.type)||!["cash","electronic"].includes(method))
