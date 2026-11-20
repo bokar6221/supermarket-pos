@@ -1,6 +1,9 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import {
   getAuth,
+  browserLocalPersistence,
+  setPersistence,
+  signInAnonymously,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -20,6 +23,7 @@ import {
   limit,
   writeBatch,
   runTransaction,
+  setDoc,
   serverTimestamp,
   Timestamp,
   onSnapshot
@@ -38,6 +42,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(error => {
+  console.warn("Firebase local auth persistence could not be initialized", error);
+  return false;
+});
 const cloudDb = getFirestore(app);
 const PAGE_SIZE = 250;
 const SYNC_STORES = [
@@ -73,6 +81,10 @@ let syncTimer = null;
 let suppressSync = false;
 let stopRecordsListener = null;
 let remoteChain = Promise.resolve();
+let trialBootstrapPromise = null;
+const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const TRIAL_DEVICE_KEY = "supermarket-pos-trial-device-info-v2";
+const LAST_REAL_UID_KEY = "supermarket-pos-last-real-auth-uid-v1";
 
 function randomId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
@@ -139,13 +151,16 @@ function setBusy(busy) {
   });
 }
 function showSignedIn(user, shopName) {
-  activeUser = user;
-  if ($("cloudAuthPanel")) $("cloudAuthPanel").hidden = !!(user && shopName);
-  if ($("cloudConnectedPanel")) $("cloudConnectedPanel").hidden = !(user && shopName);
-  if ($("cloudCreateShop")) $("cloudCreateShop").hidden = !(user && !shopName);
-  if ($("cloudAccountEmail")) $("cloudAccountEmail").textContent = user ? (user.email || "حساب Google/Firebase") : "";
-  if ($("cloudConnectedShop")) $("cloudConnectedShop").textContent = shopName || "";
-  if ($("shopTitle") && user && shopName) $("shopTitle").textContent = shopName;
+  const signedIn = !!(user && !user.isAnonymous);
+  activeUser = signedIn ? user : null;
+  if ($("cloudAuthPanel")) $("cloudAuthPanel").hidden = signedIn;
+  if ($("cloudConnectedPanel")) $("cloudConnectedPanel").hidden = !signedIn;
+  if ($("cloudCreateShop")) $("cloudCreateShop").hidden = !(signedIn && !shopName && !isPlatformAdmin);
+  if ($("cloudAccountEmail")) $("cloudAccountEmail").textContent = signedIn ? (user.email || "حساب Firebase") : "";
+  if ($("cloudConnectedShop")) $("cloudConnectedShop").textContent = shopName || (signedIn ? "لم يتم ربط محل بهذا الحساب بعد" : "");
+  if ($("cloudSyncNow")) $("cloudSyncNow").hidden = !(signedIn && !!shopName && !isPlatformAdmin);
+  if ($("cloudSignOut")) $("cloudSignOut").hidden = !signedIn;
+  if ($("shopTitle") && signedIn && shopName) $("shopTitle").textContent = shopName;
 }
 function firebaseError(error) {
   const code = String(error && error.code || "");
@@ -156,6 +171,9 @@ function firebaseError(error) {
     "auth/invalid-credential": "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
     "auth/user-disabled": "تم تعطيل هذا الحساب.",
     "auth/too-many-requests": "محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
+    "auth/network-request-failed": "تعذر الوصول إلى خادم تسجيل الدخول. لم يتم حذف الحساب أو الترخيص؛ تحقق من اتصال التطبيق ثم اضغط تسجيل الدخول مرة أخرى.",
+    "auth/user-not-found": "لا يوجد حساب بهذا البريد الإلكتروني. راجع البريد أو أنشئ حسابًا جديدًا.",
+    "auth/wrong-password": "كلمة المرور غير صحيحة.",
     "permission-denied": "رفضت قواعد Firestore العملية. تأكد من نشر قواعد الحماية المرفقة.",
     "unavailable": "خدمة Firebase غير متاحة حاليًا. سيظل البيع المحلي يعمل.",
     "failed-precondition": "قاعدة Firestore غير جاهزة أو تحتاج إلى إعداد في لوحة Firebase."
@@ -173,6 +191,90 @@ function recordsRef(shopId) {
 }
 function userRef(uid) {
   return doc(cloudDb, "users", uid);
+}
+function readTrialDeviceInfo() {
+  try {
+    if (window.AndroidScanner && typeof window.AndroidScanner.getTrialInfo === "function") {
+      const nativeInfo = JSON.parse(window.AndroidScanner.getTrialInfo() || "{}");
+      if (nativeInfo.deviceId && Number(nativeInfo.firstRunAt) > 0) {
+        return {
+          deviceId: String(nativeInfo.deviceId),
+          firstRunAt: Number(nativeInfo.firstRunAt),
+          effectiveNow: Number(nativeInfo.effectiveNow) || Date.now()
+        };
+      }
+    }
+  } catch (error) {
+    console.warn("Native trial metadata is unavailable; using browser storage", error);
+  }
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(TRIAL_DEVICE_KEY) || "null"); } catch (_) {}
+  if (saved && saved.deviceId && Number(saved.firstRunAt) > 0) return saved;
+  const now = Date.now();
+  const info = { deviceId: "web-" + randomId(), firstRunAt: now, effectiveNow: now };
+  try { localStorage.setItem(TRIAL_DEVICE_KEY, JSON.stringify(info)); } catch (_) {}
+  return info;
+}
+async function claimServerTrialStart(user, info) {
+  if (!user || !navigator.onLine || !info || !info.deviceId) return null;
+  const ref = doc(cloudDb, "trialDevices", info.deviceId);
+  let snapshot = await getDoc(ref);
+  if (!snapshot.exists()) {
+    try {
+      await setDoc(ref, { deviceId: info.deviceId, uid: user.uid, createdAt: serverTimestamp() });
+    } catch (error) {
+      // An existing device claim is immutable; read it after a create race.
+      if (!error || !["permission-denied", "already-exists"].includes(String(error.code || ""))) throw error;
+    }
+    snapshot = await getDoc(ref);
+  }
+  if (!snapshot.exists()) throw new Error("تعذر تثبيت تاريخ التجربة على الخادم.");
+  const createdAt = snapshot.data().createdAt;
+  const millis = createdAt && typeof createdAt.toMillis === "function" ? createdAt.toMillis() : 0;
+  return millis > 0 ? millis : null;
+}
+function trialMessage() {
+  const check = window.POSGate && window.POSGate.trialStatus ? window.POSGate.trialStatus() : null;
+  if (!check || !check.ok) return check && check.reason || "التجربة المجانية غير متاحة.";
+  const hours = Math.max(1, Math.ceil(check.remainingMs / 3600000));
+  const days = Math.floor(hours / 24), rest = hours % 24;
+  return days > 0 ? "التجربة المجانية سارية — متبقي " + days + " يوم و" + rest + " ساعة." : "التجربة المجانية سارية — متبقي " + hours + " ساعة.";
+}
+async function ensureTrialExperience(user) {
+  if (trialBootstrapPromise) return trialBootstrapPromise;
+  trialBootstrapPromise = (async () => {
+    await authPersistenceReady;
+    const existing = window.POSGate && window.POSGate.getSession ? window.POSGate.getSession() : null;
+    if (existing && existing.uid && !existing.trial) return false;
+
+    const info = readTrialDeviceInfo();
+    let serverStart = null;
+    const trialUser = user || auth.currentUser || null;
+    if (navigator.onLine && trialUser) {
+      try { serverStart = await claimServerTrialStart(trialUser, info); }
+      catch (error) { console.warn("Server trial registration failed; retaining the local first-run date", error); }
+    }
+    const startedAt = serverStart ? Math.min(info.firstRunAt, serverStart) : info.firstRunAt;
+    const check = window.POSGate.startTrial({
+      deviceId: info.deviceId,
+      startedAt,
+      effectiveNow: info.effectiveNow,
+      serverVerified: !!serverStart
+    });
+    const banner = $("trialStatusBanner");
+    if (banner) {
+      banner.hidden = false;
+      banner.textContent = trialMessage();
+      banner.dataset.state = check.ok ? "warning" : "error";
+    }
+    if (check.ok) {
+      setStatus(trialMessage() + (serverStart ? " تم تثبيت تاريخ البداية على الخادم." : " سيُثبت تاريخ البداية على الخادم عند عودة الاتصال."), "warning");
+    } else {
+      setStatus(check.reason || "انتهت التجربة المجانية.", "error");
+    }
+    return !!check.ok;
+  })().finally(() => { trialBootstrapPromise = null; });
+  return trialBootstrapPromise;
 }
 function localToCloudData(store, row, movementTotals) {
   const data = cleanValue(row);
@@ -354,19 +456,29 @@ async function createShopForUser(user, shopName) {
     updatedAt: serverTimestamp()
   });
   await batch.commit();
+
   activeShopId = newShop.id;
   activeShopName = name;
   activeMember = {uid:user.uid,email:user.email||"",role:"owner",active:true};
   localStorage.setItem(MANAGED_SHOP_KEY,newShop.id);
   setGateSession();
   showSignedIn(user, name);
-  setStatus("تم إنشاء المحل السحابي. جارٍ رفع بيانات هذا الجهاز لأول مرة...", "info");
+  startMemberListener(newShop.id,user.uid);
+
+  // Keep all business data local until the platform administrator issues a valid license.
+  const licensed = await checkShopLicense(newShop.id);
+  startLicenseListener(newShop.id);
+  if (!licensed) return null;
+
+  if (!window.POSGate || !window.POSGate.isCloudSyncEnabled()) {
+    setStatus(trialMessage() + " بيانات التجربة محفوظة محليًا حتى إصدار ترخيص للمحل.", "warning");
+    return null;
+  }
+
+  setStatus("تم التحقق من الترخيص. جارٍ رفع البيانات الأولية إلى السحابة...", "info");
   const state = await initialUpload(newShop.id);
   startRealtimeListener(newShop.id);
-  startMemberListener(newShop.id,user.uid);
-  const licensed=await checkShopLicense(newShop.id);
-  startLicenseListener(newShop.id);
-  setStatus(licensed?"تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.":"تم إنشاء المحل؛ ينتظر إصدار الترخيص من مدير المشروع.","warning");
+  setStatus("تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.", "success");
   return state;
 }
 async function connectExistingShop(user, shopId) {
@@ -781,6 +893,7 @@ function scheduleSync() {
   syncTimer = setTimeout(() => syncNow(false), 1800);
 }
 async function handleLogin() {
+  await authPersistenceReady;
   const email = $("cloudEmail").value.trim();
   const password = $("cloudPassword").value;
   if (!email || !password) throw new Error("اكتب البريد الإلكتروني وكلمة المرور.");
@@ -823,11 +936,13 @@ async function handleLogin() {
   setStatus("الحساب غير مرتبط بمحل. لم ننشئ محلًا تلقائيًا ولم نغيّر بيانات الجهاز. اضغط «إنشاء محل لهذا الحساب» فقط عند رغبتك في إنشاء محل جديد.", "warning");
 }
 async function handleEmployeeRegister(){
+  await authPersistenceReady;
   const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value,code=$("cloudInviteCode").value.trim();
   if(!email||!password||password.length<6||!code)throw new Error("اكتب البريد وكلمة المرور وكود الدعوة الصحيح.");
   const credential=await createUserWithEmailAndPassword(auth,email,password);activeUser=credential.user;await acceptEmployeeInvite(credential.user,code);
 }
 async function handleRegister() {
+  await authPersistenceReady;
   const email = $("cloudEmail").value.trim();
   const password = $("cloudPassword").value;
   const name = $("cloudShopName").value.trim();
@@ -868,14 +983,14 @@ function roleLabel(role){return EMPLOYEE_ROLES[role]||"غير محدد";}
 function applyRoleAccess(){
  const gateSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
  const localMode=!!(gateSession&&gateSession.local);
- const role=activeMember&&activeMember.role||(localMode?"owner":"");
+ const role=isPlatformAdmin?"":(activeMember&&activeMember.role||(localMode?"owner":""));
  const standalone=!activeMember&&!isPlatformAdmin&&!localMode,allowed=new Set(ROLE_VIEWS[role]||[]);
- document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:(!standalone&&!allowed.has(name));});
- if($("employeesTab"))$("employeesTab").hidden=role!=="owner"||localMode;
+ document.querySelectorAll(".tabs [data-view]").forEach(button=>{const name=button.dataset.view;button.hidden=name==="platform"?!isPlatformAdmin:(isPlatformAdmin||(!standalone&&!allowed.has(name)));});
+ if($("employeesTab"))$("employeesTab").hidden=isPlatformAdmin||role!=="owner"||localMode;
  if($("platformTab"))$("platformTab").hidden=!isPlatformAdmin;
- if($("cloudAccountRole"))$("cloudAccountRole").textContent=localMode?"صاحب المحل (محلي)":(activeMember?roleLabel(role):(isPlatformAdmin?"مدير المشروع":"غير مرتبط"));
+ if($("cloudAccountRole"))$("cloudAccountRole").textContent=isPlatformAdmin?"مدير المنصة":(gateSession&&gateSession.trial?("تجربة مجانية — "+roleLabel(role)):(localMode?roleLabel(role)+" (محلي)":(activeMember?roleLabel(role):"غير مرتبط")));
  if($("cloudAccountUid"))$("cloudAccountUid").textContent=activeUser?activeUser.uid:"";
- if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=role!=="owner"||localMode;
+ if($("employeeOwnerPanel"))$("employeeOwnerPanel").hidden=isPlatformAdmin||role!=="owner"||localMode;
  if($("employeeAccessMessage"))$("employeeAccessMessage").textContent=localMode
   ?"الترخيص المحلي لا يدعم دعوات أو حسابات موظفين سحابية."
   :(role==="owner"?"يمكنك دعوة الموظفين وإيقاف حساباتهم وتغيير أدوارهم.":"إدارة الموظفين متاحة لصاحب المحل فقط.");
@@ -922,8 +1037,15 @@ async function checkShopLicense(shopId){
    const snapshot=await getDoc(licenseRef(shopId));onlineReadSucceeded=true;
    if(!snapshot.exists()){
     localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
-    if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص صادر لهذا المحل. تواصل مع مدير المشروع لإصدار ترخيص.");
-    setStatus("لا يوجد ترخيص صادر لهذا المحل. يظل البرنامج مقفولًا حتى تصدر إدارة المنصة ترخيصًا صالحًا.","error");return false;
+    const trialRole=activeMember&&activeMember.role||"owner";
+    if(window.POSGate&&window.POSGate.activateTrial(shopId,trialRole)){
+     setStatus(trialMessage()+" لم يصدر ترخيص مدفوع لهذا المحل بعد؛ المزامنة السحابية متوقفة أثناء التجربة.","warning");
+     return true;
+    }
+    const trialState=window.POSGate&&window.POSGate.trialStatus?window.POSGate.trialStatus():null;
+    const reason=trialState&&!trialState.ok?trialState.reason:"لا يوجد ترخيص صادر لهذا المحل. تواصل مع مدير المنصة.";
+    if(window.POSGate)window.POSGate.lock(reason);
+    setStatus(reason,"error");return false;
    }
    licenseDocument=snapshot.data();
    if(licenseDocument.payload&&licenseDocument.payload.licenseType==="local"){if(window.POSGate)window.POSGate.lock("هذا المحل مرخص محليًا. استخدم ملف الترخيص المحلي دون تسجيل الدخول السحابي.");setStatus("الترخيص محلي ولا يقبل ربط حسابات أو أجهزة سحابية.","error");return false;}
@@ -974,9 +1096,14 @@ function startLicenseListener(shopId){
  if(stopLicenseListener){stopLicenseListener();stopLicenseListener=null;}
  stopLicenseListener=onSnapshot(licenseRef(shopId),async snapshot=>{
   if(!snapshot.exists()){
-   if(window.POSGate)window.POSGate.lock("تم سحب الترخيص أو لم يعد موجودًا. اتصل بمدير المشروع.");
+   if(window.POSGate&&window.POSGate.hasActiveTrial()){
+    setStatus(trialMessage()+" لم يصدر ترخيص للمحل بعد؛ بيانات التجربة محلية.", "warning");
+    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
+    return;
+   }
+   if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص فعال والتجربة المجانية غير متاحة.");
    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
-   setStatus("الترخيص غير موجود؛ تم إيقاف الاستخدام.","error");return;
+   setStatus("لا يوجد ترخيص فعال والتجربة المجانية غير متاحة.", "error");return;
   }
   const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true,true);
   if(valid&&activeMember&&activeMember.role==="owner"&&activeShopName&&window.POSDatabase){
@@ -1327,6 +1454,14 @@ wrapLocalMutations();
 bindGovernanceUI();
 window.POSCloudPrepareLocalMode=async()=>{if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}stopGovernanceListeners();if(window.POSGate)window.POSGate.setSession(null);if(auth.currentUser)await signOut(auth);activeUser=null;activeShopId="";activeShopName="";activeMember=null;applyRoleAccess();};
 onAuthStateChanged(auth, async user => {
+  if (user && user.isAnonymous) {
+    activeUser = null;
+    try { await ensureTrialExperience(user); }
+    catch (error) { setStatus("تعذر بدء التجربة: " + firebaseError(error), "warning"); }
+    showSignedIn(null, "");
+    applyRoleAccess();
+    return;
+  }
   activeUser = user || null;
   if (!user) {
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
@@ -1344,12 +1479,17 @@ onAuthStateChanged(auth, async user => {
       if($("shopTitle"))$("shopTitle").textContent=activeShopName;
     }
     if(window.POSGate&&window.POSGate.canOperateLocally()){
-      setStatus("وضع التشغيل المحلي مفعل. بيانات هذا الجهاز محفوظة، وسيتم الاتصال السحابي عند تسجيل الدخول إذا كانت المزامنة مسموحة.","warning");
+      const saved=window.POSGate.getSession();
+      setStatus(saved&&saved.trial?trialMessage():"وضع التشغيل المحلي مفعل. بيانات هذا الجهاز محفوظة، وسيتم الاتصال السحابي عند تسجيل الدخول إذا كانت المزامنة مسموحة.","warning");
+    }else if(!savedSession&&!localStorage.getItem(LAST_REAL_UID_KEY)){
+      try { await ensureTrialExperience(null); }
+      catch(error){ setStatus("تعذر بدء التجربة المجانية: "+firebaseError(error),"warning"); }
     }else if(window.POSGate&&window.POSGate.isManaged()){
       setStatus("لا توجد جلسة تشغيل محلية صالحة لهذا المحل. اتصل بالإنترنت للتحقق من الحساب والسياسة.","error");
     }
     return;
   }
+  localStorage.setItem(LAST_REAL_UID_KEY,user.uid);
   const state = readState();
   const previousGateSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
   try {
@@ -1433,5 +1573,9 @@ onAuthStateChanged(auth, async user => {
   }
 });
 window.addEventListener("online", () => {
+  if (auth.currentUser && auth.currentUser.isAnonymous) {
+    ensureTrialExperience(auth.currentUser).catch(error=>setStatus("تعذر تحديث تاريخ التجربة: "+firebaseError(error),"warning"));
+    return;
+  }
   if (activeUser && activeShopId && (!window.POSGate||window.POSGate.isCloudSyncEnabled())) setTimeout(() => syncNow(true), 1200);
 });
