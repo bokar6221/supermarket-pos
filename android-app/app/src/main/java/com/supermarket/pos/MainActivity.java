@@ -9,6 +9,8 @@ import android.media.ToneGenerator;
 import android.media.Image;
 import android.net.Uri;
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.provider.Settings;
 import android.print.PrintAttributes;
 import android.print.PrintJob;
 import android.print.PrintManager;
@@ -66,6 +68,7 @@ import org.json.JSONObject;
 
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -198,6 +201,53 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private class AndroidBridge {
+        @JavascriptInterface
+        public String getTrialInfo() {
+            try {
+                String androidId = Settings.Secure.getString(
+                        MainActivity.this.getContentResolver(),
+                        Settings.Secure.ANDROID_ID
+                );
+                if (androidId == null || androidId.trim().isEmpty()) {
+                    throw new IllegalStateException("تعذر قراءة معرّف الجهاز");
+                }
+
+                byte[] digest = MessageDigest.getInstance("SHA-256")
+                        .digest((androidId + "|" + MainActivity.this.getPackageName())
+                                .getBytes(StandardCharsets.UTF_8));
+                StringBuilder deviceId = new StringBuilder(digest.length * 2);
+                for (byte value : digest) {
+                    deviceId.append(String.format(Locale.US, "%02x", value & 0xff));
+                }
+
+                SharedPreferences prefs = MainActivity.this.getSharedPreferences(
+                        "supermarket_pos_trial_v2",
+                        Context.MODE_PRIVATE
+                );
+                long now = System.currentTimeMillis();
+                long firstRunAt = prefs.getLong("first_run_at", 0L);
+                long lastSeenAt = prefs.getLong("last_seen_at", 0L);
+                if (firstRunAt <= 0L) firstRunAt = now;
+                long effectiveNow = Math.max(now, lastSeenAt);
+
+                prefs.edit()
+                        .putLong("first_run_at", firstRunAt)
+                        .putLong("last_seen_at", effectiveNow)
+                        .apply();
+
+                JSONObject result = new JSONObject();
+                result.put("deviceId", deviceId.toString());
+                result.put("firstRunAt", firstRunAt);
+                result.put("effectiveNow", effectiveNow);
+                return result.toString();
+            } catch (Exception error) {
+                JSONObject result = new JSONObject();
+                try { result.put("error", error.getMessage() == null ? "trial_info_unavailable" : error.getMessage()); }
+                catch (Exception ignored) { }
+                return result.toString();
+            }
+        }
+
         @JavascriptInterface
         public void startScan(String mode) {
             runOnUiThread(() -> {
