@@ -1,44 +1,71 @@
-# تجهيز APK تجاري موقّع
+# تجهيز APK تجاري موقّع — Cashiro
 
-## الحالة
-تم تجهيز Gradle وGitHub Actions لبناء إصدار Release موقّع باستخدام مفتاح خاص محفوظ في GitHub Actions Secrets. لا يحتوي المستودع على ملف المفتاح أو كلمات مروره، ولا يتم توليد مفتاح مؤقت تلقائيًا.
+## حالة الإصدار
+- اسم التطبيق: Cashiro
+- نسخة التطبيق: 1.12.0
+- Android: targetSdk 36 (Android 16)
+- نوع التوزيع المستهدف: APK مباشر للمحلات، وليس Google Play حاليًا.
+- مسار البناء: `.github/workflows/build-android-release.yml`
 
-## إنشاء مفتاح النشر مرة واحدة على جهاز المالك
-باستخدام JDK 17 أو أحدث، افتح PowerShell في مجلد آمن خارج مجلد المشروع ونفّذ:
+يستخدم الإصدار مفتاح توقيع Release دائمًا يملكه صاحب المشروع. لا يحتوي المستودع على ملف المفتاح أو كلمات مروره، ولا ينشئ Workflow مفتاحًا مؤقتًا. **لا يمكن إصدار APK تجاري قابل للتحديث قبل إعداد المفتاح والأسرار الأربعة.**
+
+## 1. إنشاء مفتاح النشر مرة واحدة
+
+على جهاز Windows الذي تملكه، افتح PowerShell في مجلد آمن خارج المشروع، ونفّذ:
 
 ```powershell
-keytool -genkeypair -v -keystore supermarket-pos-release.jks -alias supermarket-pos -keyalg RSA -keysize 2048 -validity 10000
+keytool -genkeypair -v -keystore cashiro-release.jks -alias cashiro-release -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-احتفظ بملف `supermarket-pos-release.jks` وكلمات المرور واسم Alias في مكانين آمنين مع نسخة احتياطية مشفرة. فقدان هذا المفتاح قد يمنع تحديث التطبيق المثبت بنفس هوية التوقيع. لا تضعه في Git أو داخل APK أو في محادثة عامة.
+أدخل كلمة مرور قوية عند الطلب. لا ترسل كلمة المرور أو ملف المفتاح في المحادثات. احتفظ بنسختين مشفرتين من ملف `cashiro-release.jks` وكلمات المرور في مكانين آمنين. فقدان المفتاح قد يمنع إصدار تحديثات تقبلها الأجهزة التي تثبت هذه النسخة.
 
-## إضافة أسرار المستودع
-من GitHub افتح:
+## 2. تحويل المفتاح إلى Base64
+
+في PowerShell، من المجلد الذي يحتوي على الملف:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\cashiro-release.jks")) | Set-Clipboard
+```
+
+لا تحفظ قيمة Base64 داخل ملفات المشروع ولا ترسلها في المحادثة.
+
+## 3. إضافة أسرار GitHub
+
+افتح المستودع `bokar6221/supermarket-pos` ثم:
 Settings → Secrets and variables → Actions → New repository secret
 
 أنشئ الأسرار التالية:
 
-- `ANDROID_KEYSTORE_BASE64`: محتوى ملف JKS بعد تحويله إلى Base64.
-- `ANDROID_KEYSTORE_PASSWORD`: كلمة مرور ملف JKS.
-- `ANDROID_KEY_ALIAS`: في المثال أعلاه `supermarket-pos`.
-- `ANDROID_KEY_PASSWORD`: كلمة مرور المفتاح.
+| اسم السر | القيمة |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | قيمة Base64 المنسوخة من ملف JKS |
+| `ANDROID_KEYSTORE_PASSWORD` | كلمة مرور ملف JKS |
+| `ANDROID_KEY_ALIAS` | `cashiro-release` |
+| `ANDROID_KEY_PASSWORD` | كلمة مرور المفتاح |
 
-لنسخ قيمة Base64 إلى الحافظة من PowerShell:
+لا تضع هذه القيم في Issues أو ملفات Git أو داخل التطبيق.
 
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes(".\supermarket-pos-release.jks")) | Set-Clipboard
-```
+## 4. بناء APK الموقّع
 
-الصق القيمة في السر `ANDROID_KEYSTORE_BASE64`. لا ترسل قيمة Base64 أو كلمات المرور في المحادثات أو Issues أو ملفات المشروع.
+بعد إضافة الأسرار:
+1. افتح Actions.
+2. اختر **Build signed Android POS Release**.
+3. اختر الفرع `cashiro-commercial-release-v1` ثم Run workflow.
+4. انتظر نجاح اختبار Firestore Rules وبناء Release والتحقق من توقيع APK.
+5. حمّل Artifact باسم `cashiro-android-release-1.12.0`.
 
-## بناء APK
-بعد حفظ الأسرار، افتح تبويب Actions وشغّل Workflow باسم **Build signed Android POS Release** باستخدام Run workflow، أو ادفع Tag يبدأ بـ `v`. عند نجاح التحقق يظهر Artifact باسم `supermarket-pos-android-release`.
+يتحقق Workflow من:
+- الحزمة `com.supermarket.pos`.
+- `versionCode 16` و`versionName 1.12.0`.
+- استهداف Android 16 / API 36.
+- توقيع APK وملاءمة ZIP alignment.
+- اختبارات قواعد Firestore واختبارات سلامة بيانات POS.
 
-يتحقق Workflow من توقيع APK واسم الحزمة ورقم الإصدار. إذا لم تكن الأسرار الأربعة موجودة، يتوقف بوضوح ولا ينتج APK تجاريًا غير موقّع.
+## 5. قواعد لا يجوز نسيانها
 
-## تنبيهات ما قبل التوزيع
-- لا تغيّر ملف JKS أو Alias بعد توزيع النسخة الأولى.
-- لا ترفع مفتاح التوقيع الخاص إلى المستودع حتى لو كان Private.
-- احتفظ بنسخة من ملف JKS خارج جهاز التطوير.
-- نجاح التوقيع والبناء لا يغني عن اختبار التثبيت والتحديث والطباعة والماسح على أجهزة حقيقية.
-- الإصدار 1.10.0 الحالي ما زال يحتاج إغلاق مراجعة وظائف POS، ونشر قواعد Firebase بعد موافقة المالك، واختبارات تشغيل فعلية قبل اعتباره إصدارًا تجاريًا معتمدًا.
+- لا تغيّر ملف JKS أو Alias بعد توزيع أول نسخة Release.
+- مفتاح توقيع Android هذا مختلف عن مفتاح توقيع تراخيص Cashiro الخاص. لا تخلط بينهما.
+- احتفظ بمفتاح JKS خارج GitHub وخارج APK. لا ترفعه إلى المستودع حتى لو كان خاصًا.
+- النسخة Debug التي سبق تثبيتها على الهاتف تستخدم توقيع Debug مختلفًا. قبل الانتقال لأول Release، صدّر نسخة JSON وتأكد من نجاح استعادتها. قد تحتاج إلى إزالة Debug قبل تثبيت Release؛ لا تفعل ذلك قبل التأكد من النسخة الاحتياطية.
+- نجاح CI لا يغني عن اختبار APK النهائي على أجهزة حقيقية: الدخول والخروج، الكاميرا، الطباعة، النسخ الاحتياطي والاستعادة، وإعادة فتح التطبيق.
+- لا تعتبر طلب حذف الحساب حذفًا تلقائيًا؛ الطلب يُراجع يدويًا لحماية ملكية المحل والسجلات التجارية.
