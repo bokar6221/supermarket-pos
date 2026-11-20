@@ -45,7 +45,7 @@ assert.match(db, /seenIndexes/, "A return cannot repeat the same invoice line");
 assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece returns must be whole quantities");
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
-assert.match(gradle, /versionName '1.12.0'/, "Cashiro Android version must match this commercial candidate");
+assert.match(gradle, /versionName '1.13.0'/, "Cashiro Android version must match this commercial candidate");
 assert.match(gradle, /versionCode 17/, "Cashiro Android version code must be incremented");
 assert.match(gradle, /targetSdk 36/, "Cashiro must target Android 16");
 assert.match(html, /id="paidAmount"/, "Cashiro invoice must capture the actual payment received");
