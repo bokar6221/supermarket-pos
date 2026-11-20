@@ -6,7 +6,7 @@
 <link rel="manifest" href="manifest.json"><link rel="stylesheet" href="styles.css"><title>كاشير المحل</title>
 </head>
 <body class="sales-view">
-<header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1></div><span class="offline-tag" id="connectionState">محلي</span></header>
+<header class="topbar"><div><p class="eyebrow">نظام إدارة المبيعات</p><h1 id="shopTitle">كاشير المحل</h1><p id="trialStatusBanner" class="trial-status-banner" hidden role="status" aria-live="polite"></p></div><span class="offline-tag" id="connectionState">محلي</span></header>
 <nav class="tabs" aria-label="أقسام التطبيق">
 <button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="inventory">المخزون والجرد</button><button class="tab" data-view="purchases">المشتريات والموردون</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="customers">العملاء والحسابات</button><button class="tab" data-view="cash">الخزينة والورديات</button><button class="tab" data-view="reports">التقارير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button><button class="tab" id="employeesTab" data-view="employees" hidden>الموظفون والصلاحيات</button><button class="tab" id="platformTab" data-view="platform" hidden>إدارة التراخيص</button>
 </nav>
@@ -271,8 +271,8 @@
   </div>
   <div class="inner-tab-panel" data-subpanel-group="settings" data-subpanel="cloud">
     <div class="panel">
-      <h2>المزامنة السحابية</h2>
-      <p class="hint">البيع محلي على الجهاز، بينما الاتصال السحابي اختياري ويخضع لسياسة مدير المنصة. يمكن منع الأوفلاين أو إيقاف المزامنة لكل محل من لوحة إدارة التراخيص.</p>
+      <h2>الحساب والتفعيل</h2>
+      <p class="hint">هنا تتابع حالة الحساب والترخيص. تسجيل الدخول لا يعني أن ترخيص المحل فعال؛ سيعرض التطبيق سبب الإيقاف أو تاريخ الانتهاء بوضوح، ولن يخفي حالة الحساب بعد الدخول.</p>
       <div class="panel" id="localLicensePanel">
         <h3>تفعيل ترخيص محلي دون حساب سحابي</h3>
         <p class="hint">هذا الوضع يعمل على هذا الجهاز فقط، ولا يحتاج تسجيل دخول Firebase أو دعوات موظفين أو مزامنة. استورد ملف الترخيص الذي أصدره مدير المنصة.</p>
@@ -280,32 +280,45 @@
         <button class="primary" id="activateLocalLicense" type="button">استيراد وتفعيل الترخيص المحلي</button>
         <p class="hint" id="localLicenseStatus" role="status"></p>
       </div>
-      <div id="cloudAuthPanel">
+      <div id="cloudAuthPanel" class="account-auth-panel">
+        <div class="account-auth-heading">
+          <h3>تسجيل الدخول أو إنشاء حساب</h3>
+          <p>استخدم حساب صاحب المحل أو حساب الموظف الذي أرسله لك صاحب المحل.</p>
+        </div>
         <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
         <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
-        <label>اسم المحل عند إنشاء حساب جديد<input id="cloudShopName" maxlength="70" placeholder="اسم المحل"></label><label>كود دعوة الموظف (للموظف فقط)<input id="cloudInviteCode" autocomplete="off" maxlength="80" placeholder="أدخل كود الدعوة الذي أرسله صاحب المحل"></label><button class="secondary" id="cloudEmployeeRegister" type="button">إنشاء حساب موظف وقبول الدعوة</button>
-        <div class="actions">
-          <button class="primary" id="cloudRegister" type="button">إنشاء حساب ومحل جديد</button>
-          <button class="secondary" id="cloudLogin" type="button">تسجيل الدخول وربط الجهاز</button>
+        <div class="form-grid account-fields">
+          <label>اسم المحل (عند إنشاء محل جديد)<input id="cloudShopName" maxlength="70" placeholder="اكتب اسم المحل"></label>
+          <label>كود دعوة الموظف (للموظف فقط)<input id="cloudInviteCode" autocomplete="off" maxlength="80" placeholder="الكود المرسل من صاحب المحل"></label>
         </div>
-        <button class="secondary" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
+        <div class="actions account-actions">
+          <button class="primary" id="cloudLogin" type="button">تسجيل الدخول</button>
+          <button class="secondary" id="cloudRegister" type="button">إنشاء حساب صاحب محل</button>
+        </div>
+        <button class="secondary full" id="cloudEmployeeRegister" type="button">إنشاء حساب موظف وقبول الدعوة</button>
+        <button class="secondary full" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
       </div>
-      <div id="cloudConnectedPanel" hidden>
-        <p>الحساب: <strong id="cloudAccountEmail"></strong></p><p>الصلاحية: <strong id="cloudAccountRole">جارٍ التحقق</strong></p><p>رقم الحساب (UID): <code id="cloudAccountUid"></code></p>
-        <p>المحل المرتبط: <strong id="cloudConnectedShop"></strong></p>
+      <div id="cloudConnectedPanel" class="account-connected-panel" hidden>
+        <h3>بيانات الحساب</h3>
+        <div class="account-details-grid">
+          <p><span>البريد الإلكتروني</span><strong id="cloudAccountEmail"></strong></p>
+          <p><span>نوع الصلاحية</span><strong id="cloudAccountRole">جارٍ التحقق</strong></p>
+          <p class="account-shop"><span>المحل المرتبط</span><strong id="cloudConnectedShop"></strong></p>
+          <p class="account-uid"><span>رقم الحساب UID</span><code id="cloudAccountUid"></code></p>
+        </div>
         <div class="actions">
           <button class="primary" id="cloudSyncNow" type="button">مزامنة الآن</button>
           <button class="secondary" id="cloudSignOut" type="button">تسجيل الخروج</button>
         </div>
       </div>
-      <p class="hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
+      <p class="account-status-panel hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط حساب بعد. يمكنك استخدام تجربة الجهاز المجانية لمدة 7 أيام.</p>
       <section class="panel sync-conflicts-panel" id="cloudConflictsPanel" hidden aria-live="polite">
         <h3>تعارضات المزامنة تحتاج مراجعة</h3>
         <p class="hint">اختر النسخة الصحيحة لكل سجل بعد مراجعة بياناته. لا يتم استبدال النسخ المتعارضة تلقائيًا.</p>
         <div id="cloudConflictsList"></div>
       </section>
-      <p class="hint">صاحب المحل ينشئ لكل موظف حسابًا منفصلًا من تبويب «الموظفون والصلاحيات» بدعوة بريدية. لا تشارك كلمة مرور أي حساب بين الموظفين.</p>
-      <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password في Firebase، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
+        <p class="hint">صاحب المحل ينشئ لكل موظف حسابًا منفصلًا من تبويب «الموظفون والصلاحيات» بدعوة بريدية. لا تشارك كلمة مرور أي حساب بين الموظفين.</p>
+      <p class="hint">تحتاج المزامنة إلى تفعيل Firestore وEmail/Password وAnonymous في Firebase Authentication، ونشر ملف قواعد الحماية المرفق بالمشروع. لا تفعّل الفوترة المدفوعة.</p>
     </div>
   </div>
 </section>
@@ -374,7 +387,7 @@
   <div class="license-lock-card">
     <div class="license-lock-icon">!</div><h2 id="licenseLockTitle">البرنامج غير مفعل</h2>
     <p id="licenseLockMessage">يتم التحقق من الترخيص...</p>
-    <p class="hint">لتفعيل البرنامج، سجّل الدخول بحساب المحل أو أنشئ حسابًا جديدًا واتصل بالإنترنت للتحقق من الترخيص.</p>
+    <p class="hint">يمكنك بدء تجربة مجانية لمدة 7 أيام على هذا الجهاز. بعد ذلك يلزم ترخيص ساري من إدارة المنصة. تسجيل الدخول وحده لا يتجاوز انتهاء الترخيص أو إيقافه.</p>
     <button class="primary full" id="licenseActivationButton" type="button">الانتقال إلى شاشة التفعيل وتسجيل الدخول</button>
   </div>
 </div>
