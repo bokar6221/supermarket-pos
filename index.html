@@ -280,25 +280,59 @@
         <button class="primary" id="activateLocalLicense" type="button">استيراد وتفعيل الترخيص المحلي</button>
         <p class="hint" id="localLicenseStatus" role="status"></p>
       </div>
-      <div id="cloudAuthPanel">
-        <label>البريد الإلكتروني<input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com"></label>
-        <label>كلمة المرور<input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل"></label>
-        <label>اسم المحل عند إنشاء حساب جديد<input id="cloudShopName" maxlength="70" placeholder="اسم المحل"></label><label>كود دعوة الموظف (للموظف فقط)<input id="cloudInviteCode" autocomplete="off" maxlength="80" placeholder="أدخل كود الدعوة الذي أرسله صاحب المحل"></label><button class="secondary" id="cloudEmployeeRegister" type="button">إنشاء حساب موظف وقبول الدعوة</button>
-        <div class="actions">
-          <button class="primary" id="cloudRegister" type="button">إنشاء حساب ومحل جديد</button>
-          <button class="secondary" id="cloudLogin" type="button">تسجيل الدخول وربط الجهاز</button>
+      <section id="cloudTrialPanel" class="cloud-trial-panel" hidden aria-live="polite">
+        <div class="cloud-trial-heading">
+          <strong id="cloudTrialTitle">التجربة المجانية لمدة 7 أيام</strong>
+          <span id="cloudTrialRemaining"></span>
         </div>
-        <button class="secondary" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
+        <p id="cloudTrialMessage">يتم التحقق من التجربة المجانية لهذا الجهاز.</p>
+        <button class="secondary" id="cloudRetryAccess" type="button">إعادة المحاولة وتحديث حالة الحساب</button>
+      </section>
+      <div id="cloudAuthPanel" class="cloud-auth-panel">
+        <div class="cloud-auth-intro">
+          <h3>تسجيل الدخول إلى برنامج الكاشير</h3>
+          <p>استخدم حساب صاحب المحل أو حساب الموظف. التجربة المجانية تبدأ تلقائيًا لأول مرة على الجهاز ولا تحتاج إلى بطاقة دفع.</p>
+        </div>
+        <section class="cloud-auth-group">
+          <h4>بيانات الحساب</h4>
+          <label>البريد الإلكتروني
+            <input id="cloudEmail" type="email" autocomplete="username" maxlength="160" placeholder="name@example.com">
+          </label>
+          <label>كلمة المرور
+            <input id="cloudPassword" type="password" autocomplete="current-password" minlength="6" maxlength="128" placeholder="6 أحرف على الأقل">
+          </label>
+          <button class="primary full" id="cloudLogin" type="button">تسجيل الدخول</button>
+        </section>
+        <div class="cloud-auth-options">
+          <details>
+            <summary>إنشاء حساب صاحب محل جديد</summary>
+            <label>اسم المحل
+              <input id="cloudShopName" maxlength="70" placeholder="اكتب اسم المحل">
+            </label>
+            <button class="secondary full" id="cloudRegister" type="button">إنشاء الحساب وربط المحل</button>
+          </details>
+          <details>
+            <summary>تسجيل موظف بكود الدعوة</summary>
+            <label>كود الدعوة الذي أرسله صاحب المحل
+              <input id="cloudInviteCode" autocomplete="off" maxlength="80" placeholder="أدخل كود الدعوة">
+            </label>
+            <button class="secondary full" id="cloudEmployeeRegister" type="button">إنشاء حساب الموظف وقبول الدعوة</button>
+          </details>
+        </div>
+        <button class="secondary full" id="cloudCreateShop" type="button" hidden>إنشاء محل لهذا الحساب</button>
       </div>
-      <div id="cloudConnectedPanel" hidden>
-        <p>الحساب: <strong id="cloudAccountEmail"></strong></p><p>الصلاحية: <strong id="cloudAccountRole">جارٍ التحقق</strong></p><p>رقم الحساب (UID): <code id="cloudAccountUid"></code></p>
+      <div id="cloudConnectedPanel" hidden class="cloud-connected-panel">
+        <h3>بيانات الحساب المتصل</h3>
+        <p>الحساب: <strong id="cloudAccountEmail"></strong></p>
+        <p>الصلاحية: <strong id="cloudAccountRole">جارٍ التحقق</strong></p>
+        <p>رقم الحساب (UID): <code id="cloudAccountUid"></code></p>
         <p>المحل المرتبط: <strong id="cloudConnectedShop"></strong></p>
         <div class="actions">
           <button class="primary" id="cloudSyncNow" type="button">مزامنة الآن</button>
           <button class="secondary" id="cloudSignOut" type="button">تسجيل الخروج</button>
         </div>
       </div>
-      <p class="hint" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
+      <p class="hint cloud-account-status" id="cloudSyncStatus" role="status" aria-live="polite" data-state="info">لم يتم ربط هذا الجهاز بعد.</p>
       <section class="panel sync-conflicts-panel" id="cloudConflictsPanel" hidden aria-live="polite">
         <h3>تعارضات المزامنة تحتاج مراجعة</h3>
         <p class="hint">اختر النسخة الصحيحة لكل سجل بعد مراجعة بياناته. لا يتم استبدال النسخ المتعارضة تلقائيًا.</p>
