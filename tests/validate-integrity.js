@@ -134,4 +134,13 @@ assert.match(rules, /match \/trialDevices\//, "Trial device records must be prot
 assert.match(rules, /allow update, delete: if false;/, "A client must not reset or delete a device's trial record");
 assert.doesNotMatch(rules.slice(rules.indexOf("function canReadStore"), rules.indexOf("function canWriteStore")), /isPlatformAdmin\(\)/, "Platform admins must not bypass shop data read roles");
 
+
+assert.match(accessGate, /function suspendTrial\(\)/, "Trial owner access must be suspended while verifying a signed-in account");
+assert.match(accessGate, /session\.active!==false&&trialCheck\(\)\.ok/, "A suspended trial must not permit local operation");
+assert.match(firebase, /window\.POSGate\.suspendTrial\(\)/, "A real Firebase user must suspend anonymous trial privileges before role verification");
+assert.match(firebase, /const trialRole=activeMember&&activeMember\.role\|\|"owner";\s*await ensureTrialExperience\(activeUser,true,trialRole\)/, "Offline trial must use the verified member role");
+assert.match(firebase, /if\(!pendingInviteCode\)await ensureTrialExperience\(user,true,"owner"\)/, "An employee invitation must not temporarily grant owner trial access");
+assert.match(html, /id="cloudRetryVerification"/, "A signed-in account must have a retry action for role verification failures");
+assert.match(firebase, /cloudRetryVerification.*verifyPlatformAdmin/s, "Retry must verify the platform-admin role before routing the account");
+
 console.log("POS integrity checks passed: syntax, HTML IDs, assets, invoice integrity, product history, employees, signed licensing, Firestore role rules and release version, seven-day trial and platform-admin separation.");
