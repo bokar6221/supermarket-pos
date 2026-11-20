@@ -285,6 +285,23 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /accountDeletionRequests/{uid} {
+      // The account owner may submit one deletion request; only platform
+      // administrators can review it. Actual deletion is processed manually
+      // to protect shop ownership and legally retained business records.
+      allow get: if isPlatformAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isPlatformAdmin();
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasAll(['uid', 'email', 'requestedAt', 'status'])
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'shopId', 'role', 'requestedAt', 'status'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedAt == request.time;
+      allow update, delete: if false;
+    }
+
     match /licenses/{shopId} {
       // Shop members can only read their own shop's signed license.
       allow get: if isPlatformAdmin() || isMember(shopId);
