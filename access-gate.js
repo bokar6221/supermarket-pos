@@ -207,8 +207,11 @@ async function applyLicense(doc,shopId,persist=true,verifiedOnline=persist){
   if(persist)localStorage.setItem(LICENSE_PREFIX+shopId,JSON.stringify(doc));
   const trialBanner=$("trialStatusBanner");
   if(trialBanner){
-    if(check.ok)trialBanner.hidden=true;
-    else{trialBanner.hidden=false;trialBanner.textContent=check.reason;trialBanner.dataset.state="error";}
+    trialBanner.hidden=false;
+    trialBanner.textContent=check.ok
+      ? ("الترخيص ساري حتى "+new Date(check.expiresAt).toLocaleDateString("ar-EG"))
+      : check.reason;
+    trialBanner.dataset.state=check.ok?"success":"error";
   }
   if(!check.ok){
     if(session&&session.trial){session.trial=false;localStorage.setItem(SESSION_KEY,JSON.stringify(session));}
@@ -291,7 +294,8 @@ async function initialize(){
 function recheckLocalLicenseExpiry(){
   if(platformAdminSession||!isManaged())return;
   const check=currentLicenseCheck();
-  if(!check.ok){licenseReady=false;showLock("البرنامج متوقف",check.reason);return;}
+  if(session&&session.trial)updateTrialBanner(check);
+  if(!check.ok){licenseReady=false;showLock(session&&session.trial?"انتهت التجربة المجانية":"البرنامج متوقف",check.reason);return;}
   if(!check.offlineAllowed&&!licenseOnlineVerified){
     showLock("الاتصال بالإنترنت مطلوب","سياسة هذا المحل لا تسمح بالتشغيل دون إنترنت.");return;
   }
