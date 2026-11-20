@@ -1487,6 +1487,9 @@ onAuthStateChanged(auth, async user => {
     return;
   }
   activeUser = user || null;
+  if (user && window.POSGate && typeof window.POSGate.suspendTrial === "function") {
+    window.POSGate.suspendTrial();
+  }
   if (!user) {
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
     stopGovernanceListeners();
