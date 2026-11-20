@@ -50,7 +50,8 @@
 2. افتح Firestore Database ثم Rules.
 3. استبدل القواعد الحالية بالكامل بمحتوى الملف `firestore.rules` الموجود في هذا المستودع.
 4. اضغط Publish.
-5. افتح Firestore Database ثم Indexes، وأنشئ الفهرس المحدد في `firestore.indexes.json`، أو انشر الفهرس باستخدام Firebase CLI.\n6. تأكد أن Email/Password مفعّل في Authentication > Sign-in method.
+5. افتح Firestore Database ثم Indexes، وأنشئ الفهرس المحدد في `firestore.indexes.json`، أو انشر الفهرس باستخدام Firebase CLI.
+6. تأكد أن Email/Password وAnonymous مفعّلان في Authentication > Sign-in method.
 
 لا تضع مفاتيح الخدمة أو ملفات النسخ الاحتياطي داخل GitHub.
 
