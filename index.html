@@ -3,10 +3,20 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#173f35"><meta name="description" content="برنامج كاشير ومبيعات محلي للمحلات الصغيرة">
-<link rel="manifest" href="manifest.json"><link rel="stylesheet" href="styles.css"><title>Cashiro — نظام إدارة المحلات</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="manifest" href="manifest.json"><link rel="stylesheet" href="styles.css"><title>Cashiro — نظام إدارة المحلات ونقاط البيع</title>
 </head>
 <body class="sales-view">
-<header class="topbar"><div><p class="eyebrow">Cashiro · إدارة المحلات ونقاط البيع</p><h1 id="shopTitle">Cashiro</h1><p id="trialStatusBanner" class="trial-status-banner" hidden role="status" aria-live="polite"></p></div><span class="offline-tag" id="connectionState">محلي</span></header>
+<header class="topbar">
+  <div class="brand-lockup">
+    <img class="cashiro-brand-icon" src="icon.svg" alt="Cashiro">
+    <div class="brand-copy">
+      <p class="eyebrow">CASHIRO · SMART STORE MANAGEMENT</p>
+      <h1 id="shopTitle">Cashiro</h1>
+      <p id="trialStatusBanner" class="trial-status-banner" hidden role="status" aria-live="polite"></p>
+    </div>
+  </div>
+  <span class="offline-tag" id="connectionState">محلي</span>
+</header>
 <nav class="tabs" aria-label="أقسام التطبيق">
 <button class="tab active" data-view="sale">الكاشير</button><button class="tab" data-view="products">المنتجات</button><button class="tab" data-view="inventory">المخزون والجرد</button><button class="tab" data-view="purchases">المشتريات والموردون</button><button class="tab" data-view="invoices">الفواتير</button><button class="tab" data-view="customers">العملاء والحسابات</button><button class="tab" data-view="cash">الخزينة والورديات</button><button class="tab" data-view="reports">التقارير</button><button class="tab" data-view="backup">النسخ الاحتياطي</button><button class="tab" data-view="settings">إعدادات المحل</button><button class="tab" id="employeesTab" data-view="employees" hidden>الموظفون والصلاحيات</button><button class="tab" id="platformTab" data-view="platform" hidden>إدارة التراخيص</button>
 </nav>
@@ -33,7 +43,17 @@
     <label>اسم العميل (اختياري)<input id="customerName" autocomplete="name" placeholder="اسم العميل"></label>
     <label>رقم واتساب العميل (اختياري)<input id="customerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="01xxxxxxxxx"></label>
   </div><p class="hint" id="creditHint" hidden>البيع الآجل يتطلب اسم العميل ورقم هاتف صحيحًا حتى يتم إنشاء حسابه وتسجيل المديونية.</p>
-  <div class="total-row"><span>الإجمالي بعد الخصم</span><strong id="grandTotal">0.00 ج.م</strong></div>
+  <div class="total-row invoice-due-total"><span>المبلغ المطلوب بعد الخصم</span><strong id="grandTotal" data-amount="0">0.00 ج.م</strong></div>
+  <div class="invoice-settlement">
+    <label class="paid-field">المدفوع
+      <input id="paidAmount" type="number" min="0" step="0.01" inputmode="decimal" value="0.00" placeholder="أدخل ما دفعه العميل">
+    </label>
+    <div class="remaining-field" aria-live="polite">
+      <span>الباقي</span>
+      <strong id="remainingAmount" data-state="success">0.00 ج.م</strong>
+      <small>يُحسب تلقائيًا: المطلوب − المدفوع</small>
+    </div>
+  </div>
   <button class="checkout" id="checkoutButton" disabled>حفظ الفاتورة</button>
 </div>
 </div></section>
