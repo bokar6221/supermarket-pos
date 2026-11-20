@@ -1018,6 +1018,8 @@ async function handleLogin() {
   isPlatformAdmin = await verifyPlatformAdmin(user);
   if (window.POSGate) window.POSGate.setPlatformAdmin(isPlatformAdmin);
   if (isPlatformAdmin) {
+    if(window.POSGate){if(window.POSGate.clearTrial)window.POSGate.clearTrial();window.POSGate.setSession(null);window.POSGate.setPlatformAdmin(true);}
+    setTrialPanel(null, "");
     if (stopRecordsListener) { stopRecordsListener(); stopRecordsListener = null; }
     stopGovernanceListeners();
     activeShopId = "";
@@ -1042,9 +1044,14 @@ async function handleLogin() {
   }
   const inviteCode = $("cloudInviteCode")?.value.trim();
   if (inviteCode) { await acceptEmployeeInvite(user, inviteCode); return; }
+  const deviceTrial=await ensureDeviceTrial(user,false).catch(()=>null);
+  if(deviceTrial)activateTrialForOwner(user,deviceTrial);
   showSignedIn(user, "");
   if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;
-  setStatus("الحساب غير مرتبط بمحل. لم ننشئ محلًا تلقائيًا ولم نغيّر بيانات الجهاز. اضغط «إنشاء محل لهذا الحساب» فقط عند رغبتك في إنشاء محل جديد.", "warning");
+  setStatus(deviceTrial
+    ? (deviceTrial.status==="active"&&Date.now()<deviceTrial.expiresAtMs ? "الحساب مسجل والتجربة المجانية مستمرة. أنشئ المحل للبدء." : "انتهت التجربة المجانية. يلزم تفعيل ترخيص من مدير المنصة.")
+    : "الحساب غير مرتبط بمحل ولا توجد تجربة مجانية سارية. أنشئ محلًا أو أدخل كود دعوة الموظف.",
+    deviceTrial&&deviceTrial.status==="active"&&Date.now()<deviceTrial.expiresAtMs?"success":"warning");
 }
 async function handleEmployeeRegister(){
   const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value,code=$("cloudInviteCode").value.trim();
@@ -1640,6 +1647,8 @@ onAuthStateChanged(auth, async user => {
     isPlatformAdmin=await verifyPlatformAdmin(user);
     if(window.POSGate)window.POSGate.setPlatformAdmin(isPlatformAdmin);
     if(isPlatformAdmin){
+      if(window.POSGate){if(window.POSGate.clearTrial)window.POSGate.clearTrial();window.POSGate.setSession(null);window.POSGate.setPlatformAdmin(true);}
+      setTrialPanel(null, "");
       // Platform administrators are not shop members and must never enter
       // the shop license / device activation flow.
       if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
@@ -1677,6 +1686,7 @@ onAuthStateChanged(auth, async user => {
     }
     const member = await getDoc(memberRef(shopId, user.uid));
     if (!member.exists() || member.data().active !== true) throw new Error("لا توجد عضوية نشطة لهذا الحساب.");
+    const deviceTrial=member.data().role==="owner" ? await ensureDeviceTrial(user,false).catch(()=>null) : null;
     if(member.data().role!=="owner"&&window.POSGate&&window.POSGate.clearTrial)window.POSGate.clearTrial();
     const shop = await getDoc(shopRef(shopId));
     activeShopId = shopId;
@@ -1686,7 +1696,26 @@ onAuthStateChanged(auth, async user => {
     setGateSession();
     showSignedIn(user, activeShopName);applyRoleAccess();
     startMemberListener(shopId,user.uid);
-    const licensed=await checkShopLicense(shopId);startLicenseListener(shopId);if(!licensed)return;if(window.POSGate&&window.POSGate.isCloudLicense())await registerCurrentDevice(shopId,user.uid);
+    const licensed=await checkShopLicense(shopId);
+    startLicenseListener(shopId);
+    if(!licensed && activeMember.role==="owner" && deviceTrial && deviceTrial.status==="active" && Date.now()<deviceTrial.expiresAtMs){
+      window.POSGate.setTrial(deviceTrial);
+      setGateSession();
+      showSignedIn(user,activeShopName);
+      setTrialPanel(deviceTrial,"التجربة المجانية سارية حتى "+new Date(deviceTrial.expiresAtMs).toLocaleString("ar-EG")+". يعمل المحل محليًا خلال المدة المتبقية.");
+      setStatus("الحساب مفعل بالتجربة المجانية. "+trialRemainingText(deviceTrial)+". يلزم الترخيص للمزامنة السحابية.","success");
+      return;
+    }
+    if(!licensed){
+      setTrialPanel(deviceTrial,deviceTrial?"انتهت التجربة المجانية في "+new Date(deviceTrial.expiresAtMs).toLocaleString("ar-EG")+".":"لا يوجد ترخيص أو تجربة مجانية مرتبطة بهذا الجهاز.");
+      showSignedIn(user,"");
+      setStatus("الحساب مسجل لكن لا يوجد ترخيص أو تجربة سارية. بيانات المحل لم تُحذف؛ تواصل مع مدير المنصة.","error");
+      return;
+    }
+    if(window.POSGate&&window.POSGate.isCloudLicense()){
+      if(window.POSGate.clearTrial)window.POSGate.clearTrial();
+      await registerCurrentDevice(shopId,user.uid);
+    }
     if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
       setStatus("الحساب والترخيص تم التحقق منهما. المزامنة السحابية موقوفة من مدير المشروع؛ لن يتم تنزيل أو رفع بيانات.","warning");
       return;
