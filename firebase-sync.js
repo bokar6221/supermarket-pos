@@ -161,6 +161,7 @@ function showSignedIn(user, shopName) {
   if ($("cloudConnectedShop")) $("cloudConnectedShop").textContent = shopName || (signedIn ? "لم يتم ربط محل بهذا الحساب بعد" : "");
   if ($("cloudSyncNow")) $("cloudSyncNow").hidden = !(signedIn && !!shopName && !isPlatformAdmin);
   if ($("cloudSignOut")) $("cloudSignOut").hidden = !signedIn;
+  if ($("requestAccountDeletion")) $("requestAccountDeletion").hidden = !(signedIn && !isPlatformAdmin);
   if ($("cloudRetryVerification")) $("cloudRetryVerification").hidden = true;
   if ($("shopTitle") && signedIn && shopName) $("shopTitle").textContent = shopName;
 }
