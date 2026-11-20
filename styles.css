@@ -619,6 +619,48 @@ body{
   background:#fff9ed;color:#5d4b2b;font-size:13px;line-height:1.7
 }
 .platform-security-note p{margin:5px 0}
+
+/* Clear account, free-trial and license state — always visible below the app title. */
+.trial-status-banner{
+  display:block;max-width:760px;margin:8px 0 0;padding:8px 12px;
+  border:1px solid #d7e5dc;border-radius:10px;background:#f1f7f2;color:#28543e;
+  font-size:13px;font-weight:700;line-height:1.55
+}
+.trial-status-banner[hidden]{display:none}
+.trial-status-banner[data-state="warning"]{border-color:#e7d7ae;background:#fff8e8;color:#785512}
+.trial-status-banner[data-state="error"]{border-color:#edc9c5;background:#fff0ee;color:#923c32}
+.trial-status-banner[data-state="success"]{border-color:#c9e2d2;background:#eaf6ee;color:#245b3a}
+.account-auth-panel,.account-connected-panel{
+  margin:12px 0;padding:16px;border:1px solid #dfe8e2;border-radius:13px;background:#fbfdfb
+}
+.account-auth-heading h3,.account-connected-panel h3{margin:0 0 6px;color:#214c3a;font-size:17px}
+.account-auth-heading p{margin:0 0 14px;color:#687a70;font-size:13px;line-height:1.65}
+.account-fields{margin-top:8px}
+.account-actions{display:grid;grid-template-columns:1fr 1fr;margin-top:12px}
+.account-actions button{min-width:0}
+.account-auth-panel>.full{width:100%;margin-top:8px}
+.account-details-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+.account-details-grid p{
+  display:flex;flex-direction:column;gap:5px;min-width:0;margin:0;padding:10px;
+  border:1px solid #e5ece7;border-radius:9px;background:#fff
+}
+.account-details-grid span{color:#718078;font-size:11px}
+.account-details-grid strong,.account-details-grid code{font-size:13px;overflow-wrap:anywhere}
+.account-status-panel{
+  display:block;margin:12px 0 0;padding:12px 14px;border:1px solid #dce6df;
+  border-radius:11px;background:#f5f8f6;color:#425c4c;line-height:1.7
+}
+.account-status-panel[data-state="warning"]{border-color:#e7d7ae;background:#fff8e8;color:#785512}
+.account-status-panel[data-state="error"]{border-color:#edc9c5;background:#fff0ee;color:#923c32}
+.account-status-panel[data-state="success"]{border-color:#c9e2d2;background:#eaf6ee;color:#245b3a}
+.account-status-panel[hidden]{display:none}
+@media(max-width:420px){
+  .account-auth-panel,.account-connected-panel{padding:12px}
+  .account-actions{grid-template-columns:1fr}
+  .account-details-grid{grid-template-columns:1fr}
+  .trial-status-banner{font-size:12px}
+}
+
 .license-lock-screen{
   position:fixed;z-index:10000;inset:0;display:grid;place-items:center;
   padding:18px;background:#101d18ed;backdrop-filter:blur(8px)
