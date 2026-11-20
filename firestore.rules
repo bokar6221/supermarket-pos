@@ -2,10 +2,22 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Authentication helpers. Anonymous users may start a device trial only.
     function signedIn() {
       return request.auth != null;
     }
 
+    function anonymousUser() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function registeredUser() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // Platform administration is a separate identity and is never a shop role.
     function platformAdminPath(uid) {
       return /databases/$(database)/documents/platformAdmins/$(uid);
     }
@@ -13,7 +25,8 @@ service cloud.firestore {
     function isPlatformAdmin() {
       return signedIn()
         && exists(platformAdminPath(request.auth.uid))
-        && get(platformAdminPath(request.auth.uid)).data.active == true;
+        && get(platformAdminPath(request.auth.uid)).data.active == true
+        && get(platformAdminPath(request.auth.uid)).data.role == 'platform_admin';
     }
 
     function shopPath(shopId) {
@@ -29,7 +42,7 @@ service cloud.firestore {
     }
 
     function isMember(shopId) {
-      return signedIn()
+      return registeredUser()
         && exists(memberPath(shopId, request.auth.uid))
         && get(memberPath(shopId, request.auth.uid)).data.active == true;
     }
@@ -39,26 +52,27 @@ service cloud.firestore {
         && get(memberPath(shopId, request.auth.uid)).data.role == 'owner';
     }
 
+    // One role matrix is enforced for all synced business records.
     function canReadStore(shopId, store) {
-      return isPlatformAdmin()
-        || (
-          isMember(shopId)
-          && get(memberPath(shopId, request.auth.uid)).data.role in ['owner', 'manager']
-          && (get(memberPath(shopId, request.auth.uid)).data.role == 'owner' || store != 'settings')
-        )
-        || (
-          isMember(shopId)
-          && get(memberPath(shopId, request.auth.uid)).data.role == 'accountant'
-          && store in [
-            'products', 'invoices', 'movements', 'suppliers', 'purchases',
-            'supplierPayments', 'stocktakes', 'customers', 'customerPayments',
-            'returns', 'cashEntries', 'shifts'
-          ]
-        )
-        || (
-          isMember(shopId)
-          && get(memberPath(shopId, request.auth.uid)).data.role == 'cashier'
-          && store in ['products', 'invoices', 'movements', 'customers']
+      return isMember(shopId)
+        && (
+          get(memberPath(shopId, request.auth.uid)).data.role == 'owner'
+          || (
+            get(memberPath(shopId, request.auth.uid)).data.role == 'manager'
+            && store != 'settings'
+          )
+          || (
+            get(memberPath(shopId, request.auth.uid)).data.role == 'accountant'
+            && store in [
+              'products', 'invoices', 'movements', 'suppliers', 'purchases',
+              'supplierPayments', 'stocktakes', 'customers', 'customerPayments',
+              'returns', 'cashEntries', 'shifts'
+            ]
+          )
+          || (
+            get(memberPath(shopId, request.auth.uid)).data.role == 'cashier'
+            && store in ['products', 'invoices', 'movements', 'customers']
+          )
         );
     }
 
@@ -91,10 +105,12 @@ service cloud.firestore {
 
     function validRecord() {
       return request.resource.data.keys().hasAll([
-          'store', 'recordId', 'data', 'deleted', 'deviceId', 'clientUpdatedAt', 'updatedAt'
+          'store', 'recordId', 'data', 'deleted',
+          'deviceId', 'clientUpdatedAt', 'updatedAt'
         ])
         && request.resource.data.keys().hasOnly([
-          'store', 'recordId', 'data', 'deleted', 'deviceId', 'clientUpdatedAt', 'updatedAt'
+          'store', 'recordId', 'data', 'deleted',
+          'deviceId', 'clientUpdatedAt', 'updatedAt'
         ])
         && request.resource.data.store in [
           'products', 'invoices', 'movements', 'suppliers', 'purchases',
@@ -112,28 +128,54 @@ service cloud.firestore {
         );
     }
 
+    // A trial is created once by an anonymous first-run identity.
+    // Clients can read a trial document, but cannot extend, reset or delete it.
+    match /deviceTrials/{deviceId} {
+      allow get: if signedIn();
+      allow list: if isPlatformAdmin();
+
+      allow create: if anonymousUser()
+        && deviceId.matches('^[a-f0-9]{64}$')
+        && request.resource.data.keys().hasAll([
+          'deviceId', 'uid', 'startedAt', 'trialDays', 'status', 'schemaVersion'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'deviceId', 'uid', 'startedAt', 'trialDays', 'status', 'schemaVersion'
+        ])
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.startedAt == request.time
+        && request.resource.data.trialDays == 7
+        && request.resource.data.status == 'active'
+        && request.resource.data.schemaVersion == 1;
+
+      allow update, delete: if isPlatformAdmin();
+    }
+
+    // Only the project owner can provision or revoke platform administrators.
     match /platformAdmins/{uid} {
-      // The platform administrator is provisioned manually in Firebase Console.
-      // Client applications cannot grant or modify platform administrator status.
-      allow get: if signedIn() && (request.auth.uid == uid || isPlatformAdmin());
+      allow get: if signedIn() && request.auth.uid == uid;
       allow list: if isPlatformAdmin();
       allow create, update, delete: if false;
     }
 
+    // User profiles cannot confer a shop role or platform-admin status.
     match /users/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
       allow list: if false;
-      allow create, update: if signedIn()
+
+      allow create, update: if registeredUser()
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
           'activeShopId', 'email', 'displayName', 'updatedAt'
         ])
         && request.resource.data.activeShopId is string;
+
       allow delete: if false;
     }
 
     match /shops/{shopId} {
-      allow create: if signedIn()
+      allow create: if registeredUser()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
@@ -145,55 +187,60 @@ service cloud.firestore {
 
       allow get: if isMember(shopId) || isPlatformAdmin();
       allow list: if isPlatformAdmin();
+
       allow update: if isOwner(shopId)
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.keys().hasOnly([
           'ownerUid', 'name', 'currency', 'schemaVersion', 'createdAt'
         ]);
+
       allow delete: if false;
 
       match /members/{uid} {
-        allow get: if signedIn()
+        allow get: if registeredUser()
           && (request.auth.uid == uid || isOwner(shopId) || isPlatformAdmin());
         allow list: if isOwner(shopId) || isPlatformAdmin();
 
-        // First member is the shop owner, created atomically with the shop.
-        allow create: if signedIn() && request.auth.uid == uid
+        // First member: the registered user who owns the new shop.
+        allow create: if (
+          registeredUser()
+          && request.auth.uid == uid
           && request.resource.data.uid == uid
           && request.resource.data.role == 'owner'
           && request.resource.data.active == true
           && getAfter(shopPath(shopId)).data.ownerUid == request.auth.uid
-          ||
-          (
-            signedIn()
-            && request.auth.uid == uid
-            && request.resource.data.uid == uid
-            && request.resource.data.role in ['manager', 'cashier', 'accountant']
-            && request.resource.data.active == true
-            && request.resource.data.inviteCode is string
-            && exists(invitePath(request.resource.data.inviteCode))
-            && get(invitePath(request.resource.data.inviteCode)).data.shopId == shopId
-            && get(invitePath(request.resource.data.inviteCode)).data.active == true
-            && get(invitePath(request.resource.data.inviteCode)).data.email == request.auth.token.email
-            && get(invitePath(request.resource.data.inviteCode)).data.role == request.resource.data.role
-            && getAfter(invitePath(request.resource.data.inviteCode)).data.active == false
-            && getAfter(invitePath(request.resource.data.inviteCode)).data.acceptedByUid == request.auth.uid
-          );
+        ) || (
+          registeredUser()
+          && request.auth.uid == uid
+          && request.resource.data.uid == uid
+          && request.resource.data.role in ['manager', 'cashier', 'accountant']
+          && request.resource.data.active == true
+          && request.resource.data.inviteCode is string
+          && exists(invitePath(request.resource.data.inviteCode))
+          && get(invitePath(request.resource.data.inviteCode)).data.shopId == shopId
+          && get(invitePath(request.resource.data.inviteCode)).data.active == true
+          && get(invitePath(request.resource.data.inviteCode)).data.email == request.auth.token.email
+          && get(invitePath(request.resource.data.inviteCode)).data.role == request.resource.data.role
+          && getAfter(invitePath(request.resource.data.inviteCode)).data.active == false
+          && getAfter(invitePath(request.resource.data.inviteCode)).data.acceptedByUid == request.auth.uid
+        );
 
-        // Owners may change the role or active flag, but cannot create another owner.
+        // Owners can edit staff roles/activation, but cannot modify another owner.
         allow update: if isOwner(shopId)
           && resource.data.role != 'owner'
           && request.resource.data.uid == resource.data.uid
           && request.resource.data.role in ['manager', 'cashier', 'accountant']
           && request.resource.data.keys().hasOnly([
-            'uid', 'email', 'role', 'active', 'invitedBy', 'inviteCode',
-            'joinedAt', 'createdAt', 'updatedAt'
+            'uid', 'email', 'role', 'active', 'invitedBy',
+            'inviteCode', 'joinedAt', 'createdAt', 'updatedAt'
           ]);
+
         allow delete: if isOwner(shopId) && resource.data.role != 'owner';
       }
 
       match /devices/{deviceId} {
         allow get, list: if isPlatformAdmin() || isMember(shopId);
+
         allow create: if isMember(shopId)
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.deviceId == deviceId
@@ -201,51 +248,60 @@ service cloud.firestore {
           && request.resource.data.slot is string
           && getAfter(/databases/$(database)/documents/shops/$(shopId)/deviceSlots/$(request.resource.data.slot)).data.deviceId == deviceId
           && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud';
+
         allow update: if isPlatformAdmin()
-          || (isMember(shopId)
+          || (
+            isMember(shopId)
             && resource.data.uid == request.auth.uid
             && request.resource.data.uid == resource.data.uid
             && request.resource.data.deviceId == resource.data.deviceId
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt','active'])
-            && request.resource.data.active == true)
-          || (isMember(shopId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSeenAt', 'active'])
+            && request.resource.data.active == true
+          )
+          || (
+            isMember(shopId)
             && resource.data.uid == request.auth.uid
             && resource.data.active == false
             && request.resource.data.uid == request.auth.uid
             && request.resource.data.deviceId == deviceId
             && request.resource.data.slot is string
             && getAfter(/databases/$(database)/documents/shops/$(shopId)/deviceSlots/$(request.resource.data.slot)).data.deviceId == deviceId
-            && request.resource.data.active == true);
+            && request.resource.data.active == true
+          );
+
         allow delete: if false;
       }
 
       match /deviceSlots/{slotId} {
         allow get, list: if isPlatformAdmin() || isMember(shopId);
+
         allow create: if isMember(shopId)
           && int(slotId) < get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.maxDevices
           && get(/databases/$(database)/documents/licenses/$(shopId)).data.payload.licenseType == 'cloud'
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.active == true
           && getAfter(/databases/$(database)/documents/shops/$(shopId)/devices/$(request.resource.data.deviceId)).data.slot == slotId;
-        allow update: if isPlatformAdmin();
-        allow delete: if isPlatformAdmin();
+
+        allow update, delete: if isPlatformAdmin();
       }
 
       match /records/{recordId} {
+        // Platform administrators do not get access to sales/customer records.
         allow get, list: if canReadStore(shopId, resource.data.store);
         allow create, update: if validRecord()
-          && (isPlatformAdmin() || canWriteStore(shopId, request.resource.data.store));
-        // Deletes are represented by tombstone records so devices can converge safely.
+          && canWriteStore(shopId, request.resource.data.store);
         allow delete: if false;
       }
     }
 
     match /employeeInvites/{code} {
       allow get: if isPlatformAdmin()
-        || (signedIn() && isOwner(resource.data.shopId))
-        || (signedIn() && resource.data.email == request.auth.token.email);
-      allow list: if signedIn() && isOwner(resource.data.shopId);
-      allow create: if signedIn()
+        || (registeredUser() && isOwner(resource.data.shopId))
+        || (registeredUser() && resource.data.email == request.auth.token.email);
+
+      allow list: if registeredUser() && isOwner(resource.data.shopId);
+
+      allow create: if registeredUser()
         && isOwner(request.resource.data.shopId)
         && request.resource.data.code == code
         && request.resource.data.email is string
@@ -253,28 +309,29 @@ service cloud.firestore {
         && request.resource.data.active == true
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.keys().hasOnly([
-          'code', 'shopId', 'shopName', 'email', 'role', 'active', 'createdBy', 'createdAt'
+          'code', 'shopId', 'shopName', 'email',
+          'role', 'active', 'createdBy', 'createdAt'
         ]);
+
       allow update: if (
-          signedIn()
-          && isOwner(resource.data.shopId)
-          && request.resource.data.shopId == resource.data.shopId
-        )
-        || (
-          signedIn()
-          && resource.data.active == true
-          && resource.data.email == request.auth.token.email
-          && request.resource.data.active == false
-          && request.resource.data.acceptedByUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'active', 'acceptedByUid', 'acceptedAt'
-          ])
-        );
-      allow delete: if signedIn() && isOwner(resource.data.shopId);
+        registeredUser()
+        && isOwner(resource.data.shopId)
+        && request.resource.data.shopId == resource.data.shopId
+      ) || (
+        registeredUser()
+        && resource.data.active == true
+        && resource.data.email == request.auth.token.email
+        && request.resource.data.active == false
+        && request.resource.data.acceptedByUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'active', 'acceptedByUid', 'acceptedAt'
+        ])
+      );
+
+      allow delete: if registeredUser() && isOwner(resource.data.shopId);
     }
 
     match /licenses/{shopId} {
-      // Shop members can only read their own shop's signed license.
       allow get: if isPlatformAdmin() || isMember(shopId);
       allow list: if isPlatformAdmin();
       allow create, update, delete: if isPlatformAdmin();
