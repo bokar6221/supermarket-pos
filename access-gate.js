@@ -17,13 +17,23 @@ let session=null,license=null,licenseReady=false,initialized=false,platformAdmin
 try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
 let publicKeyPromise=null;
 const TRIAL_CACHE_KEY="supermarket-pos-device-trial-v1:";
+const TRIAL_CLOCK_PREFIX="supermarket-pos-trial-clock-v1:";
 function trialCheck(){
   if(!trial)return {ok:false,reason:"لا توجد تجربة مجانية على هذا الجهاز."};
   if(trial.status!=="active")return {ok:false,reason:"تم إيقاف التجربة المجانية من إدارة البرنامج."};
   const end=Number(trial.expiresAtMs);
   if(!Number.isFinite(end))return {ok:false,reason:"تعذر قراءة تاريخ انتهاء التجربة المجانية."};
-  if(Date.now()>=end)return {ok:false,reason:"انتهت مدة التجربة المجانية البالغة 7 أيام. سجّل الدخول بحسابك أو تواصل مع مدير المنصة لتفعيل الترخيص."};
-  return {ok:true,expiresAtMs:end,remainingMs:end-Date.now()};
+  const now=Date.now();
+  const clockKey=TRIAL_CLOCK_PREFIX+trial.deviceId;
+  let lastSeen=0;
+  try{lastSeen=Number(localStorage.getItem(clockKey)||0);}catch(_){lastSeen=0;}
+  if(Number.isFinite(lastSeen)&&lastSeen>now+5*60*1000)
+    return {ok:false,reason:"ساعة الجهاز أصبحت أقدم من آخر وقت مسجل للتجربة. اضبط التاريخ والوقت تلقائيًا ثم أعد المحاولة."};
+  if(!Number.isFinite(lastSeen)||now>lastSeen){
+    try{localStorage.setItem(clockKey,String(now));}catch(_){}
+  }
+  if(now>=end)return {ok:false,reason:"انتهت مدة التجربة المجانية البالغة 7 أيام. سجّل الدخول بحسابك أو تواصل مع مدير المنصة لتفعيل الترخيص."};
+  return {ok:true,expiresAtMs:end,remainingMs:end-now};
 }
 function setTrial(value){
   if(!value||!value.deviceId||!value.uid||!Number.isFinite(Number(value.expiresAtMs)))throw new Error("بيانات التجربة المجانية غير مكتملة.");
