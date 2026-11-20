@@ -558,18 +558,25 @@ async function createShopForUser(user, shopName) {
   setGateSession();
   showSignedIn(user, name);
   setStatus("تم إنشاء المحل السحابي. جارٍ رفع بيانات هذا الجهاز لأول مرة...", "info");
+  startMemberListener(newShop.id,user.uid);
+  if (window.POSGate && window.POSGate.isTrialActive()) {
+    showSignedIn(user, name);
+    setTrialPanel(window.POSGate.getTrial(), "تم إنشاء المحل وربطه بحسابك. يمكنك البيع محليًا خلال الفترة التجريبية؛ ستحتاج ترخيصًا ساريًا للمزامنة السحابية والأجهزة الإضافية.");
+    setStatus("المحل جاهز على هذا الجهاز ضمن التجربة المجانية. البيانات محلية حتى إصدار الترخيص.", "success");
+    return null;
+  }
   const state = await initialUpload(newShop.id);
   startRealtimeListener(newShop.id);
-  startMemberListener(newShop.id,user.uid);
   const licensed=await checkShopLicense(newShop.id);
   startLicenseListener(newShop.id);
-  setStatus(licensed?"تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.":"تم إنشاء المحل؛ ينتظر إصدار الترخيص من مدير المشروع.","warning");
+  setStatus(licensed?"تم إنشاء المحل ورفع البيانات الأولية إلى السحابة.":"تم إنشاء المحل؛ ينتظر إصدار الترخيص من مدير المنصة.","warning");
   return state;
 }
 async function connectExistingShop(user, shopId) {
   const previousGateSession=window.POSGate&&window.POSGate.getSession?window.POSGate.getSession():null;
   const member = await getDoc(memberRef(shopId, user.uid));
   if (!member.exists() || member.data().active !== true) throw new Error("هذا الحساب ليس عضوًا نشطًا في المحل المحدد.");
+  const deviceTrial = member.data().role === "owner" ? await ensureDeviceTrial(user, false).catch(() => null) : null;
   const shop = await getDoc(shopRef(shopId));
   if (!shop.exists()) throw new Error("بيانات المحل غير موجودة في السحابة.");
   activeShopId = shopId;
@@ -582,8 +589,19 @@ async function connectExistingShop(user, shopId) {
   startMemberListener(shopId,user.uid);
   const licensed=await checkShopLicense(shopId);
   startLicenseListener(shopId);
-  if(licensed&&window.POSGate&&window.POSGate.isCloudLicense())await registerCurrentDevice(shopId,user.uid);
-  if(!licensed){setStatus("الحساب متصل لكن الترخيص أو سياسة التشغيل لا تسمح باستخدام هذا الجهاز.","error");return;}
+  if(!licensed && activeMember.role==="owner" && deviceTrial && deviceTrial.status==="active" && Date.now()<deviceTrial.expiresAtMs){
+    window.POSGate.setTrial(deviceTrial);
+    setGateSession();
+    showSignedIn(user, activeShopName);
+    setTrialPanel(deviceTrial, "الحساب صاحب المحل والتجربة المجانية سارية حتى " + new Date(deviceTrial.expiresAtMs).toLocaleString("ar-EG") + ". التشغيل محلي خلال الفترة المتبقية.");
+    setStatus("الحساب مفعل بالتجربة المجانية. " + trialRemainingText(deviceTrial) + ". الترخيص المدفوع غير مفعل بعد.", "success");
+    return;
+  }
+  if(licensed && window.POSGate && window.POSGate.isCloudLicense()){
+    if(window.POSGate.clearTrial)window.POSGate.clearTrial();
+    await registerCurrentDevice(shopId,user.uid);
+  }
+  if(!licensed){setStatus("الحساب مسجل، لكن لا يوجد ترخيص أو تجربة سارية. حالة الحساب محفوظة؛ فعّل الترخيص أو تواصل مع مدير المنصة.","error");showSignedIn(user,"");return;}
   if(window.POSGate&&!window.POSGate.isCloudSyncEnabled()){
     setStatus("تم التحقق من الحساب. المزامنة السحابية موقوفة إداريًا؛ سيظل البيع محليًا وفق سياسة الأوفلاين.","warning");
     return;
@@ -981,7 +999,9 @@ async function handleLogin() {
   const email = $("cloudEmail").value.trim();
   const password = $("cloudPassword").value;
   if (!email || !password) throw new Error("اكتب البريد الإلكتروني وكلمة المرور.");
+  await authPersistenceReady;
   const credential = await signInWithEmailAndPassword(auth, email, password);
+  localStorage.setItem(REGISTERED_ACCOUNT_KEY, "1");
   const user = credential.user;
   activeUser = user;
 
@@ -1022,7 +1042,14 @@ async function handleLogin() {
 async function handleEmployeeRegister(){
   const email=$("cloudEmail").value.trim(),password=$("cloudPassword").value,code=$("cloudInviteCode").value.trim();
   if(!email||!password||password.length<6||!code)throw new Error("اكتب البريد وكلمة المرور وكود الدعوة الصحيح.");
-  const credential=await createUserWithEmailAndPassword(auth,email,password);activeUser=credential.user;await acceptEmployeeInvite(credential.user,code);
+  await authPersistenceReady;
+  const current=auth.currentUser;
+  const credential=current&&current.isAnonymous
+    ? await linkWithCredential(current,EmailAuthProvider.credential(email,password))
+    : await createUserWithEmailAndPassword(auth,email,password);
+  localStorage.setItem(REGISTERED_ACCOUNT_KEY,"1");
+  activeUser=credential.user;
+  await acceptEmployeeInvite(credential.user,code);
 }
 async function handleRegister() {
   const email = $("cloudEmail").value.trim();
@@ -1031,7 +1058,12 @@ async function handleRegister() {
   if (!email || !password) throw new Error("اكتب البريد الإلكتروني وكلمة المرور.");
   if (password.length < 6) throw new Error("كلمة المرور يجب ألا تقل عن 6 أحرف.");
   if (!name) throw new Error("اكتب اسم المحل الذي ستنشئه.");
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
+  await authPersistenceReady;
+  const current = auth.currentUser;
+  const credential = current && current.isAnonymous
+    ? await linkWithCredential(current, EmailAuthProvider.credential(email, password))
+    : await createUserWithEmailAndPassword(auth, email, password);
+  localStorage.setItem(REGISTERED_ACCOUNT_KEY, "1");
   activeUser = credential.user;
   await createShopForUser(credential.user, name);
 }
@@ -1149,9 +1181,15 @@ async function checkShopLicense(shopId){
 function startMemberListener(shopId,uid){
  if(stopMemberListener){stopMemberListener();stopMemberListener=null;}
  stopMemberListener=onSnapshot(memberRef(shopId,uid),async snapshot=>{
+  if(snapshot.metadata && snapshot.metadata.fromCache){
+   if(!snapshot.exists())setStatus("جارٍ التحقق من عضوية الحساب مع Firebase؛ لم يتم تسجيل الخروج.", "warning");
+   return;
+  }
   if(!snapshot.exists()||snapshot.data().active!==true){
-   activeMember=null;if(window.POSGate){window.POSGate.setSession(null);window.POSGate.lock("تم إيقاف حساب الموظف من صاحب المحل. تواصل معه لإعادة التفعيل.");}
-   showSignedIn(null,"");setStatus("تم إيقاف عضوية هذا الحساب.","error");signOut(auth).catch(()=>{});return;
+   activeMember=null;
+   if(window.POSGate){if(window.POSGate.clearTrial)window.POSGate.clearTrial();window.POSGate.setSession(null);window.POSGate.lock("عضوية الحساب غير نشطة. تواصل مع صاحب المحل لإعادة التفعيل.");}
+   showSignedIn(activeUser,"");setStatus("تم إيقاف عضوية هذا الحساب من صاحب المحل. الحساب لم يُحذف ولم يتم تسجيل الخروج؛ ستعود الصلاحية بعد إعادة تفعيله.", "error");
+   return;
   }
   const previousRole=activeMember&&activeMember.role;
   activeMember=snapshot.data();setGateSession();
@@ -1170,12 +1208,23 @@ function startMemberListener(shopId,uid){
 function startLicenseListener(shopId){
  if(stopLicenseListener){stopLicenseListener();stopLicenseListener=null;}
  stopLicenseListener=onSnapshot(licenseRef(shopId),async snapshot=>{
+  if(snapshot.metadata && snapshot.metadata.fromCache && !snapshot.exists())return;
   if(!snapshot.exists()){
-   if(window.POSGate)window.POSGate.lock("تم سحب الترخيص أو لم يعد موجودًا. اتصل بمدير المشروع.");
+   if(window.POSGate && window.POSGate.isTrialActive() && activeMember && activeMember.role==="owner"){
+    setTrialPanel(window.POSGate.getTrial(),"التجربة المجانية سارية. لم يصدر ترخيص مدفوع لهذا المحل حتى الآن.");
+    return;
+   }
+   if(window.POSGate)window.POSGate.lock("لا يوجد ترخيص فعال لهذا المحل. تواصل مع مدير المنصة.");
    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
-   setStatus("الترخيص غير موجود؛ تم إيقاف الاستخدام.","error");return;
+   setStatus("الترخيص غير موجود؛ الحساب ما زال مسجلًا لكن التشغيل يحتاج ترخيصًا أو تجربة سارية.","error");showSignedIn(activeUser,"");return;
   }
   const valid=await window.POSGate.applyLicense(snapshot.data(),shopId,true,true);
+  if(valid&&window.POSGate.clearTrial)window.POSGate.clearTrial();
+  if(!valid&&window.POSGate.isTrialActive()&&activeMember&&activeMember.role==="owner"){
+   setTrialPanel(window.POSGate.getTrial(),"الترخيص غير ساري، لكن التجربة المجانية ما زالت متاحة حتى تاريخ الانتهاء الموضح.");
+   setStatus("يعمل المحل خلال الفترة المتبقية من التجربة المجانية.", "warning");
+   return;
+  }
   if(valid&&activeMember&&activeMember.role==="owner"&&activeShopName&&window.POSDatabase){
    const localSettings=await window.POSDatabase.getSettings();
    if(String(localSettings.shopName||"")!==String(activeShopName))
