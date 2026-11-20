@@ -40,8 +40,7 @@ service cloud.firestore {
     }
 
     function canReadStore(shopId, store) {
-      return isPlatformAdmin()
-        || (
+      return (
           isMember(shopId)
           && get(memberPath(shopId, request.auth.uid)).data.role in ['owner', 'manager']
           && (get(memberPath(shopId, request.auth.uid)).data.role == 'owner' || store != 'settings')
@@ -234,7 +233,7 @@ service cloud.firestore {
       match /records/{recordId} {
         allow get, list: if canReadStore(shopId, resource.data.store);
         allow create, update: if validRecord()
-          && (isPlatformAdmin() || canWriteStore(shopId, request.resource.data.store));
+          && canWriteStore(shopId, request.resource.data.store);
         // Deletes are represented by tombstone records so devices can converge safely.
         allow delete: if false;
       }
@@ -271,6 +270,19 @@ service cloud.firestore {
           ])
         );
       allow delete: if signedIn() && isOwner(resource.data.shopId);
+    }
+
+    // تجربة الجهاز: سجل واحد غير قابل للتعديل لكل جهاز.
+    // القراءة الفردية فقط مطلوبة لاستعادة تاريخ بدء التجربة بعد إعادة تثبيت التطبيق.
+    match /trialDevices/{deviceId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['deviceId', 'uid', 'createdAt'])
+        && request.resource.data.deviceId == deviceId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
     }
 
     match /licenses/{shopId} {
