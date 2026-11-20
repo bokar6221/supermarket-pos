@@ -1133,9 +1133,14 @@ function startLicenseListener(shopId){
    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
   }else{
    startRealtimeListener(shopId);
-   if(activeUser&&navigator.onLine)setTimeout(()=>syncNow(false),800);
+   const currentState=readState();
+   if(activeUser&&navigator.onLine&&currentState&&currentState.shopId===shopId){
+    setTimeout(()=>syncNow(false),800);
+   }else if(activeUser&&navigator.onLine){
+    setStatus("الترخيص أصبح ساريًا. بيانات الجهاز المحلية ما زالت محفوظة؛ اضغط «مزامنة الآن» لمراجعة ورفع البيانات إلى المحل.", "success");
+   }
   }
-  setStatus(valid?"تم تحديث الترخيص وسياسة الاتصال مركزيًا.":"أوقف مدير المشروع الترخيص أو انتهت مدته.",valid?"success":"error");
+  if(!valid)setStatus("الترخيص موقوف أو منتهي أو بياناته غير صالحة. راجع مدير المنصة.", "error");
  },error=>setStatus("تعذر تحديث حالة الترخيص: "+firebaseError(error),"warning"));
 }
 async function acceptEmployeeInvite(user,code){
