@@ -8,8 +8,23 @@ on:
     tags:
       - "cashiro-v*"
     paths:
+      - "android-app/**"
+      - "app.js"
+      - "index.html"
+      - "styles.css"
+      - "db.js"
+      - "accounts.js"
+      - "catalog.js"
+      - "firebase-sync.js"
+      - "access-gate.js"
+      - "sw.js"
+      - "icon.svg"
+      - "manifest.json"
+      - "privacy.html"
       - "firestore.rules"
-      - "tests/firestore-rules.test.mjs"
+      - "firestore.indexes.json"
+      - "tests/**"
+      - "docs/ANDROID_RELEASE_SIGNING_AR.md"
       - ".github/workflows/build-android-release.yml"
 
 permissions:
@@ -41,7 +56,7 @@ jobs:
         run: npx firebase-tools emulators:exec --only firestore --project demo-supermarket-pos "node tests/firestore-rules.test.mjs"
 
   build-release:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/cashiro-v')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/cashiro-commercial-release-v1') || startsWith(github.ref, 'refs/tags/cashiro-v')
     needs: rules-tests
     name: Build and verify signed commercial APK
     runs-on: ubuntu-latest
@@ -116,8 +131,8 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -F "package: name='com.supermarket.pos'" /tmp/apk-badging.txt
-          grep -F "versionCode='16'" /tmp/apk-badging.txt
-          grep -F "versionName='1.12.0'" /tmp/apk-badging.txt
+          grep -F "versionCode='17'" /tmp/apk-badging.txt
+          grep -F "versionName='1.13.0'" /tmp/apk-badging.txt
           grep -F "targetSdkVersion:'36'" /tmp/apk-badging.txt
           "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -v 4 "$APK"
           sha256sum "$APK" | tee /tmp/cashiro-apk-sha256.txt
@@ -125,7 +140,7 @@ jobs:
       - name: Upload signed commercial APK
         uses: actions/upload-artifact@v4
         with:
-          name: cashiro-android-release-1.12.0
+          name: cashiro-android-release-1.13.0
           path: android-app/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
