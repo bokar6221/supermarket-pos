@@ -125,7 +125,7 @@ assert.match(accessGate, /function activateTrial\(shopId,role\)/, "A trial must 
 assert.match(accessGate, /trialEntitlement\.consumed===true/, "A signed license must prevent reusing the free trial");
 assert.match(firebase, /setPersistence\(auth,\s*browserLocalPersistence\)/, "Firebase Auth must explicitly use local persistence");
 assert.match(firebase, /signInAnonymously\(auth\)/, "An unregistered device must be able to start a trial anonymously");
-assert.match(firebase, /match \/trialDevices\//, "The device trial must be recorded in Firestore");
+assert.match(rules, /match \/trialDevices\//, "The device trial must be recorded in Firestore");
 assert.match(firebase, /auth\/network-request-failed/, "Network sign-in errors must have a clear user-facing message");
 assert.match(androidMainActivity, /getTrialInfo\(\)/, "Android must provide a stable device identifier and first-run clock to the WebView");
 assert.match(html, /id="trialStatusBanner"/, "Trial and license status must stay visible in the app header");
