@@ -1541,8 +1541,11 @@ onAuthStateChanged(auth, async user => {
     const shopId = profile.exists() ? String(profile.data().activeShopId || "") : "";
     if (!shopId) {
       if(isPlatformAdmin){if($("cloudCreateShop"))$("cloudCreateShop").hidden=true;applyRoleAccess();return;}
-      await ensureTrialExperience(user, true, "owner");
-      showSignedIn(user, "");setStatus("الحساب مسجل. أكمل إنشاء المحل أو استخدم كود دعوة الموظف.", "info");
+      const pendingInviteCode=$("cloudInviteCode")&&$("cloudInviteCode").value.trim();
+      // Do not grant a temporary owner session while an employee invitation
+      // is being accepted; the employee role is applied after membership lookup.
+      if(!pendingInviteCode)await ensureTrialExperience(user,true,"owner");
+      showSignedIn(user, "");setStatus(pendingInviteCode?"الحساب جاهز لقبول دعوة الموظف. أدخل كود الدعوة واضغط إنشاء حساب موظف وقبول الدعوة.":"الحساب مسجل. أكمل إنشاء المحل أو استخدم كود دعوة الموظف.", "info");
       if ($("cloudCreateShop")) $("cloudCreateShop").hidden = false;return;
     }
     const member = await getDoc(memberRef(shopId, user.uid));
