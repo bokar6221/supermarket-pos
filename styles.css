@@ -832,3 +832,90 @@ body.license-activation-only #view-settings .inner-tab-panel[data-subpanel="clou
     flex: 1 1 140px;
   }
 }
+
+
+/* Cashiro brand system — emerald, mint and charcoal */
+:root{
+  --cashiro-ink:#071c17;
+  --cashiro-deep:#0b3326;
+  --cashiro-green:#087c4b;
+  --cashiro-bright:#16b76c;
+  --cashiro-mint:#dff8ec;
+  --cashiro-line:#d8e9df;
+  --cashiro-soft:#f4faf6;
+}
+body{background:radial-gradient(circle at 92% 5%,#d8f5e7 0,transparent 25rem),radial-gradient(circle at 2% 40%,#e8f6ee 0,transparent 22rem),#f3f8f5;color:#14251e}
+.topbar{
+  position:relative;isolation:isolate;overflow:hidden;
+  background:linear-gradient(112deg,#061a15 0%,#0b3b2a 55%,#08794b 100%);
+  min-height:88px;padding-top:12px;padding-bottom:12px;
+  box-shadow:0 8px 28px #082b1c28;
+}
+.topbar:before,.topbar:after{content:"";position:absolute;z-index:-1;pointer-events:none;border-radius:50%;border:1px solid #8cf5c444}
+.topbar:before{width:260px;height:260px;right:-90px;top:-160px;box-shadow:0 0 0 15px #9fffd30b,0 0 0 32px #9fffd308}
+.topbar:after{width:140px;height:140px;left:18%;bottom:-118px;box-shadow:0 0 0 15px #9fffd311,0 0 0 32px #9fffd30a}
+.brand-lockup{display:flex;align-items:center;gap:13px;min-width:0;position:relative;z-index:1}
+.cashiro-brand-icon{width:58px;height:58px;flex:0 0 auto;border-radius:15px;box-shadow:0 5px 18px #0005,0 0 0 1px #9fffd355}
+.brand-copy{min-width:0}
+.brand-copy .eyebrow{color:#9be8bf;letter-spacing:.08em;font-size:10px;font-weight:700}
+.brand-copy h1{font-size:23px;letter-spacing:.01em;color:#fff}
+.brand-copy .trial-status-banner{margin-top:5px;color:#d3f5e1}
+.offline-tag{position:relative;z-index:1;background:#d7f5e4;color:#0a5838;font-weight:800;border:1px solid #a9eac4}
+.tabs{scrollbar-width:thin;scrollbar-color:#b7d8c4 transparent}
+.tab{border:1px solid #d7e7dd;border-radius:999px;padding:9px 14px;transition:background .15s,transform .15s}
+.tab.active{background:linear-gradient(135deg,#0a5739,#0c8c53);border-color:#0b7146;box-shadow:0 3px 10px #0c704328}
+.panel{border:1px solid #dcebe2;border-radius:18px;box-shadow:0 7px 25px #153b2810}
+.section-heading h2,.panel h2{color:#103e2c}
+button,.file-button{transition:transform .12s ease,box-shadow .12s ease}
+button:active{transform:translateY(1px)}
+.primary,.checkout{background:linear-gradient(125deg,#0a7849,#16b76c);box-shadow:0 5px 14px #0a86432a;font-weight:800}
+.secondary{border:1px solid #d8e9df}
+.quick-card{border-radius:14px;box-shadow:0 4px 13px #123a2510}
+.quick-product{border-radius:10px!important;background:linear-gradient(145deg,#f2faf5,#e5f3eb)!important}
+.category-chip.active{background:linear-gradient(130deg,#0b5738,#0e9356);border-color:#0e7b49}
+.invoice-panel{border:1px solid #cfe5d8;box-shadow:0 16px 40px #0d392a24}
+.invoice-drawer-top h3{color:#0d5438}
+.invoice-due-total{margin-top:10px;padding:13px 14px;border-radius:13px;background:linear-gradient(110deg,#f0faf4,#e0f5e9);border:1px solid #cdebd9}
+.invoice-due-total span{font-weight:800;color:#15563a}
+.invoice-due-total strong{font-size:22px;color:#075c38}
+.invoice-settlement{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin:10px 0 13px;align-items:stretch}
+.paid-field,.remaining-field{margin:0;min-width:0;padding:10px 12px;border-radius:13px;border:1px solid #d9e9df;background:#fff}
+.paid-field{color:#234a36}
+.paid-field input{height:44px;padding:8px 10px;margin-top:6px;border-color:#b9d9c6;font-size:18px;font-weight:800;text-align:center;color:#123e2a}
+.remaining-field{display:flex;flex-direction:column;justify-content:center;gap:4px;background:linear-gradient(145deg,#f5fbf7,#e5f6ec)}
+.remaining-field>span{font-size:12px;color:#416b55;font-weight:800}
+.remaining-field strong{font-size:20px;color:#087b49;direction:rtl}
+.remaining-field strong[data-state="error"]{color:#b42318}
+.remaining-field small{font-size:10px;color:#71867a}
+.cart-item{align-items:center;border-bottom:1px solid #e7f0ea}
+.cart-item-info{min-width:0}
+.cart-item-info>strong{color:#173b29}
+.cart-item-side{width:116px;max-width:116px;flex:0 0 116px;gap:5px}
+.cart-item-side>strong{color:#0c6840;font-size:14px}
+.cart-quantity-editor{display:flex;align-items:center;justify-content:space-between;gap:5px;width:100%;margin:0;font-size:11px;color:#5d7467}
+.cart-quantity-editor input{width:70px;min-width:0;height:37px;min-height:37px;margin:0;padding:5px 6px;border:1px solid #add5bd;border-radius:9px;background:#f8fdf9;text-align:center;font-size:15px;font-weight:800;color:#16442f}
+.cart-item .remove{min-height:30px;padding:5px 10px;border-radius:8px}
+.cart-item-info small{line-height:1.45;color:#718278}
+.invoice-panel .checkout-fields{margin-top:12px}
+.invoice-panel .checkout-fields input,.invoice-panel .checkout-fields select{border-color:#d2e4d9}
+.mobile-invoice-toggle{background:linear-gradient(110deg,#061d16,#08784a)!important;border:1px solid #8ce6b755!important;box-shadow:0 8px 25px #08271945!important}
+footer{color:#6f8277}
+@media(max-width:640px){
+  .topbar{min-height:76px;padding:10px 13px}
+  .cashiro-brand-icon{width:49px;height:49px;border-radius:13px}
+  .brand-lockup{gap:10px}
+  .brand-copy h1{font-size:20px}
+  .brand-copy .eyebrow{font-size:9px}
+  .tabs{margin-top:11px}
+  .invoice-settlement{gap:8px}
+  .paid-field,.remaining-field{padding:9px}
+  .paid-field input{height:42px;font-size:17px}
+  .remaining-field strong{font-size:18px}
+  .cart-item-side{width:108px;max-width:108px;flex-basis:108px}
+}
+@media(max-width:380px){
+  .invoice-settlement{grid-template-columns:1fr 1fr}
+  .cart-item{gap:5px}
+  .cart-item-side{width:100px;max-width:100px;flex-basis:100px}
+  .cart-quantity-editor input{width:62px}
+}
