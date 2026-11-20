@@ -1389,6 +1389,7 @@ async function registerCurrentDevice(shopId,uid){
  });
  if(stopOwnDeviceListener)stopOwnDeviceListener();
  stopOwnDeviceListener=onSnapshot(ref,snapshot=>{
+  if(snapshot.metadata && snapshot.metadata.fromCache)return;
   if(!snapshot.exists()||snapshot.data().active!==true){
    if(window.POSGate)window.POSGate.lock("تم إلغاء ربط هذا الجهاز من مدير المنصة. تواصل مع إدارة البرنامج.");
    if(stopRecordsListener){stopRecordsListener();stopRecordsListener=null;}
