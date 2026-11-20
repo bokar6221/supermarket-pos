@@ -240,16 +240,25 @@ function trialMessage() {
   const days = Math.floor(hours / 24), rest = hours % 24;
   return days > 0 ? "التجربة المجانية سارية — متبقي " + days + " يوم و" + rest + " ساعة." : "التجربة المجانية سارية — متبقي " + hours + " ساعة.";
 }
-async function ensureTrialExperience(user) {
+async function ensureTrialExperience(user, forceForUnlicensedShop = false) {
   if (trialBootstrapPromise) return trialBootstrapPromise;
   trialBootstrapPromise = (async () => {
     await authPersistenceReady;
     const existing = window.POSGate && window.POSGate.getSession ? window.POSGate.getSession() : null;
-    if (existing && existing.uid && !existing.trial) return false;
+    if (existing && existing.uid && !existing.trial && !forceForUnlicensedShop) return false;
 
     const info = readTrialDeviceInfo();
     let serverStart = null;
-    const trialUser = user || auth.currentUser || null;
+    let trialUser = user || auth.currentUser || null;
+    if (!trialUser && navigator.onLine && !localStorage.getItem(LAST_REAL_UID_KEY)) {
+      try {
+        const anonymousCredential = await signInAnonymously(auth);
+        trialUser = anonymousCredential.user;
+      } catch (error) {
+        // Offline or disabled Anonymous provider: use the native first-run clock.
+        console.warn("Anonymous Firebase sign-in unavailable; starting local trial", error);
+      }
+    }
     if (navigator.onLine && trialUser) {
       try { serverStart = await claimServerTrialStart(trialUser, info); }
       catch (error) { console.warn("Server trial registration failed; retaining the local first-run date", error); }
@@ -1038,6 +1047,7 @@ async function checkShopLicense(shopId){
    if(!snapshot.exists()){
     localStorage.removeItem(LICENSE_CACHE_PREFIX+shopId);
     const trialRole=activeMember&&activeMember.role||"owner";
+    if(window.POSGate&&activeUser)await ensureTrialExperience(activeUser,true);
     if(window.POSGate&&window.POSGate.activateTrial(shopId,trialRole)){
      setStatus(trialMessage()+" لم يصدر ترخيص مدفوع لهذا المحل بعد؛ المزامنة السحابية متوقفة أثناء التجربة.","warning");
      return true;
@@ -1062,6 +1072,14 @@ async function checkShopLicense(shopId){
   return true;
  }
  let cached=null;try{cached=JSON.parse(localStorage.getItem(LICENSE_CACHE_PREFIX+shopId)||"null");}catch(_){}
+ if(!cached&&activeUser&&window.POSGate){
+  await ensureTrialExperience(activeUser,true);
+  const trialRole=activeMember&&activeMember.role||"owner";
+  if(window.POSGate.activateTrial(shopId,trialRole)){
+   setStatus(trialMessage()+" — لا يوجد ترخيص متاح حاليًا؛ تعمل بيانات المحل محليًا أثناء التجربة.","warning");
+   return true;
+  }
+ }
  if(cached&&window.POSGate){
   const valid=await window.POSGate.applyLicense(cached,shopId,false,false);
   if(valid&&window.POSGate.canOperateLocally()){
@@ -1575,6 +1593,10 @@ onAuthStateChanged(auth, async user => {
 window.addEventListener("online", () => {
   if (auth.currentUser && auth.currentUser.isAnonymous) {
     ensureTrialExperience(auth.currentUser).catch(error=>setStatus("تعذر تحديث تاريخ التجربة: "+firebaseError(error),"warning"));
+    return;
+  }
+  if (!auth.currentUser && !localStorage.getItem(LAST_REAL_UID_KEY)) {
+    ensureTrialExperience(null).catch(error=>setStatus("تعذر تثبيت تاريخ التجربة: "+firebaseError(error),"warning"));
     return;
   }
   if (activeUser && activeShopId && (!window.POSGate||window.POSGate.isCloudSyncEnabled())) setTimeout(() => syncNow(true), 1200);
