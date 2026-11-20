@@ -892,17 +892,25 @@
             const incomingSales=changes
               .filter(change=>change.store==="invoices"&&!change.deleted)
               .map(change=>change.data)
-              .filter(invoice=>invoice&&invoice.id&&Number(invoice.total)>0&&["cash","electronic"].includes(invoice.paymentMethod));
+              .map(invoice=>{
+                if(!invoice||!invoice.id)return null;
+                const legacyAmount=Number(invoice.total||0);
+                const amount=invoice.paidAmount!==undefined&&invoice.paidAmount!==null
+                  ?Number(invoice.paidAmount):(["cash","electronic"].includes(invoice.paymentMethod)?legacyAmount:0);
+                const method=invoice.paidMethod||invoice.paymentMethod;
+                return {invoice,amount,method};
+              })
+              .filter(item=>item&&Number.isFinite(item.amount)&&item.amount>0&&["cash","electronic"].includes(item.method));
             if(incomingSales.length){
               const cashStore=tx.objectStore("cashEntries"),cashReq=cashStore.getAll();
               cashReq.onsuccess=()=>{
                 const existing=new Set((cashReq.result||[]).filter(entry=>entry.category==="sale").map(entry=>String(entry.referenceId||"")));
-                for(const invoice of incomingSales){
-                  const referenceId=String(invoice.id);
+                for(const item of incomingSales){
+                  const invoice=item.invoice,referenceId=String(invoice.id);
                   if(existing.has(referenceId))continue;
                   cashStore.put({
-                    id:"cloud-sale-"+referenceId,type:"income",category:"sale",amount:Number(invoice.total),
-                    method:invoice.paymentMethod,referenceId,note:"مبيعات "+referenceId,
+                    id:"cloud-sale-"+referenceId,type:"income",category:"sale",amount:Math.round(item.amount*100)/100,
+                    method:item.method,referenceId,note:"مدفوع فاتورة مبيعات "+referenceId,
                     createdAt:invoice.createdAt||new Date().toISOString()
                   });
                   existing.add(referenceId);
