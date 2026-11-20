@@ -13,6 +13,7 @@ const firebase = read("firebase-sync.js");
 const rules = read("firestore.rules");
 const indexes = read("firestore.indexes.json");
 const manifest = read("android-app/app/src/main/AndroidManifest.xml");
+const androidStrings = read("android-app/app/src/main/res/values/strings.xml");
 const accessGate = read("access-gate.js");
 const androidMainActivity = read("android-app/app/src/main/java/com/supermarket/pos/MainActivity.java");
 
@@ -47,6 +48,7 @@ assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice 
 assert.match(gradle, /versionName '1.12.0'/, "Cashiro Android version must match this commercial candidate");
 assert.match(gradle, /versionCode 16/, "Cashiro Android version code must be incremented");
 assert.match(gradle, /targetSdk 36/, "Cashiro must target Android 16");
+assert.match(androidStrings, /name="app_name">Cashiro/, "Android launcher name must be Cashiro");
 assert.match(manifest, /android:allowBackup="false"/, "Sensitive business data must not use automatic Android backup");
 assert.match(manifest, /@drawable\/cashiro_launcher/, "Cashiro app icon must be configured");
 assert.match(html, /id="requestAccountDeletion"/, "Signed-in users must be able to request account deletion");
