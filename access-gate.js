@@ -6,6 +6,8 @@ const PUBLIC_KEY_DER_B64="MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEPuijo+wZrb2mJgKw3j
 const MANAGED_KEY="supermarket-pos-managed-shop-v1";
 const SESSION_KEY="supermarket-pos-member-session-v1";
 const LICENSE_PREFIX="supermarket-pos-signed-license-v1:";
+const TRIAL_KEY="supermarket-pos-device-trial-v1";
+const TRIAL_DURATION_MS=7*24*60*60*1000;
 const ROLE_LABELS={owner:"صاحب المحل",manager:"مدير",cashier:"كاشير",accountant:"محاسب"};
 const ROLE_METHODS={
   owner:["*"],
@@ -13,8 +15,9 @@ const ROLE_METHODS={
   cashier:["saveInvoice","saveCustomer"],
   accountant:["saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
 };
-let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false,licenseOnlineVerified=false;
+let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false,licenseOnlineVerified=false,trialEntitlement=null;
 try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
+try{trialEntitlement=JSON.parse(localStorage.getItem(TRIAL_KEY)||"null");}catch(_){trialEntitlement=null;}
 let publicKeyPromise=null;
 const $=id=>document.getElementById(id);
 function bytesFromBase64(value){
@@ -53,6 +56,72 @@ async function verifyDocument(document){
 function cachedLicense(shopId){
   try{return JSON.parse(localStorage.getItem(LICENSE_PREFIX+shopId)||"null");}catch(_){return null;}
 }
+function trialCheck(){
+  if(!trialEntitlement||!trialEntitlement.deviceId)return {ok:false,reason:"لا توجد تجربة مجانية مسجلة على هذا الجهاز."};
+  const expiresAt=Number(trialEntitlement.expiresAt||0);
+  const lastSeenAt=Number(trialEntitlement.lastSeenAt||0);
+  const now=Math.max(Date.now(),lastSeenAt);
+  if(now>lastSeenAt){
+    trialEntitlement.lastSeenAt=now;
+    try{localStorage.setItem(TRIAL_KEY,JSON.stringify(trialEntitlement));}catch(_){}
+  }
+  if(!Number.isFinite(expiresAt)||expiresAt<=0)return {ok:false,reason:"بيانات التجربة المجانية غير سليمة."};
+  if(now>=expiresAt)return {ok:false,expiresAt,remainingMs:0,reason:"انتهت فترة التجربة المجانية لمدة 7 أيام. سجّل الدخول بترخيص ساري أو تواصل مع إدارة البرنامج."};
+  return {ok:true,expiresAt,remainingMs:expiresAt-now,offlineAllowed:true,cloudSyncEnabled:false,serverVerified:!!trialEntitlement.serverVerified};
+}
+function trialStatusText(check){
+  if(!check||!check.ok)return check&&check.reason||"التجربة المجانية غير متاحة.";
+  const hours=Math.max(1,Math.ceil(check.remainingMs/3600000));
+  const days=Math.floor(hours/24),rest=hours%24;
+  return days>0?("التجربة المجانية: متبقي "+days+" يوم و"+rest+" ساعة."):"التجربة المجانية: متبقي "+hours+" ساعة.";
+}
+function updateTrialBanner(check){
+  const node=$("trialStatusBanner");
+  if(!node)return;
+  node.hidden=false;
+  node.textContent=trialStatusText(check);
+  node.dataset.state=check&&check.ok?"warning":"error";
+}
+function startTrial(info){
+  if(!info||!info.deviceId)throw new Error("تعذر التعرف على هذا الجهاز لبدء التجربة.");
+  const suppliedStart=Number(info.startedAt||info.firstRunAt||Date.now());
+  const previousStart=Number(trialEntitlement&&trialEntitlement.startedAt||0);
+  const startedAt=previousStart>0?Math.min(previousStart,suppliedStart):suppliedStart;
+  const expiresAt=startedAt+TRIAL_DURATION_MS;
+  trialEntitlement={
+    deviceId:String(info.deviceId),
+    startedAt,
+    expiresAt,
+    lastSeenAt:Math.max(Date.now(),Number(info.effectiveNow||0),Number(trialEntitlement&&trialEntitlement.lastSeenAt||0)),
+    serverVerified:!!info.serverVerified
+  };
+  localStorage.setItem(TRIAL_KEY,JSON.stringify(trialEntitlement));
+  const shopId="trial-"+trialEntitlement.deviceId;
+  session={uid:"trial-"+trialEntitlement.deviceId,shopId,role:"owner",active:true,local:true,trial:true};
+  localStorage.setItem(MANAGED_KEY,shopId);
+  localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+  license=null;licenseReady=true;licenseOnlineVerified=false;
+  const check=trialCheck();
+  updateTrialBanner(check);
+  if(check.ok)hideLock();else showLock("انتهت التجربة المجانية",check.reason);
+  return check;
+}
+function activateTrial(shopId,role){
+  const check=trialCheck();
+  if(!check.ok){showLock("انتهت التجربة المجانية",check.reason);updateTrialBanner(check);return false;}
+  session={
+    uid:"trial-"+trialEntitlement.deviceId,
+    shopId:String(shopId||("trial-"+trialEntitlement.deviceId)),
+    role:["owner","manager","cashier","accountant"].includes(role)?role:"owner",
+    active:true,local:true,trial:true
+  };
+  localStorage.setItem(MANAGED_KEY,session.shopId);
+  localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+  license=null;licenseReady=true;licenseOnlineVerified=false;
+  updateTrialBanner(check);hideLock();
+  return true;
+}
+function hasActiveTrial(){return trialCheck().ok;}
 function showLock(title,message){
   const node=$("licenseLockScreen");if(!node)return;
   node.hidden=false;
@@ -100,11 +169,13 @@ function licenseCheck(doc,shopId){
 }
 function isManaged(){return true;}
 function currentLicenseCheck(){
+  if(session&&session.trial)return trialCheck();
   const shopId=localStorage.getItem(MANAGED_KEY);
   return shopId?licenseCheck(license||cachedLicense(shopId),shopId):{ok:false,reason:"يجب تفعيل البرنامج وربطه بمحل قبل الاستخدام.",offlineAllowed:false,cloudSyncEnabled:false};
 }
 function canOperateLocally(){
   if(platformAdminSession)return false;
+  if(session&&session.trial)return trialCheck().ok;
   const shopId=localStorage.getItem(MANAGED_KEY);
   if(!shopId||!session||!session.uid||!session.active||session.shopId!==shopId)return false;
   const check=currentLicenseCheck();
@@ -122,9 +193,11 @@ async function applyLicense(doc,shopId,persist=true,verifiedOnline=persist){
   license=doc;licenseReady=!!check.ok;licenseOnlineVerified=!!(check.ok&&verifiedOnline);
   if(persist)localStorage.setItem(LICENSE_PREFIX+shopId,JSON.stringify(doc));
   if(!check.ok){
+    if(session&&session.trial){session.trial=false;localStorage.setItem(SESSION_KEY,JSON.stringify(session));}
     showLock("البرنامج متوقف",check.reason);
     return false;
   }
+  if(session&&session.trial){session.trial=false;session.local=false;localStorage.setItem(SESSION_KEY,JSON.stringify(session));}
   if(check.offlineAllowed||licenseOnlineVerified)hideLock();
   else showLock("الاتصال بالإنترنت مطلوب","مدير المشروع أوقف التشغيل دون إنترنت لهذا المحل. اتصل بالإنترنت للتحقق من الترخيص.");
   return true;
@@ -136,6 +209,12 @@ function roleCan(method){
 }
 function assertMutation(method){
   if(platformAdminSession)throw new Error("حساب مدير المشروع مخصص لإدارة التراخيص ولا يستخدم لتشغيل محل.");
+  if(session&&session.trial){
+    const trial=trialCheck();
+    if(!trial.ok)throw new Error(trial.reason);
+    if(!roleCan(method))throw new Error("ليس لديك صلاحية لتنفيذ هذه العملية.");
+    return true;
+  }
   const shopId=localStorage.getItem(MANAGED_KEY);
   if(!shopId){
     throw new Error("البرنامج غير مفعل. اتصل بالإنترنت وسجّل الدخول أو أنشئ حسابًا واربط المحل أولًا.");
@@ -150,7 +229,8 @@ function assertMutation(method){
   return true;
 }
 function setSession(value){
-  session=value&&value.shopId?{...value,active:value.active!==false}:null;
+  const keepTrial=!!(value&&session&&session.trial&&trialCheck().ok&&String(value.shopId)===String(session.shopId));
+  session=value&&value.shopId?{...value,active:value.active!==false,...(keepTrial?{local:true,trial:true}: {})}:null;
   if(session){
     localStorage.setItem(MANAGED_KEY,session.shopId);
     localStorage.setItem(SESSION_KEY,JSON.stringify(session));
@@ -171,8 +251,14 @@ function lock(reason){
 async function initialize(){
   if(initialized)return;initialized=true;
   const shopId=localStorage.getItem(MANAGED_KEY);
-  if(!shopId){showLock("البرنامج غير مفعل","يجب تسجيل الدخول أو إنشاء حساب وربط المحل والتحقق من الترخيص قبل استخدام نقاط البيع.");return;}
+  if(!shopId){showLock("البرنامج غير مفعل","يمكنك بدء تجربة مجانية لمدة 7 أيام أو تسجيل الدخول بحساب المحل.");return;}
   try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
+  if(session&&session.trial){
+    const trial=trialCheck();
+    licenseReady=!!trial.ok;
+    if(trial.ok){updateTrialBanner(trial);hideLock();}else{updateTrialBanner(trial);showLock("انتهت التجربة المجانية",trial.reason);}
+    return;
+  }
   const doc=cachedLicense(shopId);
   if(doc&&doc.payload&&doc.payload.licenseType==="local"&&(!session||!session.uid)){
     session={uid:"local-"+shopId,shopId,role:"owner",active:true,local:true};
@@ -207,11 +293,12 @@ function installMutationGuards(){
 }
 window.POSGate={
   setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,supportsLicensePayload,licenseCheck,assertMutation,roleCan,lock,
+  startTrial,activateTrial,hasActiveTrial,trialStatus:()=>trialCheck(),
   getSession:()=>session,getLicense:()=>license,
-  isManaged, isLicensed:()=>licenseReady&&currentLicenseCheck().ok,
+  isManaged, isLicensed:()=>!!(session&&session.trial?trialCheck().ok:(licenseReady&&currentLicenseCheck().ok)),
   isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
-  isCloudSyncEnabled:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&c.cloudSyncEnabled);},
-  isCloudLicense:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&license&&license.payload&&license.payload.licenseType==="cloud");},
+  isCloudSyncEnabled:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&c.cloudSyncEnabled&&!(session&&session.trial));},
+  isCloudLicense:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&license&&license.payload&&license.payload.licenseType==="cloud"&&!(session&&session.trial));},
   canOperateLocally,
   roleLabel:role=>ROLE_LABELS[role]||"غير محدد"
 };
