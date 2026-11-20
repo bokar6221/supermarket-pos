@@ -13,9 +13,35 @@ const ROLE_METHODS={
   cashier:["saveInvoice","saveCustomer"],
   accountant:["saveInvoice","saveSupplier","saveSupplierPayment","savePurchase","saveCustomer","saveCustomerPayment","saveReturn","saveCashEntry","saveShift"]
 };
-let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false,licenseOnlineVerified=false;
+let session=null,license=null,licenseReady=false,initialized=false,platformAdminSession=false,licenseOnlineVerified=false,trial=null;
 try{session=JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(_){session=null;}
 let publicKeyPromise=null;
+const TRIAL_CACHE_KEY="supermarket-pos-device-trial-v1:";
+function trialCheck(){
+  if(!trial)return {ok:false,reason:"لا توجد تجربة مجانية على هذا الجهاز."};
+  if(trial.status!=="active")return {ok:false,reason:"تم إيقاف التجربة المجانية من إدارة البرنامج."};
+  const end=Number(trial.expiresAtMs);
+  if(!Number.isFinite(end))return {ok:false,reason:"تعذر قراءة تاريخ انتهاء التجربة المجانية."};
+  if(Date.now()>=end)return {ok:false,reason:"انتهت مدة التجربة المجانية البالغة 7 أيام. سجّل الدخول بحسابك أو تواصل مع مدير المنصة لتفعيل الترخيص."};
+  return {ok:true,expiresAtMs:end,remainingMs:end-Date.now()};
+}
+function setTrial(value){
+  if(!value||!value.deviceId||!value.uid||!Number.isFinite(Number(value.expiresAtMs)))throw new Error("بيانات التجربة المجانية غير مكتملة.");
+  trial={deviceId:String(value.deviceId),uid:String(value.uid),status:String(value.status||"active"),startedAtMs:Number(value.startedAtMs),expiresAtMs:Number(value.expiresAtMs),verifiedAtMs:Number(value.verifiedAtMs||Date.now())};
+  if(!session||session.uid!==trial.uid||session.role!=="owner"||session.trial!==true){
+    session={uid:trial.uid,shopId:"trial-"+trial.deviceId,role:"owner",active:true,trial:true};
+    localStorage.setItem(MANAGED_KEY,session.shopId);
+    localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+  }
+  const check=trialCheck();
+  if(check.ok)hideLock();
+  else showLock("انتهت التجربة المجانية",check.reason);
+  return check.ok;
+}
+function clearTrial(){
+  trial=null;
+  if(session&&session.trial)setSession(null);
+}
 const $=id=>document.getElementById(id);
 function bytesFromBase64(value){
   const raw=atob(value),out=new Uint8Array(raw.length);
@@ -105,6 +131,8 @@ function currentLicenseCheck(){
 }
 function canOperateLocally(){
   if(platformAdminSession)return false;
+  const trialState=trialCheck();
+  if(trialState.ok&&session&&session.uid===trial.uid&&session.role==="owner"&&session.active)return true;
   const shopId=localStorage.getItem(MANAGED_KEY);
   if(!shopId||!session||!session.uid||!session.active||session.shopId!==shopId)return false;
   const check=currentLicenseCheck();
@@ -135,7 +163,10 @@ function roleCan(method){
   return allowed.includes("*")||allowed.includes(method);
 }
 function assertMutation(method){
-  if(platformAdminSession)throw new Error("حساب مدير المشروع مخصص لإدارة التراخيص ولا يستخدم لتشغيل محل.");
+  if(platformAdminSession)throw new Error("حساب مدير المنصة مخصص لإدارة المحلات والتراخيص ولا يستخدم لتشغيل محل.");
+  const trialState=trialCheck();
+  if(trialState.ok&&session&&session.uid===trial.uid&&session.role==="owner"&&session.active)return true;
+  if(trial&&!trialState.ok)throw new Error(trialState.reason+" لا يمكن إجراء عمليات بيع أو تعديل بعد انتهاء التجربة.");
   const shopId=localStorage.getItem(MANAGED_KEY);
   if(!shopId){
     throw new Error("البرنامج غير مفعل. اتصل بالإنترنت وسجّل الدخول أو أنشئ حسابًا واربط المحل أولًا.");
@@ -156,7 +187,7 @@ function setSession(value){
     localStorage.setItem(SESSION_KEY,JSON.stringify(session));
   }else{
     localStorage.removeItem(SESSION_KEY);
-    if(isManaged())showLock("تم إيقاف صلاحية هذا الجهاز","سجّل الدخول بحساب موظف نشط لهذا المحل.");
+    if(isManaged()&&!trialCheck().ok)showLock("تم إيقاف صلاحية هذا الجهاز","سجّل الدخول بحساب موظف نشط لهذا المحل.");
   }
 }
 function setPlatformAdmin(enabled){
@@ -186,6 +217,11 @@ async function initialize(){
 }
 function recheckLocalLicenseExpiry(){
   if(platformAdminSession||!isManaged())return;
+  if(trial){
+    const trialState=trialCheck();
+    if(!trialState.ok){showLock("انتهت التجربة المجانية",trialState.reason);return;}
+    if(session&&session.uid===trial.uid&&session.role==="owner"&&session.active){hideLock();return;}
+  }
   const check=currentLicenseCheck();
   if(!check.ok){licenseReady=false;showLock("البرنامج متوقف",check.reason);return;}
   if(!check.offlineAllowed&&!licenseOnlineVerified){
@@ -206,10 +242,11 @@ function installMutationGuards(){
   window.POSDatabase.__localRoleGuarded=true;
 }
 window.POSGate={
-  setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,supportsLicensePayload,licenseCheck,assertMutation,roleCan,lock,
-  getSession:()=>session,getLicense:()=>license,
-  isManaged, isLicensed:()=>licenseReady&&currentLicenseCheck().ok,
-  isOfflineAllowed:()=>{const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
+  setSession,setPlatformAdmin,applyLicense,importLocalLicense,verifyDocument,supportsLicensePayload,licenseCheck,assertMutation,roleCan,lock,setTrial,clearTrial,
+  getSession:()=>session,getLicense:()=>license,getTrial:()=>trial,
+  isTrialActive:()=>trialCheck().ok,
+  isLicensed:()=>trialCheck().ok||(licenseReady&&currentLicenseCheck().ok),
+  isOfflineAllowed:()=>{const t=trialCheck();if(t.ok)return true;const c=currentLicenseCheck();return !isManaged()||!!(c.ok&&c.offlineAllowed);},
   isCloudSyncEnabled:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&c.cloudSyncEnabled);},
   isCloudLicense:()=>{const c=currentLicenseCheck();return !!(isManaged()&&licenseReady&&c.ok&&license&&license.payload&&license.payload.licenseType==="cloud");},
   canOperateLocally,
