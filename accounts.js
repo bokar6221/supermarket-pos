@@ -17,7 +17,8 @@ function customerMatches(invoice,customer){
   return invoice.customerId===customer.id || (!!customer.phone&&digits(invoice.customerPhone)===digits(customer.phone));
 }
 function customerBalance(customer,invoices,payments,returns){
-  const sales=invoices.filter(x=>x.paymentMethod==="credit"&&customerMatches(x,customer)).reduce((s,x)=>s+Number(x.total||0),0);
+  const sales=invoices.filter(x=>x.paymentMethod==="credit"&&customerMatches(x,customer)).reduce((s,x)=>
+    s+(Number.isFinite(Number(x.remainingAmount))?Number(x.remainingAmount):Number(x.total||0)),0);
   const collected=payments.filter(x=>x.customerId===customer.id).reduce((s,x)=>s+Number(x.amount||0),0);
   const credited=returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).reduce((s,x)=>s+Number(x.amount||0),0);
   return Math.round((Number(customer.openingBalance||0)+sales-collected-credited)*100)/100;
@@ -83,7 +84,10 @@ async function renderCustomerStatement(){
   const customer=customers.find(x=>x.id===id);
   if(!customer){root.innerHTML='<p class="empty">العميل غير موجود.</p>';return;}
   const events=[{date:"",kind:"رصيد سابق",debit:Number(customer.openingBalance||0),credit:0,note:""}];
-  invoices.filter(x=>x.paymentMethod==="credit"&&customerMatches(x,customer)).forEach(inv=>events.push({date:inv.createdAt,kind:"فاتورة آجل",debit:Number(inv.total||0),credit:0,note:"فاتورة "+String(inv.id).slice(0,8)}));
+  invoices.filter(x=>x.paymentMethod==="credit"&&customerMatches(x,customer)).forEach(inv=>events.push({
+    date:inv.createdAt,kind:"فاتورة آجل",debit:Number.isFinite(Number(inv.remainingAmount))?Number(inv.remainingAmount):Number(inv.total||0),
+    credit:0,note:"فاتورة "+String(inv.id).slice(0,8)
+  }));
   payments.filter(x=>x.customerId===id).forEach(p=>events.push({date:p.createdAt,kind:"تحصيل",debit:0,credit:Number(p.amount||0),note:p.note||p.method||""}));
   returns.filter(x=>x.refundMethod==="credit"&&invoices.some(inv=>inv.id===x.invoiceId&&customerMatches(inv,customer))).forEach(r=>events.push({date:r.createdAt,kind:"مرتجع خفّض المديونية",debit:0,credit:Number(r.amount||0),note:"مرتجع فاتورة"}));
   events.sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
@@ -104,8 +108,17 @@ POSDatabase.saveInvoice=async invoice=>{
   }
   return originalSaveInvoice(invoice);
 };
-function updateCreditHint(){const hint=$("creditHint");if(hint)hint.hidden=$("paymentMethod").value!=="credit";}
-$("paymentMethod").addEventListener("change",updateCreditHint);updateCreditHint();
+function updateCreditHint(){
+  const hint=$("creditHint");if(!hint)return;
+  const total=Number($("grandTotal")?.dataset.amount||0),paid=Number($("paidAmount")?.value||0);
+  const remaining=Math.round((total-paid)*100)/100;
+  hint.hidden=!Number.isFinite(remaining)||remaining<=0.005;
+  hint.textContent="سيتم تسجيل الباقي ("+money(remaining)+") كمديونية على العميل؛ أدخل الاسم ورقم الهاتف قبل حفظ الفاتورة.";
+}
+$("paymentMethod").addEventListener("change",updateCreditHint);
+if($("paidAmount"))$("paidAmount").addEventListener("input",updateCreditHint);
+window.addEventListener("cashiro-payment-summary",updateCreditHint);
+updateCreditHint();
 $("customerForm").onsubmit=async e=>{
   e.preventDefault();
   const id=$("customerId").value||uid();
