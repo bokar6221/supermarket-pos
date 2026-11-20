@@ -1,9 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<rect width="512" height="512" rx="112" fill="#173f35"/>
-<rect x="94" y="128" width="324" height="272" rx="28" fill="#f3f6f4"/>
-<rect x="126" y="164" width="260" height="76" rx="12" fill="#d6e7de"/>
-<path d="M150 205h28m24 0h28m24 0h28m24 0h28" stroke="#1c6b52" stroke-width="15" stroke-linecap="round"/>
-<rect x="126" y="270" width="260" height="96" rx="12" fill="#1c6b52"/>
-<path d="M164 316h184" stroke="#fff" stroke-width="18" stroke-linecap="round"/>
-<circle cx="256" cy="316" r="12" fill="#f3f6f4"/>
+  <defs>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d9fff0"/><stop offset=".48" stop-color="#21d98a"/><stop offset="1" stop-color="#087b4d"/></linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#f3fff9"/><stop offset=".55" stop-color="#8fffd0"/><stop offset="1" stop-color="#00c979"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#62ffc0"/><stop offset="1" stop-color="#00a85f"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#07151a"/>
+  <rect x="14" y="14" width="484" height="484" rx="100" fill="none" stroke="url(#edge)" stroke-width="12"/>
+  <rect x="32" y="32" width="448" height="448" rx="84" fill="none" stroke="#b5ffe3" stroke-opacity=".7" stroke-width="5"/>
+  <path d="M104 202 145 121Q153 107 170 107H343Q359 107 368 121L409 202Q414 219 398 231Q381 245 365 231Q349 247 332 232Q314 249 296 232Q278 249 260 232Q242 249 224 232Q206 249 188 232Q170 248 153 232Q136 248 120 232Q103 219 104 202Z" fill="url(#mint)"/>
+  <path d="M139 168 169 120H218L190 169Z" fill="#1a3136"/>
+  <path d="M139 232V331H373V240" fill="none" stroke="#00b96d" stroke-width="16" stroke-linejoin="round"/>
+  <path d="m174 259 48 48 67-72 48 43 77-89" fill="none" stroke="url(#green)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m378 180 42-48 10 64Z" fill="url(#mint)"/>
+  <text x="256" y="411" text-anchor="middle" font-family="Arial,sans-serif" font-size="68" font-weight="800" fill="url(#mint)">Cashiro</text>
 </svg>
