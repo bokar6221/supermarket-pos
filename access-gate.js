@@ -105,7 +105,7 @@ function startTrial(info){
   };
   localStorage.setItem(TRIAL_KEY,JSON.stringify(trialEntitlement));
   const shopId="trial-"+trialEntitlement.deviceId;
-  session={uid:"trial-"+trialEntitlement.deviceId,shopId,role:"owner",active:true,local:true,trial:true};
+  session={uid:"trial-"+trialEntitlement.deviceId,shopId,role:["owner","manager","cashier","accountant"].includes(info.role)?info.role:"owner",active:true,local:true,trial:true};
   localStorage.setItem(MANAGED_KEY,shopId);
   localStorage.setItem(SESSION_KEY,JSON.stringify(session));
   license=null;licenseReady=true;licenseOnlineVerified=false;
