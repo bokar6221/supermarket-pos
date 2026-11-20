@@ -72,7 +72,7 @@ async function run(){
   assert.equal((await db.getInvoices()).length,1,"Archive must preserve the original invoice");
   assert.equal((await db.getReturns()).length,2,"Archive must preserve return history");
   await assert.rejects(
-    db.saveInvoice({...invoice,id:"invoice-archived",items:[{...invoice.items[0],quantity:1,stockQuantity:1,total:50}],subtotal:50,discount:0,total:50}),
+    db.saveInvoice({...invoice,id:"invoice-archived",items:[{...invoice.items[0],quantity:1,stockQuantity:1,total:50}],subtotal:50,discount:0,total:50,paidAmount:50,remainingAmount:0,paidMethod:"cash"}),
     /مؤرشف/
   );
   await db.setProductActive("piece-1",true);
