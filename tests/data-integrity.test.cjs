@@ -127,7 +127,7 @@ async function run(){
   const partialInvoice={
     id:"invoice-partial-paid",createdAt:new Date().toISOString(),customerId:"partial-customer",
     customerName:"عميل دفع جزئي",customerPhone:"01099998888",
-    items:[{name:"بيع جزئي",unit:"piece",quantity:1,stockQuantity:1,unitPrice:100,total:100}],
+    items:[{name:"بيع جزئي",unit:"kg",quantity:1,stockQuantity:1,unitPrice:100,total:100}],
     subtotal:100,discount:0,total:100,paymentMethod:"credit",
     paidAmount:30,remainingAmount:70,paidMethod:"electronic",currency:"EGP",status:"saved"
   };
@@ -151,6 +151,23 @@ async function run(){
   );
   const partialCollections=(await db.getCustomerPayments()).filter(x=>x.customerId==="partial-customer");
   assert.equal(partialCollections.reduce((sum,x)=>sum+x.amount,0),25,"Customer collections must be limited by the remaining balance");
+
+  await db.saveReturn({
+    id:"partial-invoice-return",
+    invoiceId:"invoice-partial-paid",
+    refundMethod:"electronic",
+    items:[{itemIndex:0,quantity:0.5}],
+    createdAt:new Date().toISOString()
+  });
+  const partialReturn=(await db.getReturns()).find(x=>x.id==="partial-invoice-return");
+  assert.equal(partialReturn.amount,50,"Return total must use the discounted invoice line total");
+  assert.equal(partialReturn.creditReductionAmount,45,"Return must reduce only the 45 EGP customer debt remaining after collections");
+  assert.equal(partialReturn.paidRefundAmount,5,"Any return value beyond the remaining debt must be refunded as paid money");
+  assert.equal(partialReturn.paidRefundMethod,"electronic","Cash refund channel must follow the selected return method");
+  const partialRefund=(await db.getCashEntries()).filter(x=>x.referenceId==="partial-invoice-return"&&x.category==="sales_return");
+  assert.equal(partialRefund.length,1,"Only the paid portion of a partial invoice return enters the cash ledger");
+  assert.equal(partialRefund[0].amount,5,"The cash ledger must not refund the full returned amount when most of it reduces debt");
+  assert.equal(partialRefund[0].method,"electronic","The returned paid portion must preserve the selected cash/electronic channel");
 
   const remotePartial={
     id:"cloud-partial-sale",createdAt:new Date().toISOString(),
