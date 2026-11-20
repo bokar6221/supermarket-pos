@@ -46,8 +46,15 @@ assert.match(db, /sold\.unit==="piece"&&!Number\.isInteger\(qty\)/, "Piece retur
 assert.match(db, /رقم الهاتف مسجل بالفعل/, "Duplicate customer phones must be rejected");
 assert.match(accounts, /savedLineTotal/, "Profit reports must use saved invoice line totals");
 assert.match(gradle, /versionName '1.12.0'/, "Cashiro Android version must match this commercial candidate");
-assert.match(gradle, /versionCode 16/, "Cashiro Android version code must be incremented");
+assert.match(gradle, /versionCode 17/, "Cashiro Android version code must be incremented");
 assert.match(gradle, /targetSdk 36/, "Cashiro must target Android 16");
+assert.match(html, /id="paidAmount"/, "Cashiro invoice must capture the actual payment received");
+assert.match(html, /id="remainingAmount"/, "Cashiro invoice must show the calculated outstanding balance");
+assert.match(app, /function setCartQuantity\(i,value\)/, "Invoice item quantity must be editable as a numeric field");
+assert.match(app, /remainingAmount,paidMethod/, "Invoice must store the paid amount, remaining balance and payment method");
+assert.match(db, /amount:Math\.round\(paidAmount\*100\)\/100/, "Cash ledger must only record the amount actually received");
+assert.match(accounts, /Number\.isFinite\(Number\(x\.remainingAmount\)\)/, "Customer debt must use the remaining invoice balance");
+assert.doesNotMatch(app, /minus\.textContent="−";plus\.textContent="\+"/, "The old plus/minus quantity controls must be removed");
 assert.match(androidStrings, /name="app_name">Cashiro/, "Android launcher name must be Cashiro");
 assert.match(manifest, /android:allowBackup="false"/, "Sensitive business data must not use automatic Android backup");
 assert.match(manifest, /@drawable\/cashiro_launcher/, "Cashiro app icon must be configured");
