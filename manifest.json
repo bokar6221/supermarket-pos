@@ -1,6 +1,6 @@
 {
-  "name": "كاشير المحل",
-  "short_name": "الكاشير",
+  "name": "Cashiro — نظام إدارة المحلات ونقاط البيع",
+  "short_name": "Cashiro",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "./",
@@ -8,7 +8,7 @@
   "display": "standalone",
   "background_color": "#f3f6f4",
   "theme_color": "#173f35",
-  "description": "برنامج كاشير محلي للمحلات الصغيرة",
+  "description": "Cashiro لإدارة المبيعات والمخزون والمشتريات والعملاء والتقارير.",
   "icons": [
     {
       "src": "icon.svg",
